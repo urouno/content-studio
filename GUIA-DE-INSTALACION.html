@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guía de instalación · Content Studio</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#151821; --muted:#5b6272; --line:#e2e5eb; --accent:#4338ca; --soft:#eef0ff; --ok:#15803d; --okbg:#e7f6ec; --warn:#a15c07; --warnbg:#fff4e0; --code:#f1f3f6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1117; --card:#171a22; --text:#eceef3; --muted:#a2a9b8; --line:#2a2f3b; --accent:#9396f9; --soft:#23264a; --ok:#4ade80; --okbg:#12291b; --warn:#fbbf24; --warnbg:#2d230d; --code:#1e222c; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -.02em; }
+  h2 { font-size: 22px; margin: 0; display:flex; align-items:center; gap:10px; }
+  h3 { font-size: 17px; margin: 0 0 6px; }
+  p { margin: 0 0 10px; } .muted { color: var(--muted); }
+  .lead { font-size: 18px; color: var(--muted); }
+  .card { background: var(--card); border:1px solid var(--line); border-radius: 14px; padding: 20px; margin: 16px 0; }
+  .part { margin-top: 36px; }
+  .badge { display:inline-grid; place-items:center; width:34px; height:34px; border-radius:10px; background:var(--accent); color:#fff; font-weight:800; font-size:16px; flex:none; }
+  .time { font-size: 13px; font-weight: 600; color: var(--muted); background: var(--code); border-radius: 20px; padding: 2px 10px; margin-left: auto; }
+  .step { display:grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .step:first-of-type { border-top: 0; }
+  .step input[type=checkbox] { width: 22px; height: 22px; margin-top: 3px; accent-color: var(--ok); cursor: pointer; }
+  .step.done h3 { text-decoration: line-through; color: var(--muted); }
+  ol, ul { margin: 6px 0 10px; padding-left: 22px; } li { margin: 4px 0; }
+  .ui { display:inline-block; padding: 0 7px; border:1px solid var(--line); border-bottom-width:2px; border-radius:6px; background:var(--code); font-size: 14px; font-weight:600; white-space: nowrap; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: 14px; word-break: break-all; }
+  pre { background: var(--code); padding: 12px; border-radius: 10px; overflow:auto; font-size: 14px; }
+  .check { background: var(--okbg); color: var(--ok); border-radius: 10px; padding: 10px 12px; font-size: 15px; margin-top: 8px; }
+  .check b { color: inherit; }
+  .warn { background: var(--warnbg); color: var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 15px; margin-top: 8px; }
+  .here { border: 2px solid var(--accent); background: var(--soft); }
+  .map { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .map a { display:block; text-decoration:none; color: var(--text); background: var(--card); border:1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .map a b { display:block; color: var(--accent); }
+  .map a span { font-size: 14px; color: var(--muted); }
+  table { width:100%; border-collapse: collapse; font-size: 15px; }
+  td, th { text-align:left; padding: 9px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .files li { margin: 6px 0; }
+  .progress { position: sticky; top: 0; background: var(--bg); padding: 10px 0; z-index: 5; }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar i { display:block; height:100%; width:0; background: var(--ok); transition: width .2s; }
+  a { color: var(--accent); }
+  @media (max-width: 700px) { .map { grid-template-columns: 1fr 1fr; } h1 { font-size: 25px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Instalar Content Studio, paso a paso</h1>
+  <p class="lead">No necesitas saber programar. Sigue los pasos en orden y marca cada casilla al terminarlo. El avance se guarda en este navegador.</p>
+
+  <div class="progress"><div class="bar"><i id="bar"></i></div><div class="muted" style="font-size:13px;margin-top:4px" id="ptext">0 de 0 pasos</div></div>
+
+  <div class="card">
+    <h3>Primero: ¿qué es Content Studio?</h3>
+    <p>Content Studio es la aplicación que gestiona tus marcas, ideas, guiones, calendario y resultados. <b>No es un único archivo HTML</b>, sino una <b>carpeta</b> con varios archivos que trabajan juntos. La recibiste comprimida en <b>Content-Studio.zip</b>.</p>
+    <p>La instalación tiene cuatro partes:</p>
+    <div class="map">
+      <a href="#parte-a"><b>A · Google Sheets</b><span>Preparar la hoja que guarda tus datos en la nube (10 min)</span></a>
+      <a href="#parte-b"><b>B · Abrir la app</b><span>Encender Content Studio en tu computadora (2 min)</span></a>
+      <a href="#parte-c"><b>C · Conectar</b><span>Unir la app con tu hoja (2 min)</span></a>
+      <a href="#parte-d"><b>D · Activar la IA</b><span>Gemini (gratis) o Claude (de pago por uso) · 5 min</span></a>
+    </div>
+  </div>
+
+  <div class="card here" id="actualizar">
+    <h3>🔄 ¿Ya lo tenías instalado? Actualiza el código de Apps Script (2 min)</h3>
+    <p>La versión 1.2 añade <b>Claude</b> como alternativa a Gemini y explica mejor los errores. Para que tu hoja la use:</p>
+    <ol>
+      <li>Abre tu proyecto de Apps Script (desde la hoja: <span class="ui">Extensiones</span> → <span class="ui">Apps Script</span>).</li>
+      <li>Abre <code>Code.gs</code>, borra todo su contenido, pega el nuevo <code>apps-script/Code.gs</code> y guarda con 💾.</li>
+      <li>Pulsa <span class="ui">Implementar</span> → <span class="ui">Gestionar implementaciones</span> → el lápiz ✏️ → en <b>Versión</b> elige <span class="ui">Nueva versión</span> → <span class="ui">Implementar</span>. <b>La URL no cambia.</b></li>
+    </ol>
+    <div class="warn">Si te saltas el paso 3, Apps Script sigue usando el código anterior.</div>
+  </div>
+
+  <div class="card here">
+    <h3>📍 ¿Ya pegaste el código en Apps Script?</h3>
+    <p>Si ya hiciste la hoja y pegaste <code>Code.gs</code> y <code>appsscript.json</code>, <b>vuelve a pegar <code>Code.gs</code></b> con el archivo de este ZIP (paso A3), porque esta versión es más fácil de instalar. Luego continúa en el <a href="#a4"><b>paso A4</b></a>.</p>
+  </div>
+
+  <div class="card">
+    <h3>Qué hay dentro del ZIP</h3>
+    <ul class="files">
+      <li>📄 <b>GUIA-DE-INSTALACION.html</b>: esta guía.</li>
+      <li>🖱️ <b>Abrir Content Studio (Mac).command</b>: enciende la app en Mac.</li>
+      <li>🖱️ <b>Abrir Content Studio (Windows).bat</b>: enciende la app en Windows.</li>
+      <li>📁 <b>apps-script/</b>: <code>Code.gs</code> y <code>appsscript.json</code>, los dos archivos que se pegan en Google.</li>
+      <li>📁 <b>docs/</b>: manual de uso, metodología, arquitectura y pruebas.</li>
+      <li>📄 <code>index.html</code> y las carpetas <b>css/</b>, <b>js/</b> y <b>assets/</b>: la app en sí. <b>No hace falta abrirlos ni moverlos</b>.</li>
+    </ul>
+    <div class="warn">⚠️ No abras <code>index.html</code> con doble clic: así la app no funciona, porque el navegador bloquea sus módulos. Ábrela siempre con el archivo <b>Abrir Content Studio</b> (Parte B).</div>
+  </div>
+
+  <!-- ================= PARTE A ================= -->
+  <section class="part" id="parte-a">
+    <div class="card">
+      <h2><span class="badge">A</span>Preparar Google Sheets <span class="time">≈ 10 min</span></h2>
+
+      <div class="step"><input type="checkbox" data-s="a1"><div>
+        <h3>A1. Crea una hoja de cálculo nueva</h3>
+        <ol><li>Abre <a href="https://sheets.new" target="_blank" rel="noopener">sheets.new</a>, con tu cuenta de Google ya iniciada.</li>
+        <li>Haz clic en <span class="ui">Hoja de cálculo sin título</span>, arriba a la izquierda, y ponle de nombre <b>Content Studio – Base de datos</b>.</li></ol>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="a2"><div>
+        <h3>A2. Abre Apps Script desde esa hoja</h3>
+        <p>En el menú de la hoja: <span class="ui">Extensiones</span> → <span class="ui">Apps Script</span>. Se abre una pestaña nueva con un editor de código.</p>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="a3"><div>
+        <h3>A3. Pega los dos archivos</h3>
+        <p><b>Primero, <code>Code.gs</code>:</b></p>
+        <ol>
+          <li>En tu computadora, abre <code>apps-script/Code.gs</code> del ZIP con TextEdit (Mac) o el Bloc de notas (Windows). Selecciona todo con <span class="ui">⌘ A</span> o <span class="ui">Ctrl A</span> y cópialo.</li>
+          <li>En el editor de Apps Script, haz clic dentro del código que ya hay (<code>function myFunction() {…}</code>), selecciónalo todo, bórralo y pega el nuevo.</li>
+        </ol>
+        <p><b>Después, <code>appsscript.json</code>:</b></p>
+        <ol>
+          <li>En la barra de la izquierda pulsa el engranaje <span class="ui">⚙ Configuración del proyecto</span>.</li>
+          <li>Marca la casilla <span class="ui">Mostrar el archivo de manifiesto "appsscript.json" en el editor</span>.</li>
+          <li>Vuelve al editor con el icono <span class="ui">&lt; &gt; Editor</span>. Ahora verás <code>appsscript.json</code> en la lista de archivos.</li>
+          <li>Ábrelo, borra su contenido y pega el de <code>apps-script/appsscript.json</code> del ZIP.</li>
+        </ol>
+        <p>Guarda con el icono del disquete 💾 o con <span class="ui">⌘ S</span> / <span class="ui">Ctrl S</span>.</p>
+        <div class="check">✔ <b>Comprobación:</b> la primera línea de código bajo los comentarios de <code>Code.gs</code> es <code>function instalar() {</code>.</div>
+      </div></div>
+
+      <div class="step" id="a4"><input type="checkbox" data-s="a4"><div>
+        <h3>A4. Ejecuta la función <code>instalar</code> y copia tu token</h3>
+        <ol>
+          <li>Arriba del editor, junto a los botones <span class="ui">▷ Ejecutar</span> y <span class="ui">Depurar</span>, hay una lista desplegable con un nombre de función. Asegúrate de que dice <b>instalar</b>; si no, elígela en la lista.</li>
+          <li>Pulsa <span class="ui">▷ Ejecutar</span>.</li>
+          <li>La primera vez, Google pide permiso:
+            <ul>
+              <li><span class="ui">Revisar permisos</span> → elige tu cuenta.</li>
+              <li>Aparecerá <i>"Google no ha verificado esta aplicación"</i>. Es normal: la aplicación la creaste tú. Pulsa <span class="ui">Configuración avanzada</span> y luego <span class="ui">Ir a … (no seguro)</span>.</li>
+              <li>Pulsa <span class="ui">Permitir</span>.</li>
+            </ul></li>
+          <li>Abajo se abre el <b>Registro de ejecución</b>. Verás un bloque <code>INSTALACIÓN COMPLETADA</code> con <b>TU TOKEN</b>: un código largo de letras y números.</li>
+          <li><b>Copia el token</b> y guárdalo en Notas o en tu gestor de contraseñas. Lo usarás en la Parte C. No lo compartas: es la llave de tus datos.</li>
+        </ol>
+        <div class="check">✔ <b>Comprobación:</b> en la pestaña de la hoja de cálculo aparecen pestañas nuevas abajo: Marcas, Ideas, Guiones, Calendario, Resultados…</div>
+        <div class="warn">Si se te pierde el token, vuelve a ejecutar <b>instalar</b>: crea uno nuevo y no borra nada.</div>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="a5"><div>
+        <h3>A5. Publícalo como aplicación web y copia la URL</h3>
+        <ol>
+          <li>Arriba a la derecha pulsa el botón azul <span class="ui">Implementar</span> → <span class="ui">Nueva implementación</span>.</li>
+          <li>Junto a <i>"Seleccionar tipo"</i> pulsa el engranaje ⚙ → <span class="ui">Aplicación web</span>.</li>
+          <li>Rellena:
+            <table><tr><th>Campo</th><th>Qué poner</th></tr>
+            <tr><td>Descripción</td><td>Content Studio</td></tr>
+            <tr><td>Ejecutar como</td><td><b>Yo</b> (tu correo)</td></tr>
+            <tr><td>Quién tiene acceso</td><td><b>Cualquier usuario</b></td></tr></table>
+            <p class="muted" style="margin-top:6px">¿Es seguro "Cualquier usuario"? Sí: esa dirección no entrega ningún dato si no se usa tu token.</p></li>
+          <li>Pulsa <span class="ui">Implementar</span>. Si pide autorizar otra vez, acepta igual que en A4.</li>
+          <li>Copia la <b>URL de la aplicación web</b>, que empieza por <code>https://script.google.com/macros/s/</code> y termina en <code>/exec</code>, y guárdala junto al token.</li>
+        </ol>
+        <div class="check">✔ <b>Comprobación:</b> pega esa URL en una pestaña nueva del navegador. Debe aparecer un texto como <code>{"ok":true,"app":"content-studio",…}</code>.</div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ================= PARTE B ================= -->
+  <section class="part" id="parte-b">
+    <div class="card">
+      <h2><span class="badge">B</span>Abrir Content Studio en tu computadora <span class="time">≈ 2 min</span></h2>
+
+      <div class="step"><input type="checkbox" data-s="b1"><div>
+        <h3>B1. Descomprime el ZIP y guarda la carpeta</h3>
+        <p>Haz doble clic en <b>Content-Studio.zip</b>. Se crea la carpeta <b>content-studio</b>. Muévela a un lugar fijo, como <b>Documentos</b>, y no la borres: ahí vive la app.</p>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="b2"><div>
+        <h3>B2. Enciende la app</h3>
+        <p><b>En Mac:</b> dentro de la carpeta, haz doble clic en <b>Abrir Content Studio (Mac).command</b>.</p>
+        <ul>
+          <li>Se abre una ventana negra (Terminal) que dice <i>"CONTENT STUDIO está encendido"</i> y, enseguida, tu navegador en <code>http://localhost:4747</code>.</li>
+          <li><b>Deja abierta la ventana negra</b> mientras trabajas. Para apagar la app, ciérrala.</li>
+        </ul>
+        <div class="warn"><b>Si el Mac dice que no puede abrirlo</b> ("desarrollador no identificado"):
+          <ol style="margin-bottom:0">
+            <li>Pulsa <span class="ui">OK</span> o <span class="ui">Hecho</span>.</li>
+            <li>Abre <span class="ui">Ajustes del Sistema</span> → <span class="ui">Privacidad y seguridad</span> y baja hasta el final.</li>
+            <li>Junto al aviso del archivo, pulsa <span class="ui">Abrir igualmente</span> y confirma.</li>
+          </ol>
+          En versiones anteriores de macOS basta con hacer clic derecho sobre el archivo → <span class="ui">Abrir</span> → <span class="ui">Abrir</span>. Solo hay que hacerlo la primera vez.</div>
+        <p style="margin-top:10px"><b>En Windows:</b> doble clic en <b>Abrir Content Studio (Windows).bat</b>. Necesitas Python instalado desde <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>; al instalarlo, marca la casilla <i>"Add Python to PATH"</i>.</p>
+        <div class="check">✔ <b>Comprobación:</b> en el navegador ves <b>"Bienvenida a Content Studio"</b>.</div>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="b3"><div>
+        <h3>B3. Guarda la dirección en favoritos</h3>
+        <p>Añade <code>http://localhost:4747</code> a tus favoritos y usa siempre el <b>mismo navegador</b>: tus datos se guardan en él y se copian a Google Sheets al conectar.</p>
+        <p class="muted">Cada día: doble clic en <b>Abrir Content Studio</b> y listo.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ================= PARTE C ================= -->
+  <section class="part" id="parte-c">
+    <div class="card">
+      <h2><span class="badge">C</span>Conectar la app con tu hoja <span class="time">≈ 2 min</span></h2>
+
+      <div class="step"><input type="checkbox" data-s="c1"><div>
+        <h3>C1. Pega la URL y el token</h3>
+        <ol>
+          <li>En Content Studio, pulsa el engranaje <span class="ui">⚙</span> arriba a la derecha (Ajustes).</li>
+          <li>En la pestaña <span class="ui">Conexión y sync</span>:
+            <ul><li><b>URL del Web App</b>: pega la URL del paso A5.</li>
+            <li><b>Token de acceso</b>: pega el token del paso A4.</li></ul></li>
+          <li>Pulsa <span class="ui">Guardar</span> y después <span class="ui">Probar conexión</span>.</li>
+        </ol>
+        <div class="check">✔ <b>Comprobación:</b> aparece en verde <i>"Conectado como Administrador (admin)"</i>.</div>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="c2"><div>
+        <h3>C2. Primera sincronización</h3>
+        <p>Pulsa <span class="ui">Sincronizar ahora</span>. A partir de aquí, la app guarda copia en tu hoja de forma automática: al editar, cada 2 minutos y cuando vuelve Internet.</p>
+        <div class="check">✔ <b>Comprobación:</b> arriba a la derecha, el indicador dice <b>Sincronizado</b> o <b>Conectado</b>.</div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ================= PARTE D ================= -->
+  <section class="part" id="parte-d">
+    <div class="card">
+      <h2><span class="badge">D</span>Activar la inteligencia artificial (Gemini) <span class="time">≈ 5 min</span></h2>
+
+      <div class="step"><input type="checkbox" data-s="d1"><div>
+        <h3>D1. Consigue tu API Key gratuita</h3>
+        <ol>
+          <li>Entra en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> con tu cuenta de Google.</li>
+          <li>Pulsa <span class="ui">Crear clave de API</span> (o <i>Create API key</i>) y acepta las condiciones si te las pide.</li>
+          <li>Copia la clave, que empieza por <code>AIza…</code>.</li>
+        </ol>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="d2"><div>
+        <h3>D2. Guárdala dentro de Apps Script (no en la app)</h3>
+        <ol>
+          <li>Vuelve a la pestaña de Apps Script → engranaje <span class="ui">⚙ Configuración del proyecto</span>.</li>
+          <li>Baja hasta <b>Propiedades del script</b> → <span class="ui">Añadir propiedad del script</span>.</li>
+          <li>En <b>Propiedad</b> escribe exactamente <code>GEMINI_API_KEY</code>; en <b>Valor</b>, pega tu clave.</li>
+          <li>Pulsa <span class="ui">Guardar propiedades del script</span>.</li>
+        </ol>
+        <p class="muted">No hace falta volver a implementar. Así tu clave queda en Google y nunca en tu navegador.</p>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="d3"><div>
+        <h3>D3. Pruébala</h3>
+        <p>En Content Studio: <span class="ui">⚙</span> → pestaña <span class="ui">IA (Gemini)</span>. Deja marcado <b>Seguro (recomendado)</b>, pulsa <span class="ui">Guardar</span> y luego <span class="ui">Probar IA</span>.</p>
+        <div class="check">✔ <b>Comprobación:</b> aparece en verde <i>"Gemini responde correctamente"</i>.</div>
+        <div class="warn">En el plan gratuito, Google puede usar lo que envías para mejorar sus productos, y los límites de uso diario pueden cambiar. No pegues datos confidenciales de clientes.</div>
+      </div></div>
+    </div>
+  </section>
+
+  <section class="part" id="parte-d2">
+    <div class="card">
+      <h2><span class="badge">D</span>Alternativa: usar Claude en lugar de Gemini <span class="time">≈ 5 min</span></h2>
+      <p>Úsalo si Gemini te da errores como <i>"no disponible temporalmente"</i> (el plan gratuito se satura con frecuencia) o si prefieres la calidad de Claude. Puedes tener los dos configurados y cambiar cuando quieras.</p>
+      <div class="warn"><b>Importante:</b> tu suscripción <b>Claude Pro</b> (la de claude.ai) <b>no incluye la API</b>. La API se paga aparte, por uso, con crédito que cargas en la consola de Anthropic. Como referencia, generar un guion completo con Claude Opus 5.5 cuesta unos céntimos de dólar.</div>
+
+      <div class="step"><input type="checkbox" data-s="e1"><div>
+        <h3>D2-1. Crea tu clave de la API de Claude</h3>
+        <ol>
+          <li>Entra en <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a>. Crea una cuenta o inicia sesión (es la consola para desarrolladores, distinta de claude.ai).</li>
+          <li>En <span class="ui">Billing</span> (Facturación), añade un método de pago y carga crédito, por ejemplo 5 USD. Si quieres, activa un límite de gasto mensual.</li>
+          <li>En <span class="ui">API Keys</span> pulsa <span class="ui">Create Key</span>, ponle de nombre <i>Content Studio</i> y copia la clave, que empieza por <code>sk-ant-</code>. Solo se muestra una vez.</li>
+        </ol>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="e2"><div>
+        <h3>D2-2. Guárdala en Apps Script</h3>
+        <p>Igual que en D2: <span class="ui">⚙ Configuración del proyecto</span> → <b>Propiedades del script</b> → <span class="ui">Añadir propiedad del script</span>. En <b>Propiedad</b> escribe <code>ANTHROPIC_API_KEY</code>, en <b>Valor</b> pega la clave y pulsa <span class="ui">Guardar propiedades del script</span>.</p>
+        <p class="muted">Necesitas la versión 1.2 de <code>Code.gs</code> (ver «Actualiza el código» al principio). Para comprobarlo, elige la función <b>testClaude</b> en la lista y pulsa Ejecutar: el registro debe decir <i>"Claude responde: …"</i>.</p>
+      </div></div>
+
+      <div class="step"><input type="checkbox" data-s="e3"><div>
+        <h3>D2-3. Actívalo en la app</h3>
+        <p><span class="ui">⚙</span> → <span class="ui">IA (Gemini / Claude)</span> → en <b>Proveedor</b> elige <b>Claude</b> → elige el modelo → <span class="ui">Guardar</span> → <span class="ui">Probar IA</span>.</p>
+        <table><tr><th>Modelo</th><th>Para qué</th></tr>
+          <tr><td>Claude Opus 5.5</td><td>La mejor calidad para guiones, evaluación y estrategia (recomendado)</td></tr>
+          <tr><td>Claude Sonnet 5.5</td><td>Más rápido y cuesta la mitad</td></tr>
+          <tr><td>Claude Haiku 5.5</td><td>El más barato, para pruebas o tareas sencillas</td></tr></table>
+        <div class="check">✔ <b>Comprobación:</b> aparece en verde <i>"Claude responde correctamente"</i>.</div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ================= LISTO ================= -->
+  <section class="part">
+    <div class="card here">
+      <h2>🎉 ¡Listo! ¿Y ahora?</h2>
+      <ol>
+        <li>Pulsa <span class="ui">Marcas</span> → <span class="ui">Nueva marca</span> y completa su ficha: productos, tono, colores y redes. La IA usa esa información.</li>
+        <li>Ve a <span class="ui">Ideas</span> → <span class="ui">Generar ideas con IA</span>.</li>
+        <li>Abre una idea → pestaña <span class="ui">Guion</span> → <span class="ui">Generar versiones</span>.</li>
+      </ol>
+      <p class="muted">¿Quieres explorar antes con ejemplos? En <span class="ui">⚙</span> → <span class="ui">Datos y copias</span> → <span class="ui">Cargar demostración</span>. Si ya conectaste la hoja, los ejemplos también se copiarán ahí; luego puedes enviar esas dos marcas a la papelera desde <span class="ui">Marcas</span>.</p>
+      <p>Manual completo de uso: <code>docs/USO.md</code>.</p>
+    </div>
+  </section>
+
+  <!-- ================= PROBLEMAS ================= -->
+  <section class="part">
+    <div class="card">
+      <h2>Si algo no funciona</h2>
+      <table>
+        <tr><th>Lo que ves</th><th>Qué hacer</th></tr>
+        <tr><td>La página sale en blanco o con errores al abrir <code>index.html</code></td><td>No abras <code>index.html</code> directamente. Usa <b>Abrir Content Studio</b> (Parte B).</td></tr>
+        <tr><td>En la lista de funciones no aparece <b>instalar</b></td><td>Guarda el archivo (💾) y recarga la página de Apps Script. Si sigue sin aparecer, vuelve a pegar el <code>Code.gs</code> del ZIP.</td></tr>
+        <tr><td>"No se pudo contactar con Apps Script"</td><td>Revisa que la URL termina en <code>/exec</code> y que en A5 elegiste <b>Cualquier usuario</b>.</td></tr>
+        <tr><td>"Token no autorizado"</td><td>Vuelve a copiar el token sin espacios al principio ni al final.</td></tr>
+        <tr><td>"Respuesta no válida del servidor"</td><td>Copiaste otra URL. Usa la de <i>Implementar → Gestionar implementaciones</i>, la que termina en <code>/exec</code>.</td></tr>
+        <tr><td>"Gemini no está disponible temporalmente"</td><td>El servicio gratuito de Google está saturado. Espera un minuto, prueba otro modelo con <i>Cargar modelos</i> o usa Claude (Parte D, alternativa).</td></tr>
+        <tr><td>"Claude… no tiene crédito"</td><td>Carga saldo en platform.claude.com → Billing.</td></tr>
+        <tr><td>"Falta GEMINI_API_KEY"</td><td>Revisa el paso D2: el nombre debe ser exactamente <code>GEMINI_API_KEY</code>.</td></tr>
+        <tr><td>"Límite de uso de Gemini alcanzado"</td><td>Espera un minuto (límite por minuto) o hasta mañana (límite diario gratuito).</td></tr>
+        <tr><td>El Mac pide instalar "herramientas de línea de comandos"</td><td>Acepta, espera a que termine (unos minutos) y vuelve a abrir el archivo de la Parte B.</td></tr>
+        <tr><td>Mis datos no aparecen en otro navegador o computadora</td><td>En el otro equipo, haz la Parte B y la Parte C, y luego pulsa <span class="ui">Descarga completa</span> en Ajustes → Conexión.</td></tr>
+      </table>
+      <p class="muted" style="margin-top:12px">Si algún día cambias <code>Code.gs</code>, en Apps Script ve a <i>Implementar → Gestionar implementaciones → ✏️ editar → Versión: Nueva versión → Implementar</i>. La URL no cambia.</p>
+    </div>
+  </section>
+
+  <section class="part">
+    <div class="card">
+      <h2>Opcional: tener la app en internet (sin la ventana negra)</h2>
+      <p>Puedes publicarla gratis en GitHub Pages y abrirla desde cualquier computadora con una dirección como <code>https://tu-usuario.github.io/content-studio/</code>. No hace falta usar la terminal:</p>
+      <ol>
+        <li>Crea una cuenta en <a href="https://github.com" target="_blank" rel="noopener">github.com</a> y pulsa <span class="ui">New repository</span>. Ponle de nombre <b>content-studio</b> y pulsa <span class="ui">Create repository</span>.</li>
+        <li>Pulsa <span class="ui">uploading an existing file</span> y arrastra <b>todo el contenido</b> de la carpeta <code>content-studio</code>, carpetas incluidas. Pulsa <span class="ui">Commit changes</span>.</li>
+        <li>Ve a <span class="ui">Settings</span> → <span class="ui">Pages</span> → en <i>Branch</i> elige <b>main</b> y <b>/(root)</b> → <span class="ui">Save</span>. En 1–2 minutos aparecerá tu dirección.</li>
+        <li>Abre esa dirección y repite la Parte C (URL y token). Pulsa <span class="ui">Descarga completa</span> para traer tus datos desde la hoja.</li>
+      </ol>
+      <p class="muted">El sitio solo contiene el programa, no tus datos ni tus claves. Más detalles en <code>docs/GITHUB.md</code>.</p>
+    </div>
+  </section>
+</div>
+<script>
+  // Guarda qué pasos están hechos (solo en este navegador).
+  const boxes = [...document.querySelectorAll('[data-s]')];
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('cs-guia') || '{}'); } catch (e) { saved = {}; }
+  const update = () => {
+    const done = boxes.filter((b) => b.checked).length;
+    document.getElementById('bar').style.width = (done / boxes.length) * 100 + '%';
+    document.getElementById('ptext').textContent = done + ' de ' + boxes.length + ' pasos completados';
+    boxes.forEach((b) => b.closest('.step').classList.toggle('done', b.checked));
+  };
+  boxes.forEach((b) => {
+    b.checked = !!saved[b.dataset.s];
+    b.addEventListener('change', () => { saved[b.dataset.s] = b.checked; try { localStorage.setItem('cs-guia', JSON.stringify(saved)); } catch (e) { /* sin almacenamiento */ } update(); });
+  });
+  update();
+</script>
+</body>
+</html>

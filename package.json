@@ -1,0 +1,14 @@
+{
+  "name": "content-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Centro de operaciones de contenido multimarca (offline-first, Google Sheets + Gemini).",
+  "scripts": {
+    "start": "python3 -m http.server 4747 --bind 127.0.0.1",
+    "serve": "npx --yes serve -l 4747 .",
+    "test": "node --test tests/",
+    "sw": "node tools/update-sw.js"
+  },
+  "license": "MIT"
+}

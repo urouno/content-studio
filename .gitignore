@@ -1,0 +1,23 @@
+# Secretos y configuraciones locales — nunca subir
+.env
+.env.*
+*.key
+config.local.js
+.clasp.json
+.clasprc.json
+
+# Copias de seguridad exportadas desde la app (pueden contener datos de clientes)
+*-backup-*.json
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+node_modules/
+
+# Configuración local del editor
+.claude/
+
+# Paquetes descargables (no forman parte del código)
+*.zip

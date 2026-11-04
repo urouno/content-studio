@@ -1,0 +1,24 @@
+{
+  "app": "content-studio",
+  "version": 1,
+  "exportedAt": "2026-11-04T00:00:00.000Z",
+  "tables": {
+    "brands": [
+      { "id": "MRC-ejemplo1-aaaaa", "brandId": "MRC-ejemplo1-aaaaa", "createdAt": "2026-11-04T00:00:00.000Z", "updatedAt": "2026-11-04T00:00:00.000Z", "deletedAt": null, "version": 1, "updatedBy": "import",
+        "name": "Mi marca (ejemplo)", "description": "Describe la marca", "sector": "Sector", "valueProp": "Propuesta de valor", "products": "Lista verificada de productos y servicios", "businessGoals": "", "audience": "", "painPoints": "Problema 1\nProblema 2", "color": "#4f46e5", "status": "activa", "logoAssetId": "" }
+    ],
+    "brandConfigs": [
+      { "id": "CFG-ejemplo1-aaaaa", "brandId": "MRC-ejemplo1-aaaaa", "createdAt": "2026-11-04T00:00:00.000Z", "updatedAt": "2026-11-04T00:00:00.000Z", "deletedAt": null, "version": 1, "updatedBy": "import",
+        "voice": { "personality": "Cercana", "tone": "Claro y directo", "formality": 2, "person": "tú", "vocabulary": "", "avoid": "", "knowledgeLevel": 1, "narrationStyle": "", "approvedExamples": "" },
+        "visual": { "colors": [{ "name": "Principal", "hex": "#4f46e5" }], "fonts": [{ "role": "Títulos", "family": "Inter" }], "subtitleStyle": "", "textPosition": "", "editingStyle": "", "pace": "", "graphics": "", "music": "", "sfx": "", "transitions": "Cortes simples", "intro": "", "outro": "", "references": "" },
+        "strategy": { "safeRatio": 80, "wpm": 160, "monthlyTarget": 8, "notes": "" } }
+    ],
+    "pillars": [
+      { "id": "PIL-ejemplo1-aaaaa", "brandId": "MRC-ejemplo1-aaaaa", "createdAt": "2026-11-04T00:00:00.000Z", "updatedAt": "2026-11-04T00:00:00.000Z", "deletedAt": null, "version": 1, "updatedBy": "import", "name": "Dudas frecuentes", "description": "", "objective": "confianza", "share": 40 }
+    ],
+    "ideas": [
+      { "id": "CNT-ejemplo1-aaaaa", "brandId": "MRC-ejemplo1-aaaaa", "createdAt": "2026-11-04T00:00:00.000Z", "updatedAt": "2026-11-04T00:00:00.000Z", "deletedAt": null, "version": 1, "updatedBy": "import",
+        "title": "Si te pasa [problema], tienes que [solución]", "topic": "", "pillarId": "PIL-ejemplo1-aaaaa", "audience": "", "problem": "", "keyword": "", "objective": "confianza", "funnel": "mofu", "contentType": "familiaridad", "platforms": ["tiktok", "instagram"], "format": "problema-solucion", "priority": 2, "status": "idea", "difficulty": "facil", "experimental": false, "knowledgeLevel": 1, "owner": "", "targetDate": "", "references": "", "notes": "", "source": "manual", "statusHistory": [] }
+    ]
+  }
+}
