@@ -1,5 +1,7 @@
 # Content Studio
 
+**🌐 App publicada:** https://urouno.github.io/content-studio/
+
 > **👉 Empieza aquí: abre `GUIA-DE-INSTALACION.html` con doble clic.** Es la guía paso a paso para instalarlo sin saber programar.
 
 Centro de operaciones de contenido para redes sociales **multimarca**. Cubre todo el proceso en una sola herramienta:
