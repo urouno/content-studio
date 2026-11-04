@@ -1,6 +1,6 @@
 // Service Worker: caché del "app shell" para funcionamiento sin conexión.
 // Cambia CACHE_VERSION en cada despliegue para que los clientes reciban la nueva versión.
-const CACHE_VERSION = 'cs-v202611041512';
+const CACHE_VERSION = 'cs-v202611041611';
 const SHELL = [
   './',
   './assets/icons/apple-touch-icon.png',
@@ -71,14 +71,22 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // APIs externas: nunca se cachean
   if (req.mode === 'navigate') {
-    event.respondWith(fetch(req).catch(() => caches.match('./index.html')));
+    event.respondWith(fetch(req, { cache: 'no-cache' }).catch(() => caches.match('./index.html')));
     return;
   }
-  // Stale-while-revalidate para recursos propios
+  // Red primero (siempre la versión más reciente cuando hay internet); la caché solo sin conexión.
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_VERSION);
-    const cached = await cache.match(req, { ignoreSearch: true });
-    const network = fetch(req, { cache: 'no-cache' }).then((res) => { if (res.ok) cache.put(req, res.clone()); return res; }).catch(() => null);
-    return cached || (await network) || new Response('Sin conexión', { status: 503, statusText: 'Offline' });
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5000);
+      const res = await fetch(req, { cache: 'no-cache', signal: ctrl.signal });
+      clearTimeout(timer);
+      if (res.ok) cache.put(req, res.clone());
+      return res;
+    } catch {
+      const cached = await cache.match(req, { ignoreSearch: true });
+      return cached || new Response('Sin conexión', { status: 503, statusText: 'Offline' });
+    }
   })());
 });

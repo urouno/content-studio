@@ -2,43 +2,8 @@
 // No sustituye la prueba en Google real (ver docs/PRUEBAS.md), pero valida la lógica de sync.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import crypto from 'node:crypto';
-
-function makeEnv({ geminiResponder } = {}) {
-  const sheets = new Map();
-  const props = new Map();
-  class Range {
-    constructor(sh, r, c, nr, nc) { Object.assign(this, { sh, r, c, nr, nc }); }
-    getValues() { const out = []; for (let i = 0; i < this.nr; i++) { const row = []; for (let j = 0; j < this.nc; j++) row.push(this.sh.data[this.r - 1 + i]?.[this.c - 1 + j] ?? ''); out.push(row); } return out; }
-    setValues(v) { v.forEach((row, i) => { const ri = this.r - 1 + i; this.sh.data[ri] = this.sh.data[ri] || []; row.forEach((x, j) => { this.sh.data[ri][this.c - 1 + j] = x; }); }); return this; }
-    setNumberFormat() { return this; } setFontWeight() { return this; } setBackground() { return this; } setDataValidation() { return this; }
-  }
-  class Sheet {
-    constructor(name) { this.name = name; this.data = []; }
-    getRange(r, c, nr = 1, nc = 1) { return new Range(this, r, c, nr, nc); }
-    getDataRange() { return new Range(this, 1, 1, Math.max(1, this.data.length), this.getLastColumn() || 1); }
-    getLastRow() { return this.data.length; }
-    getLastColumn() { return Math.max(0, ...this.data.map((r) => r.length)); }
-    getMaxRows() { return 1000; } setFrozenRows() {}
-  }
-  const ss = { getName: () => 'Hoja de prueba', getSheetByName: (n) => sheets.get(n) || null, insertSheet: (n) => { const s = new Sheet(n); sheets.set(n, s); return s; } };
-  const fetchCalls = [];
-  const ctx = {
-    console: { log() {}, error() {} },
-    SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss, flush() {}, newDataValidation: () => ({ requireValueInList() { return this; }, setAllowInvalid() { return this; }, build() { return {}; } }), getUi: () => { throw new Error('no ui'); } },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => props.set(k, String(v)), deleteProperty: (k) => props.delete(k), getProperties: () => Object.fromEntries(props) }) },
-    LockService: { getScriptLock: () => ({ tryLock: () => true, waitLock() {}, releaseLock() {} }) },
-    ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (s) => ({ text: s, setMimeType() { return this; } }) },
-    Utilities: { getUuid: () => crypto.randomUUID(), sleep() {}, DigestAlgorithm: { SHA_256: 'sha256' }, computeDigest: (_a, s) => [...crypto.createHash('sha256').update(s).digest()].map((b) => (b > 127 ? b - 256 : b)), formatDate: (d) => d.toISOString().slice(0, 10) },
-    UrlFetchApp: { fetch: (url, opts) => { fetchCalls.push({ url, opts }); const r = geminiResponder ? geminiResponder(url, opts) : { code: 200, body: { candidates: [] } }; return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) }; } },
-  };
-  vm.createContext(ctx);
-  vm.runInContext(readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8'), ctx);
-  const post = (body) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(body) } }).text);
-  return { ctx, post, sheets, props, fetchCalls };
-}
+import { makeEnv } from './gas-mock.js';
 
 const ts = () => new Date().toISOString();
 const rec = (id, extra = {}) => ({ id, brandId: 'MRC-aa11-bb22', createdAt: ts(), updatedAt: ts(), deletedAt: null, version: 1, updatedBy: 'DEV-x', ...extra });
@@ -83,9 +48,9 @@ test('detecta conflictos de concurrencia (dos dispositivos editan la misma versi
   const { post, token } = ready();
   const idea = rec('CNT-aa11-cc33', { title: 'Base', status: 'idea' });
   post({ action: 'sync', token, ops: [{ key: 'k1', table: 'ideas', id: idea.id, baseVersion: 0, record: idea }] });
-  const a = post({ action: 'sync', token, ops: [{ key: 'k2', table: 'ideas', id: idea.id, baseVersion: 1, record: { ...idea, title: 'Dispositivo A', version: 2 } }] });
+  const a = post({ action: 'sync', token, ops: [{ key: 'k2', table: 'ideas', id: idea.id, baseVersion: 1, record: { ...idea, title: 'Dispositivo A', version: 2, updatedBy: 'DEV-a' } }] });
   assert.equal(a.applied.length, 1);
-  const b = post({ action: 'sync', token, ops: [{ key: 'k3', table: 'ideas', id: idea.id, baseVersion: 1, record: { ...idea, title: 'Dispositivo B', version: 2 } }] });
+  const b = post({ action: 'sync', token, ops: [{ key: 'k3', table: 'ideas', id: idea.id, baseVersion: 1, record: { ...idea, title: 'Dispositivo B', version: 2, updatedBy: 'DEV-b' } }] });
   assert.equal(b.applied.length, 0); assert.equal(b.conflicts.length, 1);
   assert.equal(b.conflicts[0].server.title, 'Dispositivo A');
 });
@@ -202,4 +167,37 @@ test('errores de Gemini incluyen el modelo y el detalle real', () => {
   props.set('GEMINI_API_KEY', 'X');
   const r = post({ action: 'ai.generate', token, model: 'gemini-flash-latest', body: { contents: [{ parts: [{ text: 'x' }] }] } });
   assert.equal(r.error.status, 503); assert.match(r.error.message, /gemini-flash-latest/); assert.match(r.error.details, /overloaded/);
+});
+
+test('Gemini prueba otro modelo cuando el primero está saturado', () => {
+  const { post, token, props, fetchCalls } = ready({ geminiResponder: (url) => {
+    if (url.includes('/models?')) return { code: 200, body: { models: [
+      { name: 'models/gemini-flash-latest', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-3.5-flash-lite', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-3.6-flash-preview-tts', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] } ] } };
+    if (url.includes('gemini-flash-latest:')) return { code: 503, body: { error: { message: 'The model is overloaded.' } } };
+    return { code: 200, body: { candidates: [{ content: { parts: [{ text: 'hola' }] } }] } };
+  } });
+  props.set('GEMINI_API_KEY', 'K');
+  const r = post({ action: 'ai.generate', token, model: 'gemini-flash-latest', body: { contents: [{ parts: [{ text: 'x' }] }] } });
+  assert.equal(r.ok, true); assert.equal(r.data.usedModel, 'gemini-3.5-flash-lite');
+  assert.equal(r.data.triedModels[0].status, 503);
+  assert.ok(!fetchCalls.some((c) => c.url.includes('tts:')), 'no debe probar modelos de voz');
+});
+
+test('Gemini no insiste con otros modelos si la clave es inválida', () => {
+  const { post, token, props, fetchCalls } = ready({ geminiResponder: (url) => (url.includes('/models?') ? { code: 400, body: {} } : { code: 400, body: { error: { message: 'API key not valid' } } }) });
+  props.set('GEMINI_API_KEY', 'K'); props.set('GEMINI_MODELS', 'gemini-a,gemini-b');
+  const r = post({ action: 'ai.generate', token, model: 'gemini-flash-latest', body: { contents: [{ parts: [{ text: 'x' }] }] } });
+  assert.equal(r.error.status, 400); assert.equal(fetchCalls.filter((c) => c.url.includes(':generateContent')).length, 1);
+});
+
+test('reenviar un cambio ya guardado no crea conflicto (idempotente)', () => {
+  const { post, token } = ready();
+  const idea = rec('CNT-aa11-cc33', { title: 'Una', status: 'idea' });
+  const op = { key: 'k', table: 'ideas', id: idea.id, baseVersion: 0, record: idea };
+  assert.equal(post({ action: 'sync', token, ops: [op] }).applied.length, 1);
+  const again = post({ action: 'sync', token, ops: [op] });
+  assert.deepEqual(again.applied, ['k']); assert.equal(again.conflicts.length, 0);
 });

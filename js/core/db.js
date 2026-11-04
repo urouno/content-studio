@@ -55,6 +55,8 @@ export const idb = {
   clear: (store) => tx(store, 'readwrite', (s) => { s.clear(); }),
   // Escritura atómica de un registro + su operación pendiente + historial.
   writeAtomic: (entries) => {
+    // Sin cambios no se abre transacción (IndexedDB rechaza una transacción sin almacenes).
+    if (!entries || !entries.length) return Promise.resolve();
     const stores = [...new Set(entries.map((e) => e.store))];
     return tx(stores, 'readwrite', (...objs) => {
       entries.forEach((e) => {

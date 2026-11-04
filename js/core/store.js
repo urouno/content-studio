@@ -104,6 +104,7 @@ export const store = {
   pendingOps() { return [...outbox.values()].sort((a, b) => a.ts.localeCompare(b.ts)); },
   pendingCount() { return outbox.size; },
   async ackOps(keys, serverMeta = {}) {
+    if (!keys?.length) return;
     keys.forEach((k) => outbox.delete(k));
     await idb.writeAtomic(keys.map((k) => ({ store: 'outbox', delete: true, key: k })));
     emit('outbox', outbox.size);

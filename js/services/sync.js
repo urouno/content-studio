@@ -49,12 +49,20 @@ export async function syncNow({ silent = false } = {}) {
         await store.ackOps(appliedKeys);
         pushed += appliedKeys.length;
         for (const c of res.conflicts || []) {
+          const local = store.getAny(c.table, c.id);
+          // Si la hoja ya tiene exactamente esta versión, no es un conflicto real.
+          if (local && c.server && Number(c.server.version) === Number(local.version) && String(c.server.updatedAt) === String(local.updatedAt) && String(c.server.updatedBy) === String(local.updatedBy)) continue;
           conflictCount++;
           await conflicts.put({ key: `${c.table}:${c.id}`, table: c.table, id: c.id, server: c.server, detectedAt: nowISO() });
         }
         // Las claves en conflicto se retiran de la cola hasta que el usuario decida.
         await store.ackOps((res.conflicts || []).map((c) => `${c.table}:${c.id}`));
-        for (const ch of res.changes || []) { if (await store.applyRemote(ch.table, ch.record)) pulled++; }
+        // Los registros en conflicto no se sobrescriben: se conservan ambas versiones hasta que el usuario decida.
+        const inConflict = new Set((await conflicts.all()).map((c) => c.key));
+        for (const ch of res.changes || []) {
+          if (inConflict.has(`${ch.table}:${ch.record.id}`)) continue;
+          if (await store.applyRemote(ch.table, ch.record)) pulled++;
+        }
         // Rechazados por validación: quedan en la cola (no se pierden) y se informa del motivo.
         if ((res.rejected || []).length) rejectedMsgs.push(...res.rejected.map((r) => `${r.key}: ${r.reason}`));
         since = res.serverTime || since;

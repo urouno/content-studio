@@ -11,6 +11,7 @@
  *   GEMINI_API_KEY     Clave de Google AI Studio (opcional)
  *   ANTHROPIC_API_KEY  Clave de la API de Claude (opcional; platform.claude.com)
  *   AI_EFFORT          Esfuerzo de Claude: low | medium | high (por defecto low)
+ *   GEMINI_MODELS      Opcional: modelos de reserva de Gemini separados por comas
  *   SPREADSHEET_ID  Solo si el script NO está vinculado a la hoja
  *   AI_DAILY_LIMIT  Solicitudes de IA por token y día (por defecto 300)
  *   AI_MAX_TOKENS   Máximo de tokens de salida por solicitud (por defecto 16384)
@@ -45,7 +46,7 @@ function instalar() {
   return token;
 }
 
-var VERSION = '1.2.0';
+var VERSION = '1.3.0';
 var BASE = ['id', 'brandId', 'createdAt', 'updatedAt', 'deletedAt', 'version', 'updatedBy'];
 var SERVER_COLS = ['syncedAt'];
 var MAX_CELL = 49000;
@@ -288,6 +289,8 @@ function sync_(user, req) {
             var cur = toRecord_(t, tb, entry.values);
             delete cur.syncedAt;
             var serverV = Number(cur.version) || 0;
+            // Reenvío de un cambio que ya se guardó (p. ej. la respuesta anterior se perdió): idempotente.
+            if (serverV === Number(op.record.version) && String(cur.updatedAt) === String(op.record.updatedAt) && String(cur.updatedBy) === String(op.record.updatedBy)) { applied.push(op.key); return; }
             if (serverV > (Number(op.baseVersion) || 0)) { conflicts.push({ table: t, id: op.id, server: cur }); return; }
             var rowVals = toRow_(t, tb, op.record, now);
             tb.sheet.getRange(entry.row, 1, 1, tb.header.length).setValues([rowVals]);
@@ -390,17 +393,80 @@ function aiGenerate_(user, req) {
   if (Array.isArray(b.tools)) payload.tools = b.tools.filter(function (t) { return t && t.google_search; }).map(function () { return { google_search: {} }; });
   var key = geminiKey_();
   countAi_(user);
-  var res = UrlFetchApp.fetch(GEMINI_BASE + '/models/' + encodeURIComponent(model) + ':generateContent', {
-    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    headers: { 'x-goog-api-key': key }, payload: JSON.stringify(payload),
-  });
-  var code = res.getResponseCode(); var text = res.getContentText();
-  var data; try { data = JSON.parse(text); } catch (x) { data = null; }
-  if (code !== 200) {
-    var gmsg = (data && data.error && data.error.message) || ('Gemini respondió ' + code);
-    throw err_('AI_ERROR', 'Gemini (' + model + '): ' + gmsg, { status: code, details: gmsg });
+  // En el plan gratuito cada modelo tiene su propio límite y puede saturarse:
+  // si uno falla por saturación, cuota o porque ya no existe, se prueba el siguiente.
+  var candidates = geminiCandidates_(model, key);
+  var errors = [];
+  for (var i = 0; i < candidates.length; i++) {
+    var m = candidates[i];
+    var res = UrlFetchApp.fetch(GEMINI_BASE + '/models/' + encodeURIComponent(m) + ':generateContent', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { 'x-goog-api-key': key }, payload: JSON.stringify(payload),
+    });
+    var code = res.getResponseCode();
+    var data; try { data = JSON.parse(res.getContentText()); } catch (x) { data = null; }
+    if (code === 200) { data.usedModel = m; data.triedModels = errors; return { data: data }; }
+    var gmsg = (data && data.error && data.error.message) || ('respondió ' + code);
+    errors.push({ model: m, status: code, message: String(gmsg).slice(0, 300) });
+    // Clave inválida, permisos o solicitud mal formada: probar otro modelo no ayuda.
+    if (code === 400 || code === 401 || code === 403) break;
   }
-  return { data: data };
+  var last = errors[errors.length - 1] || { status: 500, message: 'sin respuesta' };
+  var summary = errors.map(function (e) { return e.model + ' → ' + e.status + ' (' + e.message + ')'; }).join(' | ');
+  throw err_('AI_ERROR', 'Gemini no respondió con ninguno de los modelos probados: ' + summary, { status: last.status, details: summary });
+}
+
+/** Modelos a probar: el elegido primero y después los Flash/Flash-Lite disponibles en la cuenta. */
+function geminiCandidates_(model, key) {
+  var props = PropertiesService.getScriptProperties();
+  var custom = props.getProperty('GEMINI_MODELS'); // opcional: lista separada por comas
+  var list = [model];
+  if (custom) list = list.concat(custom.split(',').map(function (x) { return x.trim(); }).filter(String));
+  else {
+    var available = geminiAvailable_(key);
+    var pick = function (re) { return available.filter(function (n) { return re.test(n); }); };
+    list = list.concat(['gemini-flash-lite-latest', 'gemini-flash-latest'].filter(function (n) { return available.indexOf(n) !== -1; }),
+      pick(/flash-lite/), pick(/flash/));
+  }
+  var seen = {}; var out = [];
+  list.forEach(function (n) { if (n && !seen[n]) { seen[n] = true; out.push(n); } });
+  return out.slice(0, 4);
+}
+
+/** Lista de modelos de texto disponibles para la clave (se guarda 6 h en caché). */
+function geminiAvailable_(key) {
+  var cache = CacheService.getScriptCache();
+  var hit = cache && cache.get('gemini_models');
+  if (hit) return JSON.parse(hit);
+  var names = [];
+  try {
+    var res = UrlFetchApp.fetch(GEMINI_BASE + '/models?pageSize=200', { muteHttpExceptions: true, headers: { 'x-goog-api-key': key } });
+    if (res.getResponseCode() === 200) {
+      names = (JSON.parse(res.getContentText()).models || [])
+        .filter(function (m) { return (m.supportedGenerationMethods || []).indexOf('generateContent') !== -1; })
+        .map(function (m) { return String(m.name).replace('models/', ''); })
+        .filter(function (n) { return /^gemini-/.test(n) && !/tts|image|live|audio|embedding|robotics|computer|exp/.test(n); })
+        .sort().reverse(); // versiones más nuevas primero
+    }
+  } catch (x) { names = []; }
+  if (cache && names.length) cache.put('gemini_models', JSON.stringify(names), 21600);
+  return names;
+}
+
+/** Ejecuta en el editor: prueba Gemini con cada modelo y muestra qué funciona con tu clave. */
+function diagnosticarGemini() {
+  var key = geminiKey_();
+  var models = geminiAvailable_(key);
+  console.log('Modelos de texto disponibles para tu clave (' + models.length + '): ' + models.join(', '));
+  ['gemini-flash-latest', 'gemini-flash-lite-latest'].concat(models.slice(0, 6)).forEach(function (m) {
+    var res = UrlFetchApp.fetch(GEMINI_BASE + '/models/' + encodeURIComponent(m) + ':generateContent', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { 'x-goog-api-key': key },
+      payload: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Responde solo: ok' }] }], generationConfig: { maxOutputTokens: 50 } }),
+    });
+    var code = res.getResponseCode(); var msg = '';
+    try { var d = JSON.parse(res.getContentText()); msg = code === 200 ? 'FUNCIONA' : (d.error && d.error.message); } catch (x) { msg = res.getContentText().slice(0, 120); }
+    console.log((code === 200 ? '✔ ' : '✘ ') + m + ' → ' + code + ' ' + String(msg).slice(0, 160));
+  });
 }
 
 function aiModels_(req) {

@@ -67,13 +67,14 @@
 
   <div class="card here" id="actualizar">
     <h3>🔄 ¿Ya lo tenías instalado? Actualiza el código de Apps Script (2 min)</h3>
-    <p>La versión 1.2 añade <b>Claude</b> como alternativa a Gemini y explica mejor los errores. Para que tu hoja la use:</p>
+    <p>La versión <b>1.3</b> corrige el error de sincronización <i>«The storeNames parameter was empty»</i>, hace que Gemini pruebe solo otros modelos gratuitos cuando uno está saturado y añade Claude como opción. Para que tu hoja la use:</p>
     <ol>
       <li>Abre tu proyecto de Apps Script (desde la hoja: <span class="ui">Extensiones</span> → <span class="ui">Apps Script</span>).</li>
       <li>Abre <code>Code.gs</code>, borra todo su contenido, pega el nuevo <code>apps-script/Code.gs</code> y guarda con 💾.</li>
       <li>Pulsa <span class="ui">Implementar</span> → <span class="ui">Gestionar implementaciones</span> → el lápiz ✏️ → en <b>Versión</b> elige <span class="ui">Nueva versión</span> → <span class="ui">Implementar</span>. <b>La URL no cambia.</b></li>
     </ol>
     <div class="warn">Si te saltas el paso 3, Apps Script sigue usando el código anterior.</div>
+    <p style="margin-top:10px"><b>Comprobación:</b> en la app, <span class="ui">⚙</span> → <span class="ui">Conexión y sync</span> → <span class="ui">Probar conexión</span> debe mostrar <b>versión 1.3.0</b>.</p>
   </div>
 
   <div class="card here">
@@ -318,7 +319,7 @@
         <tr><td>"No se pudo contactar con Apps Script"</td><td>Revisa que la URL termina en <code>/exec</code> y que en A5 elegiste <b>Cualquier usuario</b>.</td></tr>
         <tr><td>"Token no autorizado"</td><td>Vuelve a copiar el token sin espacios al principio ni al final.</td></tr>
         <tr><td>"Respuesta no válida del servidor"</td><td>Copiaste otra URL. Usa la de <i>Implementar → Gestionar implementaciones</i>, la que termina en <code>/exec</code>.</td></tr>
-        <tr><td>"Gemini no está disponible temporalmente"</td><td>El servicio gratuito de Google está saturado. Espera un minuto, prueba otro modelo con <i>Cargar modelos</i> o usa Claude (Parte D, alternativa).</td></tr>
+        <tr><td>"Gemini no está disponible temporalmente" o "Gemini no respondió con ninguno de los modelos probados"</td><td>1) Comprueba que tienes la versión 1.3 (sección «Actualiza el código»). 2) En Apps Script elige la función <b>diagnosticarGemini</b> y pulsa ▷ Ejecutar: el registro mostrará con ✔ qué modelos funcionan con tu clave. 3) En la app, <span class="ui">⚙</span> → <span class="ui">IA</span> → escribe en <b>Modelo de Gemini</b> uno de los que salieron con ✔ → <span class="ui">Guardar</span> → <span class="ui">Probar IA</span>.</td></tr>
         <tr><td>"Claude… no tiene crédito"</td><td>Carga saldo en platform.claude.com → Billing.</td></tr>
         <tr><td>"Falta GEMINI_API_KEY"</td><td>Revisa el paso D2: el nombre debe ser exactamente <code>GEMINI_API_KEY</code>.</td></tr>
         <tr><td>"Límite de uso de Gemini alcanzado"</td><td>Espera un minuto (límite por minuto) o hasta mañana (límite diario gratuito).</td></tr>
