@@ -33,8 +33,8 @@ export function render(main) {
       { v: count(['idea', 'aprobada']), l: 'Ideas pendientes', href: '#/ideas' },
       { v: count(['guion']), l: 'Guiones en desarrollo', href: '#/contenidos?st=guion' },
       { v: count(['guion_aprobado', 'por_grabar']), l: 'Por grabar', href: '#/contenidos?st=por_grabar' },
-      { v: count(['grabado', 'edicion']), l: 'En edición', href: '#/contenidos?st=edicion' },
-      { v: count(['listo']), l: 'Listos para publicar', href: '#/contenidos?st=listo' },
+      { v: count(['grabado']), l: 'Grabados por editar', href: '#/contenidos?st=grabado' },
+      { v: count(['listo']), l: 'Editados sin programar', href: '#/contenidos?st=listo' },
       { v: scheduled, l: 'Programados (internos)', href: '#/calendario/lista' },
       { v: pubMonth, l: 'Publicados este mes', href: '#/resultados' },
     ];
@@ -48,7 +48,7 @@ export function render(main) {
       const i = store.get('ideas', c.ideaId); if (i && statusIndex(i.status) < statusIndex('listo')) alerts.push({ sev: 'warn', text: `En riesgo: "${i.title}" se publica el ${fmtDate(c.date)} y está en "${PIPELINE[statusIndex(i.status)]?.name}"`, id: i.id, brandId: i.brandId });
     });
     ideas.filter((i) => i.targetDate && i.targetDate < today && statusIndex(i.status) < statusIndex('publicado') && !cal.some((c) => c.ideaId === i.id)).forEach((i) => alerts.push({ sev: 'warn', text: `Fecha objetivo vencida sin calendarizar: "${i.title}"`, id: i.id, brandId: i.brandId }));
-    ideas.filter((i) => i.status === 'listo' && !cal.some((c) => c.ideaId === i.id)).forEach((i) => alerts.push({ sev: 'info', text: `Listo sin fecha de publicación: "${i.title}"`, id: i.id, brandId: i.brandId }));
+    ideas.filter((i) => i.status === 'listo' && !cal.some((c) => c.ideaId === i.id)).forEach((i) => alerts.push({ sev: 'info', text: `Editado sin fecha de publicación: "${i.title}"`, id: i.id, brandId: i.brandId }));
     ideas.filter((i) => i.priority === 1 && ['idea', 'aprobada'].includes(i.status)).slice(0, 5).forEach((i) => alerts.push({ sev: 'info', text: `Prioridad alta sin guion: "${i.title}"`, id: i.id, brandId: i.brandId }));
     store.all('publications', { brandId: bId }).filter((p) => daysBetween(p.publishedAt, new Date()) >= 7 && !store.find('results', (r) => r.publicationId === p.id)).forEach((p) => {
       const i = store.get('ideas', p.ideaId); if (i) alerts.push({ sev: 'info', text: `Registra resultados: "${i.title}" (${platformLabel(p.platform)}) lleva ${daysBetween(p.publishedAt, new Date())} días publicado`, id: i.id, brandId: i.brandId, tab: 'resultados' });
@@ -86,7 +86,7 @@ export function render(main) {
         <div class="stack-lg">
           <section class="card"><div class="card-h"><h3>${icon('flag')}Prioridades, retrasos y pendientes</h3><span class="muted small">${alerts.length}</span></div>
             <div class="card-b">${alerts.length ? `<ul class="alerts">${alerts.slice(0, 14).map((a) => `<li class="al-${a.sev}"><a href="#/contenido/${a.id}${a.tab ? '/' + a.tab : ''}">${esc(a.text)}</a>${bId === 'all' ? brandTag(a.brandId) : ''}</li>`).join('')}</ul>` : `<p class="muted">Todo al día. No hay retrasos ni tareas urgentes.</p>`}</div></section>
-          <section class="card"><div class="card-h"><h3>${icon('layers')}Flujo de producción</h3><a class="small" href="#/contenidos">Ver tablero</a></div>
+          <section class="card"><div class="card-h"><h3>${icon('layers')}Flujo de contenidos</h3><a class="small" href="#/contenidos">Ver tablero</a></div>
             <div class="card-b funnel">${funnel.map((f) => `<a class="frow" href="#/contenidos?st=${f.id}"><span>${esc(f.name)}</span><div class="meter"><i style="width:${(f.n / maxF) * 100}%;background:${f.color}"></i></div><b>${f.n}</b></a>`).join('')}</div></section>
           ${compliance.length ? `<section class="card"><div class="card-h"><h3>${icon('target')}Cumplimiento del calendario · ${new Intl.DateTimeFormat('es', { month: 'long' }).format(now)}</h3></div>
             <div class="table-wrap"><table class="tbl"><thead><tr><th>Marca</th><th class="num">Meta mes</th><th class="num">Planificados</th><th class="num">Publicados</th><th>Avance</th></tr></thead><tbody>
@@ -96,7 +96,7 @@ export function render(main) {
         <aside class="stack-lg">
           <section class="card"><div class="card-h"><h3>${icon('calendar')}Próximas publicaciones</h3><a class="small" href="#/calendario/semana">Calendario</a></div>
             <div class="card-b">${upcoming.length ? `<ul class="upcoming">${upcoming.slice(0, 10).map((c) => { const i = store.get('ideas', c.ideaId); return i ? `<li><a href="#/contenido/${i.id}"><span class="up-date"><b>${parseDateKey(c.date).getDate()}</b>${new Intl.DateTimeFormat('es', { month: 'short' }).format(parseDateKey(c.date))}</span><span class="up-t"><span class="truncate">${esc(i.title)}</span><span class="row xs muted">${platformLabel(c.platform)}${c.time ? ` · ${c.time}` : ''} ${statusBadge(i.status)}</span></span></a></li>` : ''; }).join('')}</ul>` : '<p class="muted small">Nada programado en los próximos 14 días.</p>'}</div></section>
-          <section class="card"><div class="card-h"><h3>${icon('clock')}Indicadores de producción</h3></div>
+          <section class="card"><div class="card-h"><h3>${icon('clock')}Indicadores del flujo</h3></div>
             <div class="card-b stack small">
               <div class="row-between"><span>Ciclo medio idea → publicación</span><b>${cycle.length ? `${median(cycle)} días` : '—'}</b></div>
               <div class="row-between"><span>Contenidos que avanzaron esta semana</span><b>${moved}</b></div>

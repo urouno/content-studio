@@ -6,11 +6,14 @@
 
 Centro de operaciones de contenido para redes sociales **multimarca**. Cubre todo el proceso en una sola herramienta:
 
-**Investigación → Estrategia → Ideas → Guiones → Producción → Edición → Copies → Calendario → Publicación → Resultados → Optimización**
+**Investigación → Estrategia → Ideas → Guiones → Grabado ✓ → Editado ✓ → Copies → Calendario → Publicación → Resultados → Optimización**
+
+> La grabación (con el teléfono) y la edición (con Claude) se hacen fuera de la app: aquí solo se marca cada contenido como **grabado** y **editado**.
 
 - **Offline-first.** Todo se guarda en el navegador (IndexedDB) y funciona sin conexión gracias a un Service Worker.
 - **Google Sheets** como base de datos remota, mediante Google Apps Script. Incluye sincronización, control de versiones, conflictos y eliminación lógica.
 - **IA con Gemini (Google AI Studio) o Claude (API de Anthropic)**, a elegir, a través de un proxy seguro en Apps Script. Las claves nunca llegan al navegador.
+- **Documentos de referencia por marca** en Markdown (buyer persona, puntos de dolor, discurso comercial, oferta, reglas, foco comercial…) que la IA usa como contexto fijo. Ver [docs/DOCUMENTOS_DE_MARCA.md](docs/DOCUMENTOS_DE_MARCA.md).
 - **Metodología integrada.** Viene de una investigación de buenas prácticas y de la ingeniería inversa de 34 guiones de una agencia: estructuras, hooks en 4 capas, CTA y evaluador. Ver [docs/METODOLOGIA.md](docs/METODOLOGIA.md).
 - **HTML + CSS + JavaScript sin dependencias.** Son módulos ES que no necesitan compilación.
 
@@ -44,9 +47,19 @@ Al abrir el archivo como `file://`, los navegadores **bloquean los módulos Java
 | 2. Gemini (AI Studio) | Ideas, guiones, evaluación, copies e investigación con IA | [docs/CONFIGURACION_API.md §2](docs/CONFIGURACION_API.md) |
 | 3. GitHub y GitHub Pages | Repositorio y app publicada con HTTPS | [docs/GITHUB.md](docs/GITHUB.md) |
 
+## Actualizar desde una versión anterior
+
+Si ya usabas la app con Google Sheets, después de actualizar el código:
+
+1. Copia el nuevo [`apps-script/Code.gs`](apps-script/Code.gs) en tu proyecto de Apps Script.
+2. *Implementar → Gestionar implementaciones → editar → Versión: Nueva versión*. La URL no cambia.
+
+La hoja nueva `DocumentosMarca` se crea sola en la primera sincronización. Las hojas `Produccion` y `Edicion` ya no se usan: puedes conservarlas como archivo o borrarlas. Los contenidos que estaban "En edición" pasan a "Grabado · por editar".
+
 ## Documentación
 
 - [docs/USO.md](docs/USO.md): cómo usar la app, del flujo de trabajo a cada módulo.
+- [docs/DOCUMENTOS_DE_MARCA.md](docs/DOCUMENTOS_DE_MARCA.md): qué documentos de referencia necesita cada marca, qué llevan y cómo los usa la IA.
 - [docs/METODOLOGIA.md](docs/METODOLOGIA.md): investigación, ingeniería inversa del material de referencia y metodología con niveles de evidencia.
 - [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md): módulos, flujo de datos, sincronización, seguridad y limitaciones.
 - [docs/GOOGLE_SHEETS.md](docs/GOOGLE_SHEETS.md): estructura de hojas, identificadores y relaciones.
@@ -64,9 +77,9 @@ content-studio/
 ├── css/                     tokens · base · layout · components · views
 ├── js/
 │   ├── main.js              Arranque, router y barra superior
-│   ├── core/                db (IndexedDB) · store (datos, historial, cola) · schema · ui · utils · settings · events · app
-│   ├── services/            methodology · prompts · ai · assistant · sync · api · workflow · scriptkit · analytics · demo
-│   └── views/               dashboard · ideas · contents · content (+script, production, publish) · calendar · results · brands · method · settings
+│   ├── core/                db (IndexedDB) · store (datos, historial, cola) · schema · ui · utils · markdown · settings · events · app
+│   ├── services/            methodology · prompts · ai · assistant · branddocs · sync · api · workflow · scriptkit · analytics · demo
+│   └── views/               dashboard · ideas · contents · content (+script, publish) · calendar · results · brands (+docs) · method · settings
 ├── apps-script/             Code.gs + appsscript.json (backend)
 ├── assets/icons/            Favicon e iconos PWA
 ├── examples/                Archivo de ejemplo para importar

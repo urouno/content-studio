@@ -26,7 +26,8 @@ test('setup crea todas las hojas con cabeceras', () => {
   const { sheets } = ready();
   assert.ok(sheets.get('Ideas')); assert.equal(sheets.get('Ideas').data[0][0], 'id');
   assert.ok(sheets.get('Ideas').data[0].includes('syncedAt'));
-  assert.equal(sheets.size, 19); // 18 tablas + _Meta
+  assert.equal(sheets.size, 18); // 17 tablas + _Meta
+  assert.ok(sheets.get('DocumentosMarca').data[0].includes('content'));
 });
 
 test('crea, actualiza y descarga registros con tipos correctos', () => {
@@ -200,4 +201,15 @@ test('reenviar un cambio ya guardado no crea conflicto (idempotente)', () => {
   assert.equal(post({ action: 'sync', token, ops: [op] }).applied.length, 1);
   const again = post({ action: 'sync', token, ops: [op] });
   assert.deepEqual(again.applied, ['k']); assert.equal(again.conflicts.length, 0);
+});
+
+test('crea al vuelo la hoja de una tabla nueva si falta (actualización sin reinstalar)', () => {
+  const { post, token, sheets } = ready();
+  sheets.delete('DocumentosMarca');
+  const doc = rec('DOC-aa11bb22-buyer', { docType: 'buyer', title: 'Buyer persona', content: '# Buyer\n\n## Perfil\nLaura', active: true, order: 3, tasks: ['ideas', 'guion'] });
+  const r = post({ action: 'sync', token, since: '', ops: [{ key: 'brandDocs:' + doc.id, table: 'brandDocs', id: doc.id, baseVersion: 0, record: doc }] });
+  assert.equal(r.ok, true); assert.equal(r.applied.length, 1);
+  assert.ok(sheets.get('DocumentosMarca'));
+  const got = r.changes.find((c) => c.table === 'brandDocs').record;
+  assert.deepEqual(got.tasks, ['ideas', 'guion']); assert.equal(got.active, true); assert.equal(got.order, 3);
 });

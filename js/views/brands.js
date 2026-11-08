@@ -5,9 +5,10 @@ import { esc, fileToDataUrl, fmtDate } from '../core/utils.js';
 import { KNOWLEDGE_LEVELS, PLATFORMS, STRUCTURES, CTA_TYPES, HOOK_PATTERNS, HOOK_LAYERS, OBJECTIVES, byId } from '../services/methodology.js';
 import { createBrand, duplicateBrand, brandConfig, ensureBrandConfig } from '../services/workflow.js';
 import { pageHeader } from './shared.js';
+import { tabDocs } from './brand-docs.js';
 
 const TABS = [
-  { id: 'general', label: 'Identidad general', icon: 'brand' }, { id: 'comunicacion', label: 'Comunicación', icon: 'text' },
+  { id: 'general', label: 'Identidad general', icon: 'brand' }, { id: 'documentos', label: 'Documentos', icon: 'book' }, { id: 'comunicacion', label: 'Comunicación', icon: 'text' },
   { id: 'visual', label: 'Identidad visual', icon: 'image' }, { id: 'redes', label: 'Redes sociales', icon: 'send' },
   { id: 'estrategia', label: 'Pilares y estrategia', icon: 'target' }, { id: 'biblioteca', label: 'Hooks y CTA', icon: 'layers' },
   { id: 'referencias', label: 'Referencias', icon: 'link' },
@@ -18,10 +19,10 @@ const GENERAL = [
   { name: 'color', label: 'Color en la app', type: 'color' }, { name: 'status', label: 'Estado', type: 'select', options: [{ value: 'activa', label: 'Activa' }, { value: 'archivada', label: 'Archivada' }], empty: false },
   { name: 'description', label: 'Descripción', type: 'textarea', rows: 2, span: 3 },
   { name: 'valueProp', label: 'Propuesta de valor', type: 'textarea', rows: 2, span: 3 },
-  { name: 'products', label: 'Productos y servicios (fuente de verdad para la IA)', type: 'textarea', rows: 4, span: 3, hint: 'Incluye solo datos verificados: características, precios, garantías. La IA no debe inventar nada fuera de esto.' },
+  { name: 'products', label: 'Productos y servicios (fuente de verdad para la IA)', type: 'textarea', rows: 4, span: 3, hint: 'Resumen con datos verificados. El detalle va en Documentos → Productos, servicios y oferta; si ese documento tiene contenido, la IA usa el documento.' },
   { name: 'businessGoals', label: 'Objetivos comerciales', type: 'textarea', rows: 2, span: 3 },
-  { name: 'audience', label: 'Público objetivo', type: 'textarea', rows: 2, span: 3 },
-  { name: 'painPoints', label: 'Problemas frecuentes de sus clientes', type: 'textarea', rows: 4, span: 3, hint: 'Uno por línea, con las palabras que usan los clientes.' },
+  { name: 'audience', label: 'Público objetivo', type: 'textarea', rows: 2, span: 3, hint: 'Resumen. El perfil completo va en Documentos → Buyer persona.' },
+  { name: 'painPoints', label: 'Problemas frecuentes de sus clientes', type: 'textarea', rows: 4, span: 3, hint: 'Uno por línea, con las palabras que usan los clientes. El detalle va en Documentos → Puntos de dolor, deseos y objeciones.' },
 ];
 const VOICE = [
   { name: 'voice.personality', label: 'Personalidad', placeholder: 'Cercana, experta, con humor suave…', span: 2 },
@@ -46,7 +47,7 @@ const VISUAL = [
 ];
 
 export function render(main, { params, query }) {
-  const [id, tabId] = params;
+  const [id, tabId, subId] = params;
   if (!id) return renderList(main, query);
   const brand = store.get('brands', id);
   if (!brand) { main.innerHTML = emptyState('Marca no encontrada', 'Puede estar en la papelera.', '<a class="btn" href="#/marcas">Volver</a>', 'alert'); return null; }
@@ -61,7 +62,7 @@ export function render(main, { params, query }) {
     const body = main.querySelector('.bbody'); body.innerHTML = '';
     const host = document.createElement('div'); body.append(host);
     await ensureBrandConfig(id);
-    cleanup = ({ general: tabGeneral, comunicacion: tabVoice, visual: tabVisual, redes: tabPlatforms, estrategia: tabStrategy, biblioteca: tabLibrary, referencias: tabRefs })[tab](host, id) || null;
+    cleanup = ({ general: tabGeneral, documentos: tabDocs, comunicacion: tabVoice, visual: tabVisual, redes: tabPlatforms, estrategia: tabStrategy, biblioteca: tabLibrary, referencias: tabRefs })[tab](host, id, subId) || null;
   };
   drawTabs(); drawBody();
   return () => { try { cleanup?.(); } catch { /* */ } };
@@ -131,7 +132,7 @@ function tabVisual(host, id) {
       <section class="card"><div class="card-h"><h3>Tipografías</h3><button class="btn btn-sm" data-addfont>${icon('plus', 'ic-sm')}Tipografía</button></div><div class="card-b stack">
         ${(cfg.visual.fonts || []).map((f, i) => `<div class="row"><input class="input input-sm" data-frole="${i}" value="${esc(f.role)}" placeholder="Uso" style="width:160px"><input class="input input-sm" data-ffam="${i}" value="${esc(f.family)}" placeholder="Nombre de la fuente" style="flex:1"><span style="font-family:${esc(f.family)};min-width:80px">Aa Bb 123</span><button class="icon-btn sm" data-delfont="${i}">${icon('x', 'ic-sm')}</button></div>`).join('')}
       </div></section>
-      <section class="card"><div class="card-h"><h3>Estilo audiovisual</h3><span class="xs muted">Se aplica automáticamente a las fichas de edición</span></div><div class="card-b"><form class="form-grid" data-vform>${renderFields(VISUAL, cfg)}</form></div></section>
+      <section class="card"><div class="card-h"><h3>Estilo audiovisual</h3><span class="xs muted">La IA lo tiene en cuenta en guiones y copies</span></div><div class="card-b"><form class="form-grid" data-vform>${renderFields(VISUAL, cfg)}</form></div></section>
     </div>
     <aside class="stack-lg"><section class="card"><div class="card-h"><h3>${icon('image')}Recursos de la marca</h3></div><div class="card-b stack">
       <label class="dropzone" data-drop>${icon('upload')}<div class="small">Arrastra logotipos, imágenes o gráficos (≤ 1,5 MB) o haz clic</div><input type="file" accept="image/*,.svg" multiple hidden data-file></label>

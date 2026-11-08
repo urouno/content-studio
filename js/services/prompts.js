@@ -3,12 +3,14 @@ import { methodologyBrief, KNOWLEDGE_LEVELS, STRUCTURES, HOOK_PATTERNS, CTA_TYPE
 
 const TRUTH_RULES = `REGLAS DE VERACIDAD (obligatorias):
 - No inventes datos técnicos, cifras, especificaciones, precios, resultados de clientes, estudios ni beneficios de productos.
-- Usa solo la información de la marca y de la idea. Si una afirmación necesita comprobación, inclúyela en "verify" con el motivo.
+- Usa solo la información de la marca, de sus documentos de referencia y de la idea. Si una afirmación necesita comprobación, inclúyela en "verify" con el motivo.
+- Los DOCUMENTOS DE REFERENCIA son contexto fijo y fuente de verdad: respeta sus temas, identidad, voz, discurso comercial y foco actual. Si se contradicen, prevalece "Reglas, límites y temas sensibles" y después "Productos, servicios y oferta".
+- Nunca menciones productos, precios, promociones ni casos que no aparezcan en la marca o en sus documentos.
 - Si falta información para una afirmación, escribe un marcador entre corchetes, p. ej. [DATO A CONFIRMAR: tiempo de curación].
 - Distingue recomendaciones de hechos. No prometas viralidad ni resultados garantizados.`;
 
 export function brandContext(ctx) {
-  const { brand, config = {}, platforms = [], pillars = [], hooks = [], ctas = [], examples = [], learnings = [] } = ctx;
+  const { brand, config = {}, platforms = [], pillars = [], hooks = [], ctas = [], examples = [], learnings = [], docs = '', filled = new Set() } = ctx;
   const v = config.voice || {}; const vis = config.visual || {};
   const lvl = byId(KNOWLEDGE_LEVELS, Number(v.knowledgeLevel)) || KNOWLEDGE_LEVELS[1];
   const lines = [
@@ -16,10 +18,11 @@ export function brandContext(ctx) {
     brand.description && `Descripción: ${brand.description}`,
     brand.sector && `Sector: ${brand.sector}`,
     brand.valueProp && `Propuesta de valor: ${brand.valueProp}`,
-    brand.products && `Productos/servicios (fuente de verdad, no añadas otros): ${brand.products}`,
-    brand.businessGoals && `Objetivos comerciales: ${brand.businessGoals}`,
-    brand.audience && `Público objetivo: ${brand.audience}`,
-    brand.painPoints && `Problemas frecuentes de sus clientes: ${brand.painPoints}`,
+    // Si el documento equivalente tiene contenido, el resumen de la ficha no se repite.
+    brand.products && !filled.has('oferta') && `Productos/servicios (fuente de verdad, no añadas otros): ${brand.products}`,
+    brand.businessGoals && !filled.has('foco') && `Objetivos comerciales: ${brand.businessGoals}`,
+    brand.audience && !filled.has('buyer') && `Público objetivo: ${brand.audience}`,
+    brand.painPoints && !filled.has('dolores') && `Problemas frecuentes de sus clientes: ${brand.painPoints}`,
     'IDENTIDAD COMUNICATIVA:',
     v.personality && `- Personalidad: ${v.personality}`,
     v.tone && `- Tono de voz: ${v.tone}`,
@@ -44,6 +47,7 @@ export function brandContext(ctx) {
     ctas.filter((c) => c.status === 'evitar').length && `CTA A EVITAR: ${ctas.filter((c) => c.status === 'evitar').slice(0, 8).map((c) => `"${c.text}"`).join(' | ')}`,
     examples.length && `GUIONES APROBADOS DE ESTA MARCA (resumen): ${examples.map((e) => `"${e.hook}" → ${e.structure}`).join(' | ')}`,
     learnings.length && `APRENDIZAJES DE RESULTADOS (hipótesis, no reglas): ${learnings.join(' | ')}`,
+    docs && `\n=== DOCUMENTOS DE REFERENCIA DE ${String(brand.name).toUpperCase()} (contexto fijo: síguelos siempre) ===\n${docs}\n=== FIN DE LOS DOCUMENTOS ===`,
   ];
   return lines.filter(Boolean).join('\n');
 }
@@ -196,17 +200,19 @@ Para cada plataforma da 2 variantes. Primera línea del caption = gancho escrito
 Devuelve JSON: {"copies": [{"platform": "id", "variant": 1, "title": "", "caption": "", "description": "", "ctaText": "", "hashtags": ["#..."], "coverText": "texto de portada ≤ 6 palabras"}]}`;
 }
 
-export function productionPrompt({ script }) {
-  return `Convierte este guion aprobado en una ficha de producción para quien graba. Agrupa por escenas (misma localización/encuadre), detalla tomas, recursos físicos, B-roll e indicaciones de actuación. No inventes recursos que la marca no tenga; si algo es opcional, indícalo.
-GUION: ${JSON.stringify(script)}
-Devuelve JSON: {"scenes": [{"title": "", "location": "", "sectionRefs": [índices], "shots": [{"type": "A-roll|B-roll|detalle|plano general", "framing": "", "description": "", "voiceRef": ""}], "direction": "indicaciones para quien graba", "props": [""]}], "props": [""], "checklist": [""], "crewNotes": ""}`;
-}
+export function brandDocPrompt({ title, purpose, template, current }) {
+  return `Redacta el documento de referencia "${title}" de la marca, en Markdown y en español.
+Propósito del documento: ${purpose}
 
-export function editingPrompt({ script, visual }) {
-  return `Crea la guía de edición por escena para este guion, aplicando la identidad visual de la marca: ${JSON.stringify(visual)}.
-Para cada sección indica: texto en pantalla, estilo de subtítulo, B-roll, gráficos, transición (corte por defecto), efecto sonoro (solo si aporta), música (nivel), zoom/cambio de plano.
-GUION: ${JSON.stringify(script)}
-Devuelve JSON: {"scenes": [{"sectionIndex": 0, "time": "0-3 s", "onScreenText": "", "subtitle": "", "broll": "", "graphics": "", "transition": "", "sfx": "", "music": "", "camera": "", "notes": ""}], "global": {"pace": "", "music": "", "hookVisual": "", "notes": ""}}`;
+PLANTILLA (mantén exactamente estas cabeceras; las indicaciones entre <!-- --> explican qué va en cada sección y NO deben aparecer en tu respuesta):
+${template}
+
+${current ? `CONTENIDO ACTUAL DEL DOCUMENTO (consérvalo, ordénalo y compleméntalo; no borres información verificada):\n${current}\n` : ''}
+Reglas:
+- Usa SOLO la información de la marca y de sus otros documentos. No inventes datos, precios, casos ni testimonios.
+- Donde falte información escribe un marcador concreto, p. ej. [COMPLETAR: precio del curso] o [VERIFICAR: años de experiencia].
+- Frases concretas y accionables, listas cuando ayuden. Usa las palabras del cliente cuando las conozcas.
+- Devuelve solo el documento en Markdown, empezando por "# ${title}". Sin explicaciones antes ni después.`;
 }
 
 export function insightsPrompt({ table, brandName }) {

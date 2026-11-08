@@ -6,8 +6,8 @@
 ┌──────────────────────── Navegador (escritorio) ────────────────────────┐
 │  Vistas (js/views)  ──►  Servicios (js/services)  ──►  Núcleo (js/core) │
 │   Dashboard, Ideas,       workflow  (reglas del flujo)    store (caché + │
-│   Producción, Contenido,  assistant (tareas de IA)        historial +    │
-│   Calendario, Resultados, prompts   (contexto por marca)  outbox)        │
+│   Contenidos, Contenido,  assistant (tareas de IA)        historial +    │
+│   Calendario, Resultados, prompts + branddocs (contexto)  outbox)        │
 │   Marcas, Método, Ajustes analytics, scriptkit, sync      db (IndexedDB) │
 │                                    │                                     │
 │          Service Worker (sw.js): caché del app shell → funciona offline  │
@@ -20,7 +20,7 @@
                          └───────────┬────────────┘
                                      │ SpreadsheetApp (LockService)
                          ┌───────────▼────────────┐
-                         │ Google Sheets (18 hojas)│
+                         │ Google Sheets (17 hojas)│
                          └────────────────────────┘
 ```
 
@@ -29,10 +29,10 @@
 | Módulo | Archivo | Responsabilidad |
 |---|---|---|
 | Dashboard | `views/dashboard.js` | Indicadores, alertas de retraso o riesgo, flujo por etapas, cumplimiento del calendario, próximas fechas |
-| Marcas | `views/brands.js` | Crear, duplicar y archivar marcas. Ficha de identidad general, comunicativa y visual, redes, pilares, hooks/CTA y referencias |
+| Marcas | `views/brands.js`, `views/brand-docs.js` | Crear, duplicar y archivar marcas. Ficha de identidad general, **documentos de referencia (Markdown)**, comunicación, visual, redes, pilares, hooks/CTA y referencias |
 | Banco de ideas | `views/ideas.js` | Registro, filtros, ideas generadas con IA y detección de duplicados |
-| Producción (tablero) | `views/contents.js` | Kanban de todo el flujo con arrastrar y soltar, y vista de lista |
-| Contenido | `views/content*.js` | Espacio de trabajo por contenido con pestañas: Estrategia, Guion, Producción, Edición, Copies, Publicación, Resultados e Historial |
+| Contenidos (tablero) | `views/contents.js` | Kanban de todo el flujo con arrastrar y soltar, y vista de lista |
+| Contenido | `views/content*.js` | Espacio de trabajo por contenido con pestañas: Estrategia, Guion, Copies, Publicación, Resultados e Historial. En la cabecera, casillas **Grabado** y **Editado** |
 | Calendario | `views/calendar.js` | Vistas de mes, semana, día, lista y tablero. Arrastrar y soltar, conflictos y semanas por debajo del objetivo |
 | Resultados | `views/results.js` | Métricas derivadas, patrones por dimensión, mejores contenidos por objetivo y propuestas de IA |
 | Método | `views/method.js` | Biblioteca de metodología (la misma que recibe la IA) |
@@ -40,10 +40,10 @@
 
 ## Flujo y estados
 
-Un **contenido** es una idea con id `CNT-…`. Todas las fichas cuelgan de ese id: guion, versiones, producción, edición, copies, calendario, publicaciones y resultados. Así nunca hay que volver a escribir la idea en cada módulo.
+Un **contenido** es una idea con id `CNT-…`. Todas las fichas cuelgan de ese id: guion, versiones, copies, calendario, publicaciones y resultados. Así nunca hay que volver a escribir la idea en cada módulo.
 
 ```
-idea → aprobada → guion → guion_aprobado → por_grabar → grabado → edicion → listo → calendarizado → publicado → analizado
+idea → aprobada → guion → guion_aprobado → por_grabar → grabado → listo (editado) → calendarizado → publicado → analizado
                                                                                   (descartada en cualquier punto)
 ```
 
@@ -52,14 +52,14 @@ Transiciones automáticas (`services/workflow.js`):
 | Acción | Efecto |
 |---|---|
 | Crear la primera versión de guion | → `guion` |
-| Aprobar una versión | Se bloquea, se crean las fichas de producción y edición y pasa a `guion_aprobado` y luego a `por_grabar` |
-| Marcar como grabado | → `grabado` → `edicion` |
-| Marcar el video como listo | → `listo` (o `calendarizado` si ya tiene fecha) |
-| Programar con el video listo | → `calendarizado` |
+| Aprobar una versión | Se bloquea y pasa a `guion_aprobado` y luego a `por_grabar` |
+| Casilla **Grabado** | → `grabado` (desmarcarla vuelve a `por_grabar`) |
+| Casilla **Editado** | → `listo` (o `calendarizado` si ya tiene fecha). Desmarcarla vuelve a `grabado` |
+| Programar con el video editado | → `calendarizado` |
 | Marcar como publicado | Crea la publicación y pasa a `publicado` |
 | Registrar resultados | → `analizado` |
 
-Las transiciones automáticas **solo avanzan**. El usuario puede retroceder o elegir cualquier estado a mano, y **no se pierde nada**: las fichas se conservan y cada cambio de estado queda en `statusHistory`.
+Las transiciones automáticas **solo avanzan**. El usuario puede retroceder o elegir cualquier estado a mano, y **no se pierde nada**: el guion, los copies y el calendario se conservan y cada cambio de estado queda en `statusHistory`.
 
 ## Datos locales
 
@@ -100,6 +100,7 @@ La sincronización se dispara al editar (8 s después del último cambio), cada 
   2. las reglas de veracidad;
   3. **solo** el contexto de la marca del contenido: identidad, voz, visual, redes, pilares, hooks y CTA aprobados o a evitar, ejemplos aprobados y aprendizajes de sus propios resultados;
   4. la tarea.
+- **Documentos de referencia** (`services/branddocs.js`): los Markdown de la marca activos y asignados a la tarea, sin las indicaciones de plantilla ni secciones vacías, con un límite de 8.000 caracteres por documento y 30.000 en total. Ver [DOCUMENTOS_DE_MARCA.md](DOCUMENTOS_DE_MARCA.md).
 - **Para evitar repeticiones**, se envían los hooks recientes de la marca con la orden de no repetirlos, las ideas existentes al generar ideas nuevas y versiones con estructuras distintas.
 - **Veracidad**: la IA debe marcar las afirmaciones que haya que verificar (campo `verify`) y no inventar datos. La lista "Productos y servicios" de la marca es la fuente de verdad.
 - Las salidas son JSON (`responseMimeType: application/json`), se leen de forma tolerante y se normalizan.

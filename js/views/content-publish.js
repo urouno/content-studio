@@ -85,7 +85,7 @@ export function renderPublishing(host, b, ctx) {
     const pubs = store.filter('publications', (p) => p.ideaId === idea.id);
     const approvedCopies = store.filter('copies', (c) => c.ideaId === idea.id && c.status === 'aprobado');
     const ready = ['listo', 'calendarizado', 'publicado', 'analizado'].includes(idea.status);
-    host.innerHTML = `<div class="notice" style="margin-bottom:16px">${icon('info')}<div><p>La publicación se hace manualmente en cada red. Aquí se gestiona la fecha interna, los materiales y el estado. ${ready ? '' : '<b>El video aún no está listo:</b> puedes reservar fecha igualmente.'}</p></div></div>
+    host.innerHTML = `<div class="notice" style="margin-bottom:16px">${icon('info')}<div><p>La publicación se hace manualmente en cada red. Aquí se gestiona la fecha interna, los materiales y el estado. ${ready ? '' : '<b>El video aún no está marcado como editado:</b> puedes reservar fecha igualmente.'}</p></div></div>
       <div class="split"><div class="stack-lg">
         <section class="card"><div class="card-h"><h3>${icon('calendar')}Fechas programadas</h3><button class="btn btn-sm btn-primary" data-add>${icon('plus', 'ic-sm')}Programar</button></div>
           ${cal.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Plataforma</th><th>Fecha</th><th>Hora</th><th>Responsable</th><th>Estado</th><th></th></tr></thead><tbody>
@@ -129,7 +129,7 @@ export function openSchedule(idea, after, preset = {}) {
     { name: 'date', label: 'Fecha', type: 'date', required: true }, { name: 'time', label: 'Hora', type: 'time' }, { name: 'owner', label: 'Responsable' },
   ];
   const body = document.createElement('form'); body.className = 'form-grid';
-  body.innerHTML = renderFields(fields, { platform: (idea.platforms || [])[0] || 'tiktok', date: todayISO(), owner: idea.owner || '', ...preset });
+  body.innerHTML = renderFields(fields, { platform: (idea.platforms || [])[0] || 'tiktok', date: todayISO(), owner: '', ...preset });
   const plats = idea.platforms?.length > 1 ? `<label class="check span-2"><input type="checkbox" data-all checked>Programar en todas sus plataformas (${idea.platforms.map(platformLabel).join(', ')})</label>` : '';
   body.insertAdjacentHTML('beforeend', plats);
   modal({ title: `Programar: ${idea.title}`, body, size: 'sm', actions: [{ label: 'Cancelar' }, { label: 'Programar', kind: 'primary', onClick: async () => {

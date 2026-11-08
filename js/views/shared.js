@@ -45,7 +45,6 @@ export function ideaFields(brandId) {
     { name: 'priority', label: 'Prioridad', type: 'select', cast: 'number', options: PRIORITIES.map((p) => ({ value: p.id, label: p.name })) },
     { name: 'difficulty', label: 'Dificultad de grabación', type: 'select', options: DIFFICULTIES.map((p) => ({ value: p.id, label: p.name })) },
     { name: 'targetDate', label: 'Fecha objetivo', type: 'date' },
-    { name: 'owner', label: 'Responsable' },
     { name: 'experimental', label: 'Contenido experimental (20 %)', type: 'checkbox' },
     { name: 'references', label: 'Referencias y conocimiento disponible', type: 'textarea', rows: 3, span: 3, hint: 'Enlaces a videos de referencia, datos verificados, fichas técnicas. La IA solo usará esto como fuente.' },
     { name: 'notes', label: 'Notas', type: 'textarea', rows: 2, span: 3 },
@@ -117,7 +116,7 @@ export function ideaCard(idea, { draggable = false, showBrand = true } = {}) {
   return `<article class="kcard ${late ? 'late' : ''}" data-id="${idea.id}" ${draggable ? 'draggable="true"' : ''} tabindex="0">
     ${showBrand ? `<div class="kcard-brand">${brandTag(idea.brandId)}</div>` : ''}
     <div class="kcard-t">${esc(idea.title)}</div>
-    <div class="row xs muted">${pl}${idea.priority === 1 ? `<span class="badge" style="--bc:var(--danger)">Alta</span>` : ''}${idea.experimental ? '<span class="tag">20 %</span>' : ''}${cal ? `<span class="${late ? 'late-txt' : ''}">${icon('calendar', 'ic-sm')} ${fmtDate(cal.date)}</span>` : ''}${idea.owner ? `<span>${icon('user', 'ic-sm')} ${esc(idea.owner)}</span>` : ''}</div>
+    <div class="row xs muted">${pl}${idea.priority === 1 ? `<span class="badge" style="--bc:var(--danger)">Alta</span>` : ''}${idea.experimental ? '<span class="tag">20 %</span>' : ''}${cal ? `<span class="${late ? 'late-txt' : ''}">${icon('calendar', 'ic-sm')} ${fmtDate(cal.date)}</span>` : ''}</div>
   </article>`;
 }
 

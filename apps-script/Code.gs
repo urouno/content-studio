@@ -46,7 +46,7 @@ function instalar() {
   return token;
 }
 
-var VERSION = '1.3.0';
+var VERSION = '1.4.0';
 var BASE = ['id', 'brandId', 'createdAt', 'updatedAt', 'deletedAt', 'version', 'updatedBy'];
 var SERVER_COLS = ['syncedAt'];
 var MAX_CELL = 49000;
@@ -61,8 +61,6 @@ var TABLES = {
   ideas:          { sheet: 'Ideas',          prefix: 'CNT', cols: ['title', 'topic', 'pillarId', 'audience', 'problem', 'keyword', 'objective', 'funnel', 'contentType', 'platforms', 'format', 'priority', 'status', 'difficulty', 'experimental', 'knowledgeLevel', 'owner', 'targetDate', 'references', 'notes', 'source', 'statusHistory'], json: ['platforms', 'statusHistory'], num: ['priority', 'knowledgeLevel'], bool: ['experimental'], required: ['title', 'status'] },
   scripts:        { sheet: 'Guiones',        prefix: 'GUI', cols: ['ideaId', 'currentVersionId', 'approvedVersionId', 'locked', 'publishFilter'], json: ['publishFilter'], bool: ['locked'], required: ['ideaId'] },
   scriptVersions: { sheet: 'VersionesGuion', prefix: 'VER', cols: ['scriptId', 'ideaId', 'versionNo', 'label', 'origin', 'data', 'evaluation'], json: ['data', 'evaluation'], num: ['versionNo'], required: ['scriptId', 'ideaId'] },
-  productions:    { sheet: 'Produccion',     prefix: 'PRD', cols: ['ideaId', 'scriptVersionId', 'scenes', 'props', 'checklist', 'crewNotes', 'observations', 'recordedAt'], json: ['scenes', 'props', 'checklist'], required: ['ideaId'] },
-  editions:       { sheet: 'Edicion',        prefix: 'EDI', cols: ['ideaId', 'scriptVersionId', 'guide', 'scenes', 'checklist', 'editor', 'observations', 'readyAt'], json: ['guide', 'scenes', 'checklist'], required: ['ideaId'] },
   copies:         { sheet: 'Copies',         prefix: 'CPY', cols: ['ideaId', 'platform', 'title', 'caption', 'description', 'ctaText', 'hashtags', 'coverText', 'variant', 'status'], json: ['hashtags'], num: ['variant'], required: ['ideaId', 'platform'] },
   calendar:       { sheet: 'Calendario',     prefix: 'CAL', cols: ['ideaId', 'platform', 'date', 'time', 'owner', 'status', 'notes'], required: ['ideaId', 'platform', 'date'] },
   publications:   { sheet: 'Publicaciones',  prefix: 'PUB', cols: ['ideaId', 'calendarId', 'platform', 'publishedAt', 'url', 'notes'], required: ['ideaId', 'platform'] },
@@ -70,9 +68,11 @@ var TABLES = {
   references:     { sheet: 'Referencias',    prefix: 'REF', cols: ['ideaId', 'kind', 'title', 'url', 'metrics', 'notes'] },
   hooks:          { sheet: 'Hooks',          prefix: 'HOK', cols: ['layer', 'patternId', 'text', 'objective', 'status', 'notes', 'sourceIdeaId'] },
   ctas:           { sheet: 'CTA',            prefix: 'CTA', cols: ['type', 'text', 'objective', 'status', 'notes'] },
+  brandDocs:      { sheet: 'DocumentosMarca', prefix: 'DOC', cols: ['docType', 'title', 'content', 'active', 'order', 'tasks'], json: ['tasks'], num: ['order'], bool: ['active'], required: ['docType'] },
   assets:         { sheet: 'Recursos',       prefix: 'AST', cols: ['kind', 'name', 'url', 'notes'] },
   history:        { sheet: 'Historial',      prefix: 'HIS', cols: ['table', 'recordId', 'action', 'before', 'summary'], json: ['before'], appendOnly: true },
 };
+// "edicion" ya no se usa en la app (equivale a "grabado"), pero se sigue aceptando para datos antiguos.
 var STATUS_VALUES = ['idea', 'aprobada', 'guion', 'guion_aprobado', 'por_grabar', 'grabado', 'edicion', 'listo', 'calendarizado', 'publicado', 'analizado', 'descartada'];
 
 // ================== Entrada HTTP ==================
@@ -198,8 +198,16 @@ function setup_() {
 }
 
 function readTable_(t) {
-  var sh = ss_().getSheetByName(TABLES[t].sheet);
-  if (!sh) throw err_('NOT_SETUP', 'Falta la hoja "' + TABLES[t].sheet + '". Pulsa "Crear/verificar hojas" en Ajustes.');
+  var ss = ss_();
+  var sh = ss.getSheetByName(TABLES[t].sheet);
+  // Tablas nuevas de una actualización: se crea la pestaña al vuelo para no romper la sincronización.
+  if (!sh) {
+    sh = ss.insertSheet(TABLES[t].sheet);
+    var hs = headers_(t);
+    sh.getRange(1, 1, 1, hs.length).setValues([hs]);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, sh.getMaxRows(), hs.length).setNumberFormat('@');
+  }
   var values = sh.getDataRange().getValues();
   var header = values[0] || [];
   var idx = {}; header.forEach(function (h, i) { if (h) idx[h] = i; });

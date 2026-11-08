@@ -65,7 +65,7 @@ function ev(c, conflicts) {
   const conflict = conflicts.has(`${c.brandId}|${c.platform}|${c.date}`);
   const late = c.status !== 'publicado' && c.date < todayISO();
   const st = statusInfo(i.status);
-  return `<div class="cev ${c.status === 'publicado' ? 'pub' : ''} ${conflict ? 'conflict' : ''} ${late ? 'late' : ''}" draggable="${c.status !== 'publicado'}" data-cal="${c.id}" data-idea="${i.id}" title="${esc(`${i.title}\n${b?.name} · ${platformLabel(c.platform)}\n${st.name}${i.owner ? `\nResponsable: ${i.owner}` : ''}${i.priority === 1 ? '\nPrioridad alta' : ''}`)}" style="--bc:${esc(b?.color || '#888')}">
+  return `<div class="cev ${c.status === 'publicado' ? 'pub' : ''} ${conflict ? 'conflict' : ''} ${late ? 'late' : ''}" draggable="${c.status !== 'publicado'}" data-cal="${c.id}" data-idea="${i.id}" title="${esc(`${i.title}\n${b?.name} · ${platformLabel(c.platform)}\n${st.name}${c.owner ? `\nResponsable: ${c.owner}` : ''}${i.priority === 1 ? '\nPrioridad alta' : ''}`)}" style="--bc:${esc(b?.color || '#888')}">
     <span class="cev-p">${platformShort(c.platform)}</span><span class="cev-t">${c.time ? `<b>${esc(c.time)}</b> ` : ''}${esc(i.title)}</span><span class="cev-s" style="background:${st.color}"></span></div>`;
 }
 
@@ -102,13 +102,13 @@ function drawWeek(host, entries, conflicts, days) {
 function dayCard(c) {
   const i = store.get('ideas', c.ideaId);
   return `<a class="card card-b dcard" href="#/contenido/${i.id}" data-cal="${c.id}"><div class="row-between"><b>${esc(i.title)}</b>${statusBadge(i.status)}</div>
-    <div class="row small muted">${brandTag(c.brandId)}<span>${esc(platformLabel(c.platform))}</span>${c.time ? `<span>${icon('clock', 'ic-sm')} ${esc(c.time)}</span>` : ''}${i.owner ? `<span>${icon('user', 'ic-sm')} ${esc(i.owner)}</span>` : ''}<span>${esc(statusInfo(i.status).name)}</span></div></a>`;
+    <div class="row small muted">${brandTag(c.brandId)}<span>${esc(platformLabel(c.platform))}</span>${c.time ? `<span>${icon('clock', 'ic-sm')} ${esc(c.time)}</span>` : ''}${c.owner ? `<span>${icon('user', 'ic-sm')} ${esc(c.owner)}</span>` : ''}<span>${esc(statusInfo(i.status).name)}</span></div></a>`;
 }
 
 function drawList(host, entries) {
   const rows = entries.sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
   host.innerHTML = `<div class="card">${rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Contenido</th><th>Marca</th><th>Plataforma</th><th>Estado</th><th>Responsable</th><th>Prioridad</th><th>Tipo</th></tr></thead><tbody>
-    ${rows.map((c) => { const i = store.get('ideas', c.ideaId); const late = c.status !== 'publicado' && c.date < todayISO(); return `<tr class="clickable" data-open="${i.id}"><td class="nowrap ${late ? 'late-txt' : ''}">${fmtDate(c.date)} ${c.time || ''}${late ? ' · retrasado' : ''}</td><td><b>${esc(i.title)}</b></td><td>${brandTag(c.brandId)}</td><td>${esc(platformLabel(c.platform))}</td><td>${c.status === 'publicado' ? '<span class="badge" style="--bc:var(--ok)">Publicado</span>' : statusBadge(i.status)}</td><td class="small">${esc(i.owner || c.owner || '—')}</td><td class="small">${i.priority === 1 ? 'Alta' : i.priority === 3 ? 'Baja' : 'Media'}</td><td class="small">${esc(i.contentType || '—')}</td></tr>`; }).join('')}
+    ${rows.map((c) => { const i = store.get('ideas', c.ideaId); const late = c.status !== 'publicado' && c.date < todayISO(); return `<tr class="clickable" data-open="${i.id}"><td class="nowrap ${late ? 'late-txt' : ''}">${fmtDate(c.date)} ${c.time || ''}${late ? ' · retrasado' : ''}</td><td><b>${esc(i.title)}</b></td><td>${brandTag(c.brandId)}</td><td>${esc(platformLabel(c.platform))}</td><td>${c.status === 'publicado' ? '<span class="badge" style="--bc:var(--ok)">Publicado</span>' : statusBadge(i.status)}</td><td class="small">${esc(c.owner || '—')}</td><td class="small">${i.priority === 1 ? 'Alta' : i.priority === 3 ? 'Baja' : 'Media'}</td><td class="small">${esc(i.contentType || '—')}</td></tr>`; }).join('')}
     </tbody></table></div>` : emptyState('Sin publicaciones programadas', 'Programa contenidos desde su pestaña Publicación o arrastrándolos al calendario.', '', 'calendar')}</div>`;
   host.querySelector('tbody')?.addEventListener('click', (e) => { const tr = e.target.closest('[data-open]'); if (tr) go(`/contenido/${tr.dataset.open}`); });
 }

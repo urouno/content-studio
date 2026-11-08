@@ -159,15 +159,15 @@ export function render(host, b, ctx) {
       save.flush();
       const issues = localEvaluate(draft, { durationTarget, avoid: cfg.voice?.avoid, keyword: idea.keyword, wpm }).filter((x) => x.severity === 'problema');
       const pf = (scriptFor(idea.id).publishFilter || []).filter(Boolean).length;
-      const msg = [issues.length ? `Hay ${issues.length} problema(s) en la revisión automática.` : '', pf < 5 ? `El filtro antes de aprobar (pestaña Estrategia) tiene ${pf}/5 respuestas confirmadas.` : '', 'Al aprobar se bloquea la versión y se crean las fichas de producción y edición.'].filter(Boolean).join(' ');
+      const msg = [issues.length ? `Hay ${issues.length} problema(s) en la revisión automática.` : '', pf < 5 ? `El filtro antes de aprobar (pestaña Estrategia) tiene ${pf}/5 respuestas confirmadas.` : '', 'Al aprobar se bloquea la versión y el contenido pasa a "Por grabar".'].filter(Boolean).join(' ');
       if (!(await confirmDialog({ title: `Aprobar v${current.versionNo}`, message: msg, confirm: 'Aprobar y bloquear' }))) return;
       await approveVersion(idea.id, current.id);
-      toast('Guion aprobado. Fichas de producción y edición creadas.', 'success', { action: { label: 'Ir a producción', fn: () => ctx.setTab('produccion') } });
+      toast('Guion aprobado. Listo para grabar: márcalo como grabado y editado arriba cuando esté hecho.', 'success');
       ctx.refresh();
     });
     host.querySelector('[data-eval]').onclick = (e) => runEval(e.currentTarget);
     host.querySelector('[data-unlock]')?.addEventListener('click', async () => {
-      if (!(await confirmDialog({ title: 'Desbloquear guion', message: 'Podrás editar y crear versiones. El contenido volverá a "Guion en desarrollo"; las fichas de producción y edición se conservan (puedes regenerarlas después).', confirm: 'Desbloquear' }))) return;
+      if (!(await confirmDialog({ title: 'Desbloquear guion', message: 'Podrás editar y crear versiones. El contenido volverá a "Guion en desarrollo".', confirm: 'Desbloquear' }))) return;
       await unlockScript(idea.id); ctx.refresh();
     });
 

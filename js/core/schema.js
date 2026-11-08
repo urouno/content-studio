@@ -11,8 +11,6 @@ export const TABLES = {
   ideas: { sheet: 'Ideas', prefix: 'CNT', cols: ['title', 'topic', 'pillarId', 'audience', 'problem', 'keyword', 'objective', 'funnel', 'contentType', 'platforms', 'format', 'priority', 'status', 'difficulty', 'experimental', 'knowledgeLevel', 'owner', 'targetDate', 'references', 'notes', 'source', 'statusHistory'], json: ['platforms', 'statusHistory'] },
   scripts: { sheet: 'Guiones', prefix: 'GUI', cols: ['ideaId', 'currentVersionId', 'approvedVersionId', 'locked', 'publishFilter'], json: ['publishFilter'] },
   scriptVersions: { sheet: 'VersionesGuion', prefix: 'VER', cols: ['scriptId', 'ideaId', 'versionNo', 'label', 'origin', 'data', 'evaluation'], json: ['data', 'evaluation'] },
-  productions: { sheet: 'Produccion', prefix: 'PRD', cols: ['ideaId', 'scriptVersionId', 'scenes', 'props', 'checklist', 'crewNotes', 'observations', 'recordedAt'], json: ['scenes', 'props', 'checklist'] },
-  editions: { sheet: 'Edicion', prefix: 'EDI', cols: ['ideaId', 'scriptVersionId', 'guide', 'scenes', 'checklist', 'editor', 'observations', 'readyAt'], json: ['guide', 'scenes', 'checklist'] },
   copies: { sheet: 'Copies', prefix: 'CPY', cols: ['ideaId', 'platform', 'title', 'caption', 'description', 'ctaText', 'hashtags', 'coverText', 'variant', 'status'], json: ['hashtags'] },
   calendar: { sheet: 'Calendario', prefix: 'CAL', cols: ['ideaId', 'platform', 'date', 'time', 'owner', 'status', 'notes'] },
   publications: { sheet: 'Publicaciones', prefix: 'PUB', cols: ['ideaId', 'calendarId', 'platform', 'publishedAt', 'url', 'notes'] },
@@ -20,6 +18,7 @@ export const TABLES = {
   references: { sheet: 'Referencias', prefix: 'REF', cols: ['ideaId', 'kind', 'title', 'url', 'metrics', 'notes'] },
   hooks: { sheet: 'Hooks', prefix: 'HOK', cols: ['layer', 'patternId', 'text', 'objective', 'status', 'notes', 'sourceIdeaId'] },
   ctas: { sheet: 'CTA', prefix: 'CTA', cols: ['type', 'text', 'objective', 'status', 'notes'] },
+  brandDocs: { sheet: 'DocumentosMarca', prefix: 'DOC', cols: ['docType', 'title', 'content', 'active', 'order', 'tasks'], json: ['tasks'] },
   assets: { sheet: 'Recursos', prefix: 'AST', cols: ['kind', 'name', 'url', 'notes', 'dataUrl'], localOnly: ['dataUrl'] },
   history: { sheet: 'Historial', prefix: 'HIS', cols: ['table', 'recordId', 'action', 'before', 'summary'], json: ['before'], appendOnly: true },
 };
@@ -29,10 +28,10 @@ export const PIPELINE = [
   { id: 'aprobada', name: 'Idea aprobada', group: 'ideas', color: '#64748b' },
   { id: 'guion', name: 'Guion en desarrollo', group: 'guion', color: '#a78bfa' },
   { id: 'guion_aprobado', name: 'Guion aprobado', group: 'guion', color: '#7c3aed' },
-  { id: 'por_grabar', name: 'Pendiente de grabación', group: 'produccion', color: '#f59e0b' },
-  { id: 'grabado', name: 'Grabado', group: 'produccion', color: '#d97706' },
-  { id: 'edicion', name: 'En edición', group: 'edicion', color: '#0ea5e9' },
-  { id: 'listo', name: 'Video listo', group: 'edicion', color: '#0284c7' },
+  // Grabación (con el teléfono) y edición (con Claude) solo se registran como hechas o no.
+  { id: 'por_grabar', name: 'Por grabar', group: 'grabar', color: '#f59e0b' },
+  { id: 'grabado', name: 'Grabado · por editar', group: 'editar', color: '#d97706' },
+  { id: 'listo', name: 'Editado', group: 'editado', color: '#0284c7' },
   { id: 'calendarizado', name: 'Calendarizado', group: 'publicacion', color: '#14b8a6' },
   { id: 'publicado', name: 'Publicado', group: 'publicacion', color: '#16a34a' },
   { id: 'analizado', name: 'Analizado', group: 'analisis', color: '#15803d' },
@@ -41,6 +40,8 @@ export const DISCARDED = { id: 'descartada', name: 'Descartada', color: '#ef4444
 export const ALL_STATUSES = [...PIPELINE, DISCARDED];
 export const statusIndex = (s) => PIPELINE.findIndex((p) => p.id === s);
 export const statusInfo = (s) => ALL_STATUSES.find((p) => p.id === s) || PIPELINE[0];
+// Estados antiguos que ya no existen y su equivalente actual.
+export const LEGACY_STATUS = { edicion: 'grabado' };
 
 export const PRIORITIES = [
   { id: 1, name: 'Alta' }, { id: 2, name: 'Media' }, { id: 3, name: 'Baja' },

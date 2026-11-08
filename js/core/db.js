@@ -2,7 +2,7 @@
 import { TABLES } from './schema.js';
 
 const DB_NAME = 'content-studio';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // 2: documentos de marca (brandDocs)
 export const SYSTEM_STORES = ['outbox', 'meta', 'conflicts'];
 let dbp;
 

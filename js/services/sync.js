@@ -52,6 +52,8 @@ export async function syncNow({ silent = false } = {}) {
           const local = store.getAny(c.table, c.id);
           // Si la hoja ya tiene exactamente esta versión, no es un conflicto real.
           if (local && c.server && Number(c.server.version) === Number(local.version) && String(c.server.updatedAt) === String(local.updatedAt) && String(c.server.updatedBy) === String(local.updatedBy)) continue;
+          // Documento base creado a la vez en dos dispositivos y sin editar en este: se adopta el de la hoja.
+          if (c.table === 'brandDocs' && local && c.server && Number(local.version) === 1) { await store.replaceLocal(c.table, c.server); continue; }
           conflictCount++;
           await conflicts.put({ key: `${c.table}:${c.id}`, table: c.table, id: c.id, server: c.server, detectedAt: nowISO() });
         }

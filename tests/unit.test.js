@@ -6,7 +6,10 @@ import { localEvaluate, normalizeScript, scriptStats, emptyScript } from '../js/
 import { derive } from '../js/services/analytics.js';
 import { brandContext, scriptPrompt, systemPrompt } from '../js/services/prompts.js';
 import { parseJSON } from '../js/services/ai.js';
-import { TABLES } from '../js/core/schema.js';
+import { TABLES, PIPELINE } from '../js/core/schema.js';
+import { cleanDoc, docCompleteness, docsContext, templateMarkdown, baseDocId, DOC_TEMPLATES } from '../js/services/branddocs.js';
+import { mdToHtml } from '../js/core/markdown.js';
+import { productionState } from '../js/services/workflow.js';
 import { readFileSync } from 'node:fs';
 
 test('similarity detecta ideas casi iguales y separa distintas', () => {
@@ -91,4 +94,58 @@ test('el esquema del frontend coincide con el de Apps Script', () => {
     const expected = def.cols.filter((c) => !(def.localOnly || []).includes(c));
     assert.deepEqual(cols, expected, `Columnas distintas en ${t}`);
   }
+});
+
+test('flujo simplificado: sin fichas de producción ni edición', () => {
+  assert.ok(!TABLES.productions && !TABLES.editions);
+  assert.deepEqual(PIPELINE.map((p) => p.id).slice(4, 7), ['por_grabar', 'grabado', 'listo']);
+  assert.ok(!PIPELINE.some((p) => p.id === 'edicion'));
+  assert.deepEqual(productionState({ status: 'por_grabar' }), { recorded: false, edited: false, locked: false });
+  assert.deepEqual(productionState({ status: 'grabado' }), { recorded: true, edited: false, locked: false });
+  assert.deepEqual(productionState({ status: 'calendarizado' }), { recorded: true, edited: true, locked: false });
+  assert.equal(productionState({ status: 'publicado' }).locked, true);
+});
+
+test('documentos de marca: la plantilla vacía no envía nada a la IA', () => {
+  const md = templateMarkdown('buyer', {});
+  assert.match(md, /^# Buyer persona/); assert.match(md, /## Perfil principal/);
+  assert.equal(cleanDoc(md), ''); assert.equal(docCompleteness(md), 0);
+  const filled = templateMarkdown('buyer', { audience: 'Personas que toman café en casa' });
+  assert.match(cleanDoc(filled), /## Perfil principal\nPersonas que toman café en casa/);
+  assert.ok(!cleanDoc(filled).includes('<!--')); assert.ok(!cleanDoc(filled).includes('## Situación y contexto'));
+  assert.ok(docCompleteness(filled) > 0 && docCompleteness(filled) < 0.5);
+});
+
+test('documentos de marca: tipos base, ids deterministas y contexto por tarea', () => {
+  const types = DOC_TEMPLATES.map((t) => t.type);
+  for (const t of ['identidad', 'buyer', 'dolores', 'discurso', 'oferta', 'reglas', 'foco']) assert.ok(types.includes(t), t);
+  assert.equal(baseDocId('MRC-ab12-cd34', 'buyer'), 'DOC-ab12cd34-buyer');
+  assert.match(baseDocId('MRC-ab12-cd34', 'buyer'), /^DOC-[a-z0-9]+-[a-z0-9]+$/);
+  const docs = [
+    { id: 'D1', docType: 'reglas', title: 'Reglas', content: '# Reglas\n## Prohibido\nNo prometer curas', active: true, order: 0 },
+    { id: 'D2', docType: 'voz', title: 'Voz', content: '# Voz\n## Cómo sonamos\nCercana', active: true, order: 1 },
+    { id: 'D3', docType: 'buyer', title: 'Buyer', content: '# Buyer\n## Perfil\nLaura', active: false, order: 2 },
+    { id: 'D4', docType: 'custom', title: 'Lanzamiento', content: '# L\n\nNuevo curso en marzo', active: true, order: 3, tasks: ['ideas'] },
+  ];
+  const ideas = docsContext('MRC-x', 'ideas', { docs });
+  assert.ok(ideas.text.includes('No prometer curas')); assert.ok(ideas.text.includes('Nuevo curso en marzo'));
+  assert.ok(!ideas.text.includes('Cercana'), 'la voz no se usa para ideas'); assert.ok(!ideas.text.includes('Laura'), 'desactivado');
+  const guion = docsContext('MRC-x', 'guion', { docs });
+  assert.ok(guion.text.includes('Cercana')); assert.ok(!guion.text.includes('Nuevo curso'));
+  const small = docsContext('MRC-x', 'guion', { docs, limits: { perDoc: 10, total: 1000 } });
+  assert.ok(small.used.every((u) => u.truncated));
+});
+
+test('los documentos llegan al prompt y sustituyen el resumen de la ficha', () => {
+  const ctx = { brand: { name: 'Marca A', products: 'Resumen de productos', audience: 'Resumen de público' }, config: { voice: {}, visual: {} }, docs: '### Productos\nCurso de 3 horas', filled: new Set(['oferta']) };
+  const sys = systemPrompt(ctx);
+  assert.ok(sys.includes('DOCUMENTOS DE REFERENCIA')); assert.ok(sys.includes('Curso de 3 horas'));
+  assert.ok(!sys.includes('Resumen de productos')); assert.ok(sys.includes('Resumen de público'));
+});
+
+test('mdToHtml escapa HTML y muestra las indicaciones como ayuda', () => {
+  const h = mdToHtml('# T\n<!-- ayuda -->\n<script>alert(1)</script>\n- **uno** [COMPLETAR: precio]\n\n| a | b |\n|---|---|\n| 1 | 2 |');
+  assert.ok(!h.includes('<script>')); assert.ok(h.includes('&lt;script&gt;'));
+  assert.ok(h.includes('class="md-hint"')); assert.ok(h.includes('<b>uno</b>')); assert.ok(h.includes('<mark>'));
+  assert.ok(h.includes('<table'));
 });

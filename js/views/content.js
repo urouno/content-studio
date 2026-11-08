@@ -6,18 +6,15 @@ import { PIPELINE, statusIndex, statusInfo, ALL_STATUSES } from '../core/schema.
 import { icon, tabs, toast, confirmDialog, renderFields, bindAutosave, withBusy, emptyState, modal } from '../core/ui.js';
 import { esc, fmtDateTime, fmtRelative } from '../core/utils.js';
 import { PUBLISH_FILTER } from '../services/methodology.js';
-import { contentBundle, setStatus, nextStatus, prevStatus, scriptFor, ensureScript } from '../services/workflow.js';
+import { contentBundle, setStatus, nextStatus, prevStatus, scriptFor, ensureScript, productionState, setRecorded, setEdited } from '../services/workflow.js';
 import { aiResearch } from '../services/assistant.js';
 import { brandTag, statusBadge, ideaFields, aiGuard } from './shared.js';
 import * as scriptTab from './content-script.js';
-import * as prodTab from './content-production.js';
 import * as pubTab from './content-publish.js';
 
 const TABS = [
   { id: 'estrategia', label: 'Estrategia', icon: 'target' },
   { id: 'guion', label: 'Guion', icon: 'edit' },
-  { id: 'produccion', label: 'Producción', icon: 'camera' },
-  { id: 'edicion', label: 'Edición', icon: 'scissors' },
   { id: 'copies', label: 'Copies', icon: 'text' },
   { id: 'publicacion', label: 'Publicación', icon: 'send' },
   { id: 'resultados', label: 'Resultados', icon: 'chart' },
@@ -42,9 +39,12 @@ export function render(main, { params }) {
     const { idea } = b;
     const idx = statusIndex(idea.status);
     const nx = nextStatus(idea.status); const pv = prevStatus(idea.status);
-    head.innerHTML = `<div class="crumbs"><a href="#/contenidos">Producción</a>${icon('right', 'ic-sm')}${brandTag(idea.brandId)}<span class="mono xs">${idea.id}</span></div>
+    const ps = productionState(idea);
+    const flag = (key, label, ic, on, hint) => `<label class="pflag ${on ? 'on' : ''} ${ps.locked ? 'locked' : ''}" title="${esc(hint)}"><input type="checkbox" data-flag="${key}" ${on ? 'checked' : ''} ${ps.locked ? 'disabled' : ''}>${icon(ic, 'ic-sm')}<span>${label}</span></label>`;
+    head.innerHTML = `<div class="crumbs"><a href="#/contenidos">Contenidos</a>${icon('right', 'ic-sm')}${brandTag(idea.brandId)}<span class="mono xs">${idea.id}</span></div>
       <div class="row-between" style="align-items:flex-start;margin-bottom:12px">
-        <div><h1 class="content-title">${esc(idea.title)}</h1><div class="row small muted" style="margin-top:4px">${statusBadge(idea.status)}<span>Actualizado ${fmtRelative(idea.updatedAt)}</span></div></div>
+        <div><h1 class="content-title">${esc(idea.title)}</h1><div class="row small muted" style="margin-top:4px">${statusBadge(idea.status)}<span>Actualizado ${fmtRelative(idea.updatedAt)}</span></div>
+          ${idea.status === 'descartada' ? '' : `<div class="row pflags" style="margin-top:10px">${flag('rec', 'Grabado', 'camera', ps.recorded, ps.locked ? 'Ya está publicado' : 'Grabado con el teléfono')}${flag('edit', 'Editado', 'scissors', ps.edited, ps.locked ? 'Ya está publicado' : 'Editado con Claude')}</div>`}</div>
         <div class="row">
           ${pv ? `<button class="btn btn-sm" data-prev title="Regresar a la etapa anterior sin perder información">${icon('left', 'ic-sm')}${esc(statusInfo(pv).name)}</button>` : ''}
           ${nx && idea.status !== 'descartada' ? `<button class="btn btn-sm btn-primary" data-next>${esc(statusInfo(nx).name)}${icon('right', 'ic-sm')}</button>` : ''}
@@ -55,6 +55,11 @@ export function render(main, { params }) {
     head.querySelector('[data-next]')?.addEventListener('click', () => setStatus(id, nx));
     head.querySelector('[data-prev]')?.addEventListener('click', () => setStatus(id, pv, 'Regreso manual'));
     head.querySelector('[data-status]').addEventListener('change', (e) => setStatus(id, e.target.value, 'Cambio manual'));
+    head.querySelectorAll('[data-flag]').forEach((cb) => cb.addEventListener('change', async () => {
+      const on = cb.checked;
+      if (cb.dataset.flag === 'rec') { await setRecorded(id, on); toast(on ? 'Marcado como grabado. Pendiente de editar.' : 'Marcado como pendiente de grabar', 'success'); }
+      else { await setEdited(id, on); toast(on ? 'Marcado como editado. Ya puedes preparar copies y programarlo.' : 'Marcado como pendiente de editar', 'success', on ? { action: { label: 'Copies', fn: () => { tab = 'copies'; drawTabs(); drawBody(); } } } : undefined); }
+    }));
     head.querySelector('[data-del]').addEventListener('click', async () => {
       if (!(await confirmDialog({ title: 'Enviar a la papelera', message: 'El contenido y sus fichas quedarán en la papelera (Ajustes → Papelera) y podrás restaurarlo.', confirm: 'Enviar a la papelera', danger: true }))) return;
       const bb = contentBundle(id);
@@ -82,8 +87,6 @@ export function render(main, { params }) {
     switch (tab) {
       case 'estrategia': cleanupTab = strategyTab(host, b, ctx); break;
       case 'guion': cleanupTab = scriptTab.render(host, b, ctx); break;
-      case 'produccion': cleanupTab = prodTab.renderProduction(host, b, ctx); break;
-      case 'edicion': cleanupTab = prodTab.renderEditing(host, b, ctx); break;
       case 'copies': cleanupTab = pubTab.renderCopies(host, b, ctx); break;
       case 'publicacion': cleanupTab = pubTab.renderPublishing(host, b, ctx); break;
       case 'resultados': cleanupTab = pubTab.renderResults(host, b, ctx); break;
@@ -154,9 +157,9 @@ export function mdLite(t) {
 
 // ---------- Historial ----------
 function historyTab(host, b, ctx) {
-  const ids = [b.idea.id, b.script?.id, ...b.versions.map((v) => v.id), b.production?.id, b.edition?.id, ...b.copies.map((c) => c.id), ...b.calendar.map((c) => c.id), ...b.publications.map((p) => p.id), ...b.results.map((r) => r.id)].filter(Boolean);
+  const ids = [b.idea.id, b.script?.id, ...b.versions.map((v) => v.id), ...b.copies.map((c) => c.id), ...b.calendar.map((c) => c.id), ...b.publications.map((p) => p.id), ...b.results.map((r) => r.id)].filter(Boolean);
   const entries = ids.flatMap((rid) => store.historyFor(rid)).sort((a, c) => c.createdAt.localeCompare(a.createdAt));
-  const labels = { ideas: 'Idea', scripts: 'Guion', scriptVersions: 'Versión de guion', productions: 'Producción', editions: 'Edición', copies: 'Copy', calendar: 'Calendario', publications: 'Publicación', results: 'Resultado' };
+  const labels = { ideas: 'Idea', scripts: 'Guion', scriptVersions: 'Versión de guion', copies: 'Copy', calendar: 'Calendario', publications: 'Publicación', results: 'Resultado' };
   host.innerHTML = `<div class="card">${entries.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Elemento</th><th>Cambio</th><th>Dispositivo</th><th></th></tr></thead><tbody>
     ${entries.map((h) => `<tr><td class="nowrap small">${fmtDateTime(h.createdAt)}</td><td class="small">${labels[h.table] || h.table}</td><td class="small">${esc(h.summary)}</td><td class="xs muted mono">${esc(h.updatedBy || '').slice(-6)}</td><td class="nowrap">${h.before ? `<button class="btn btn-sm" data-view="${h.id}">${icon('eye', 'ic-sm')}Ver</button> <button class="btn btn-sm" data-revert="${h.id}">${icon('history', 'ic-sm')}Restaurar</button>` : ''}</td></tr>`).join('')}
     </tbody></table></div>` : emptyState('Sin historial', 'Los cambios aparecerán aquí.', '', 'history')}</div>`;
