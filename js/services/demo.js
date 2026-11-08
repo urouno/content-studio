@@ -1,8 +1,20 @@
 // Datos de demostración: dos marcas ficticias con contenidos en todas las etapas.
 import { store } from '../core/store.js';
 import { toDateKey, addDays, nowISO } from '../core/utils.js';
-import { createBrand, ensureBrandConfig, productionFromScript, editionFromScript, brandConfig } from './workflow.js';
+import { createBrand, ensureBrandConfig } from './workflow.js';
 import { normalizeScript } from './scriptkit.js';
+import { baseDocId, templateFor } from './branddocs.js';
+
+// Rellena documentos base de la demo: { tipo: { 'Título de sección': 'texto' } }.
+async function fillDocs(brandId, docs) {
+  for (const [type, sections] of Object.entries(docs)) {
+    const t = templateFor(type); const id = baseDocId(brandId, type);
+    if (!t || !store.get('brandDocs', id)) continue;
+    const brand = store.get('brands', brandId);
+    const md = [`# ${t.title}`, '', `<!-- ${t.purpose} -->`, '', ...t.sections.flatMap((sec) => [`## ${sec.title}`, `<!-- ${sec.hint} -->`, sections[sec.title] || sec.prefill?.(brand) || '', ''])].join('\n');
+    await store.update('brandDocs', id, { content: md }, { silent: true });
+  }
+}
 
 const d = (n) => toDateKey(addDays(new Date(), n));
 const hist = (...steps) => steps.map(([to, days]) => ({ from: '', to, at: addDays(new Date(), days).toISOString(), note: 'demo' }));
@@ -24,6 +36,34 @@ export async function loadDemo() {
     visual: { colors: [{ name: 'Tostado', hex: '#7c2d12' }, { name: 'Crema', hex: '#fef3c7' }, { name: 'Acento', hex: '#f59e0b' }], fonts: [{ role: 'Títulos', family: 'Fraunces' }, { role: 'Subtítulos', family: 'Inter' }], subtitleStyle: 'Inter Bold blanco con sombra, palabra clave en ámbar, máx. 2 líneas', textPosition: 'Tercio central, fuera de zonas seguras', editingStyle: 'Cortes secos, planos detalle de la cafetera', pace: 'Cambio de plano cada 2–3 s', transitions: 'Cortes simples', music: 'Lo-fi muy baja', sfx: 'Sonido real de la cafetera en el hook', graphics: 'Flechas simples en ámbar', intro: '', outro: 'Logo 1 s', references: '' },
     strategy: { safeRatio: 80, wpm: 165, monthlyTarget: 8, notes: 'Estrategia de largo plazo: ventas todos los meses.' },
   }, { silent: true });
+  await fillDocs(cafe.id, {
+    reglas: {
+      'Afirmaciones prohibidas': '- "El mejor café del mundo" o comparaciones de superioridad sin prueba.\n- Beneficios para la salud del café (no somos profesionales sanitarios).\n- "Recién tostado" si el lote tiene más de 15 días.',
+      'Temas vetados': '- Críticas a cafeterías o marcas concretas.\n- Política.',
+      'Datos que siempre hay que verificar': 'Precios, fechas de cursos y plazas disponibles: los confirma Luis antes de publicar.',
+    },
+    buyer: {
+      'Perfil principal': '**Laura, 34 años.** Trabaja desde casa, toma 2–3 cafés al día con cafetera italiana. Nivel de conocimiento 1: sabe que hay cafés "mejores", pero no por qué.',
+      'Situación y contexto': 'Por la mañana, antes de empezar a trabajar. Le molesta que el café le salga amargo y no sabe si es culpa del café o de cómo lo prepara.',
+      'Cómo decide y compra': 'Compra en el súper por costumbre. Probaría un café de especialidad si alguien le explica la diferencia sin pedantería y el precio por taza es razonable.',
+      'Cómo habla': '"Me sale amargo", "sabe a quemado", "¿qué molienda le pongo?", "café bueno pero sin complicarme".',
+    },
+    dolores: {
+      'Objeciones y miedos': '- "El café de especialidad es para expertos."\n- "Es caro."\n- "Necesito una cafetera cara para notarlo."',
+      'Preguntas frecuentes reales': '- ¿Cuánto dura el café una vez abierto?\n- ¿Molido o en grano?\n- ¿Qué molienda para la italiana?',
+      'Mitos y errores comunes': '- Apretar el café en la italiana.\n- Tueste oscuro = más cafeína.',
+    },
+    discurso: {
+      'Promesa principal': 'Que tu café de casa sepa como en una buena cafetería, sin aparatos caros.',
+      'Mensajes clave': '1. La frescura importa más que la cafetera (prueba: tostamos cada semana y la fecha va en la bolsa).\n2. Preparar bien el café es fácil si te lo explican.\n3. Te asesoramos: elige tu cafetera y te decimos qué café y qué molienda.',
+      'Respuesta a objeciones': '- **"Es caro"** → una taza sale a [COMPLETAR: precio por taza]; muestra la cuenta, no prometas ahorro.\n- **"Es para expertos"** → nuestros videos y cursos empiezan desde cero.',
+      'Llamadas a la acción y siguiente paso': 'Atraer: guardar o seguir. Considerar: comentar MOLIENDA para recibir la guía. Comprar: enlace de la tienda o reserva de curso.',
+    },
+    foco: {
+      'Productos o servicios a priorizar': 'Curso de barista de 3 horas (plazas del próximo mes) y suscripción mensual de café.',
+      'Promociones, lanzamientos y fechas': 'Sin promociones activas. No mencionar descuentos.',
+    },
+  });
   const pc = {};
   for (const [name, obj, desc] of [['Errores al preparar café', 'confianza', 'Errores comunes en casa y cómo evitarlos'], ['Detrás del tueste', 'comunidad', 'Proceso, equipo y origen'], ['Producto y cursos', 'conversion', 'Cafés, kits y cursos como solución']]) {
     pc[name] = (await store.create('pillars', { brandId: cafe.id, name, objective: obj, description: desc, share: null }, { silent: true })).id;
@@ -61,8 +101,6 @@ export async function loadDemo() {
   const s1 = await store.create('scripts', { brandId: cafe.id, ideaId: i1.id, currentVersionId: null, approvedVersionId: null, locked: true, publishFilter: [true, true, true, true, true] }, { silent: true });
   const v1 = await store.create('scriptVersions', { brandId: cafe.id, scriptId: s1.id, ideaId: i1.id, versionNo: 1, label: 'Manual', origin: 'manual', data: script1, evaluation: null }, { silent: true });
   await store.update('scripts', s1.id, { currentVersionId: v1.id, approvedVersionId: v1.id }, { silent: true });
-  await store.create('productions', { brandId: cafe.id, ideaId: i1.id, scriptVersionId: v1.id, ...productionFromScript(script1), observations: 'Grabado en una toma', recordedAt: addDays(new Date(), -25).toISOString() }, { silent: true });
-  await store.create('editions', { brandId: cafe.id, ideaId: i1.id, scriptVersionId: v1.id, ...editionFromScript(script1, brandConfig(cafe.id)), editor: 'Marta', observations: '', readyAt: addDays(new Date(), -22).toISOString() }, { silent: true });
   await store.create('copies', { brandId: cafe.id, ideaId: i1.id, platform: 'instagram', variant: 1, title: '', caption: '¿Tu café de italiana sabe a quemado? No es la cafetera: son estos dos gestos.\n\n1. No aprietes el café.\n2. Fuego medio y tapa abierta.\nY el truco final: agua fría en la base.', description: '', ctaText: 'Guárdalo para tu próximo café', hashtags: ['#cafeteraitaliana', '#cafeencasa', '#trucosdecafe'], coverText: 'Café quemado: 3 errores', status: 'aprobado' }, { silent: true });
 
   // Varios publicados con resultados para que haya patrones
@@ -93,13 +131,13 @@ export async function loadDemo() {
   // Contenidos en distintas etapas
   await mk(cafe.id, { title: 'Cuánto dura un café abierto (y cómo guardarlo)', pillarId: pc['Errores al preparar café'], problem: 'No sé cuánto dura el café una vez abierto', keyword: 'café abierto', objective: 'confianza', contentType: 'familiaridad', format: 'pregunta-frecuente', platforms: ['tiktok', 'instagram'], status: 'idea', priority: 1 });
   await mk(cafe.id, { title: '¿Me cambias tu café de cápsula por una bolsa recién tostada?', pillarId: pc['Producto y cursos'], problem: 'Creen que el café de cápsula es igual', objective: 'alcance', contentType: 'memorable', format: 'experimento', platforms: ['tiktok'], status: 'aprobada', experimental: true, difficulty: 'dificil' });
-  const iG = await mk(cafe.id, { title: 'Molienda correcta para cada cafetera', pillarId: pc['Errores al preparar café'], problem: 'No sé qué molienda usar', keyword: 'molienda', objective: 'conversion', contentType: 'venta', format: 'lista', platforms: ['instagram', 'tiktok'], status: 'guion', owner: 'Marta' });
+  const iG = await mk(cafe.id, { title: 'Molienda correcta para cada cafetera', pillarId: pc['Errores al preparar café'], problem: 'No sé qué molienda usar', keyword: 'molienda', objective: 'conversion', contentType: 'venta', format: 'lista', platforms: ['instagram', 'tiktok'], status: 'guion' });
   const sG = await store.create('scripts', { brandId: cafe.id, ideaId: iG.id, currentVersionId: null, approvedVersionId: null, locked: false, publishFilter: [] }, { silent: true });
   const vG = await store.create('scriptVersions', { brandId: cafe.id, scriptId: sG.id, ideaId: iG.id, versionNo: 1, label: 'Borrador', origin: 'manual', data: normalizeScript({ ...script1, title: 'Molienda correcta para cada cafetera', structureId: 'lista', promise: '', hook: { patternId: 'lista', narrado: 'Hola a todos, en el día de hoy vamos a hablar de la molienda adecuada para cada tipo de cafetera que tengas en casa', visual: '', textual: '', auditivo: '' } }), evaluation: null }, { silent: true });
   await store.update('scripts', sG.id, { currentVersionId: vG.id }, { silent: true });
-  const iR = await mk(cafe.id, { title: 'Curso de barista: lo que aprenderás en 3 horas', pillarId: pc['Producto y cursos'], objective: 'conversion', contentType: 'venta', format: 'todo-saber', platforms: ['instagram'], status: 'por_grabar', owner: 'Luis' });
+  const iR = await mk(cafe.id, { title: 'Curso de barista: lo que aprenderás en 3 horas', pillarId: pc['Producto y cursos'], objective: 'conversion', contentType: 'venta', format: 'todo-saber', platforms: ['instagram'], status: 'por_grabar' });
   await store.create('calendar', { brandId: cafe.id, ideaId: iR.id, platform: 'instagram', date: d(2), time: '19:00', owner: 'Luis', status: 'programado', notes: '' }, { silent: true });
-  const iE = await mk(cafe.id, { title: 'Tueste claro vs. oscuro: ¿cuál es más fuerte?', pillarId: pc['Detrás del tueste'], objective: 'interaccion', contentType: 'familiaridad', format: 'comparativa', platforms: ['tiktok'], status: 'edicion', owner: 'Marta' });
+  const iE = await mk(cafe.id, { title: 'Tueste claro vs. oscuro: ¿cuál es más fuerte?', pillarId: pc['Detrás del tueste'], objective: 'interaccion', contentType: 'familiaridad', format: 'comparativa', platforms: ['tiktok'], status: 'grabado' });
   await store.create('calendar', { brandId: cafe.id, ideaId: iE.id, platform: 'tiktok', date: d(5), time: '13:00', owner: 'Marta', status: 'programado', notes: '' }, { silent: true });
   const iL = await mk(cafe.id, { title: 'Hemos cogido café de hace 6 meses y uno de esta semana', pillarId: pc['Detrás del tueste'], objective: 'alcance', contentType: 'memorable', format: 'experimento', platforms: ['tiktok', 'instagram'], status: 'listo' });
   await store.create('calendar', { brandId: cafe.id, ideaId: iL.id, platform: 'tiktok', date: d(-1), time: '13:00', owner: 'Marta', status: 'programado', notes: '' }, { silent: true });

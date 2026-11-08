@@ -6,8 +6,10 @@ import { brandConfig, approvedVersion } from './workflow.js';
 import { learningsFor } from './analytics.js';
 import { normalizeScript } from './scriptkit.js';
 import { structureName } from './workflow.js';
+import { docsContext, docsFor, templateFor, templateMarkdown, cleanDoc } from './branddocs.js';
 
-export function brandCtx(brandId) {
+// `task` decide qué documentos de referencia se incluyen (ver DOC_TASKS en branddocs.js).
+export function brandCtx(brandId, task) {
   const brand = store.get('brands', brandId);
   if (!brand) throw new Error('Marca no encontrada.');
   const examples = store.all('scripts', { brandId }).filter((s) => s.approvedVersionId).slice(-3)
@@ -18,7 +20,12 @@ export function brandCtx(brandId) {
     platforms: store.all('platforms', { brandId }), pillars: store.all('pillars', { brandId }),
     hooks: store.all('hooks', { brandId }), ctas: store.all('ctas', { brandId }),
     examples, learnings: learningsFor(brandId),
+    ...docsCtx(brandId, task),
   };
+}
+function docsCtx(brandId, task, opts) {
+  const d = docsContext(brandId, task, opts);
+  return { docs: d.text, filled: new Set(d.used.map((u) => u.type)), docsUsed: d.used };
 }
 
 function recentHooks(brandId, excludeIdeaId) {
@@ -27,7 +34,7 @@ function recentHooks(brandId, excludeIdeaId) {
 }
 
 export async function aiIdeas(brandId, opts) {
-  const ctx = brandCtx(brandId);
+  const ctx = brandCtx(brandId, 'ideas');
   const pillar = opts.pillarId ? store.get('pillars', opts.pillarId) : null;
   const existing = store.all('ideas', { brandId }).map((i) => i.title);
   const r = await generate({ system: P.systemPrompt(ctx, 'estratega de contenido'), prompt: P.ideasPrompt({ ...opts, pillar, existing }) });
@@ -36,17 +43,17 @@ export async function aiIdeas(brandId, opts) {
 }
 
 export async function aiAngles(idea, similar) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId), 'estratega de contenido'), prompt: P.anglesPrompt({ idea, similar }) });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'ideas'), 'estratega de contenido'), prompt: P.anglesPrompt({ idea, similar }) });
   return r.json?.angles || [];
 }
 
 export async function aiResearch(brandId, topic, idea) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(brandId), 'investigador de contenido'), prompt: P.researchPrompt({ topic, idea }), json: false, grounding: true, temperature: 0.4 });
+  const r = await generate({ system: P.systemPrompt(brandCtx(brandId, 'investigacion'), 'investigador de contenido'), prompt: P.researchPrompt({ topic, idea }), json: false, grounding: true, temperature: 0.4 });
   return { text: r.text, sources: r.sources };
 }
 
 export async function aiScripts(idea, opts) {
-  const ctx = brandCtx(idea.brandId);
+  const ctx = brandCtx(idea.brandId, 'guion');
   const pillar = idea.pillarId ? store.get('pillars', idea.pillarId) : null;
   const r = await generate({
     system: P.systemPrompt(ctx), maxTokens: 12000,
@@ -57,42 +64,45 @@ export async function aiScripts(idea, opts) {
 }
 
 export async function aiRewrite(idea, script, opts) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId)), prompt: P.rewritePrompt({ script, ...opts }), temperature: 0.8, maxTokens: 10000 });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: P.rewritePrompt({ script, ...opts }), temperature: 0.8, maxTokens: 10000 });
   return normalizeScript(r.json?.versions?.[0] || r.json);
 }
 
 export async function aiEvaluate(idea, script, { durationTarget, localFindings }) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId), 'editor y evaluador de guiones'), prompt: P.evaluatePrompt({ script, durationTarget, localFindings }), temperature: 0.3 });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'evaluacion'), 'editor y evaluador de guiones'), prompt: P.evaluatePrompt({ script, durationTarget, localFindings }), temperature: 0.3 });
   return r.json;
 }
 
 export async function aiHooks(idea, script, opts = {}) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId)), prompt: P.hooksPrompt({ idea, script, ...opts }) });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'hooks')), prompt: P.hooksPrompt({ idea, script, ...opts }) });
   return r.json?.hooks || [];
 }
 export async function aiCtas(idea, script) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId)), prompt: P.ctaPrompt({ idea, script, objective: idea.objective }) });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'hooks')), prompt: P.ctaPrompt({ idea, script, objective: idea.objective }) });
   return r.json?.ctas || [];
 }
 
 export async function aiCopies(idea, platforms) {
   const ver = approvedVersion(idea.id);
   if (!ver) throw new Error('Aprueba un guion antes de generar copies.');
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId), 'copywriter de redes sociales'), prompt: P.copiesPrompt({ script: ver.data, idea, platforms }), temperature: 0.85 });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'copies'), 'copywriter de redes sociales'), prompt: P.copiesPrompt({ script: ver.data, idea, platforms }), temperature: 0.85 });
   return r.json?.copies || [];
 }
 
-export async function aiProduction(idea, script) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId), 'productor audiovisual'), prompt: P.productionPrompt({ script }), temperature: 0.5 });
-  return r.json;
-}
-export async function aiEditing(idea, script) {
-  const ctx = brandCtx(idea.brandId);
-  const r = await generate({ system: P.systemPrompt(ctx, 'editor de video'), prompt: P.editingPrompt({ script, visual: ctx.config.visual }), temperature: 0.5 });
-  return r.json;
+// Redacta (o completa) un documento de referencia a partir de la ficha y del resto de documentos.
+export async function aiBrandDoc(doc) {
+  const t = templateFor(doc.docType);
+  // Contexto: la ficha y los demás documentos (todas las tareas), sin el documento que se redacta.
+  const ctx = { ...brandCtx(doc.brandId, null), ...docsCtx(doc.brandId, null, { docs: docsFor(doc.brandId).filter((d) => d.id !== doc.id) }) };
+  const current = cleanDoc(doc.content);
+  const r = await generate({
+    system: P.systemPrompt(ctx, 'estratega de marca y comunicación'), json: false, temperature: 0.4, maxTokens: 8000,
+    prompt: P.brandDocPrompt({ title: doc.title, purpose: t?.purpose || 'Documento de referencia de la marca.', template: t ? templateMarkdown(t.type) : doc.content, current }),
+  });
+  return String(r.text || '').replace(/^```(?:markdown|md)?\s*/i, '').replace(/```\s*$/, '').trim();
 }
 export async function aiInsights(brandId, table) {
-  const ctx = brandCtx(brandId);
+  const ctx = brandCtx(brandId, 'analisis');
   const r = await generate({ system: P.systemPrompt(ctx, 'analista de contenido'), prompt: P.insightsPrompt({ table, brandName: ctx.brand.name }), temperature: 0.3 });
   return r.json;
 }

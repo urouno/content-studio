@@ -25,11 +25,9 @@ La hoja tiene **18 pestañas de datos** y una pestaña `_Meta`. Se crean solas c
 | **ConfigMarca** | CFG | voice{}, visual{}, strategy{} (JSON) | brandId → Marcas (1:1) |
 | **Plataformas** | PLT | platform, goal, formats[], durationTarget, frequencyPerWeek, ctas[], active | brandId → Marcas (1:N) |
 | **Pilares** | PIL | name, description, objective, share | brandId → Marcas |
-| **Ideas** (contenidos) | CNT | title, topic, pillarId, audience, problem, keyword, objective, funnel, contentType, platforms[], format, priority, status, difficulty, experimental, knowledgeLevel, owner, targetDate, references, notes, source, statusHistory[] | pillarId → Pilares. **El id de la idea es el identificador del contenido en todo el flujo** |
+| **Ideas** (contenidos) | CNT | title, topic, pillarId, audience, problem, keyword, objective, funnel, contentType, platforms[], format, priority, status, difficulty, experimental, knowledgeLevel, owner (ya no se edita; se conserva para datos antiguos), targetDate, references, notes, source, statusHistory[] | pillarId → Pilares. **El id de la idea es el identificador del contenido en todo el flujo** |
 | **Guiones** | GUI | ideaId, currentVersionId, approvedVersionId, locked, publishFilter[] | ideaId → Ideas (1:1); \*VersionId → VersionesGuion |
 | **VersionesGuion** | VER | scriptId, ideaId, versionNo, label, origin, data{} (guion completo), evaluation{} | scriptId → Guiones (1:N) |
-| **Produccion** | PRD | ideaId, scriptVersionId, scenes[], props[], checklist[], crewNotes, observations, recordedAt | ideaId → Ideas (1:1) |
-| **Edicion** | EDI | ideaId, scriptVersionId, guide{}, scenes[], checklist[], editor, observations, readyAt | ideaId → Ideas (1:1) |
 | **Copies** | CPY | ideaId, platform, title, caption, description, ctaText, hashtags[], coverText, variant, status | ideaId → Ideas (1:N) |
 | **Calendario** | CAL | ideaId, platform, date (AAAA-MM-DD), time, owner, status, notes | ideaId → Ideas (1:N, una por plataforma) |
 | **Publicaciones** | PUB | ideaId, calendarId, platform, publishedAt, url, notes | calendarId → Calendario |
@@ -37,10 +35,13 @@ La hoja tiene **18 pestañas de datos** y una pestaña `_Meta`. Se crean solas c
 | **Referencias** | REF | ideaId, kind, title, url, metrics, notes | brandId → Marcas; ideaId opcional |
 | **Hooks** | HOK | layer, patternId, text, objective, status (aprobado/evitar), notes, sourceIdeaId | brandId → Marcas |
 | **CTA** | CTA | type, text, objective, status, notes | brandId → Marcas |
+| **DocumentosMarca** | DOC | docType (reglas, oferta, identidad, buyer, dolores, discurso, foco, voz, editorial, pruebas, competencia o custom), title, content (Markdown), active, order, tasks[] | brandId → Marcas (1:N). Los documentos base tienen id fijo `DOC-<marca>-<tipo>` |
 | **Recursos** | AST | kind, name, url, notes | brandId → Marcas (los archivos subidos quedan solo en el dispositivo) |
 | **Historial** | HIS | table, recordId, action, before{} (copia anterior), summary | recordId → cualquier tabla. Solo se añaden filas |
 
 `{}` = objeto JSON · `[]` = lista JSON. Las columnas JSON se guardan como texto y la app las interpreta.
+
+> **Grabado y editado** no tienen hoja propia: se deducen del `status` de la idea (`por_grabar` → `grabado` → `listo` = editado). Las hojas `Produccion` y `Edicion` de versiones anteriores ya no se usan; puedes conservarlas o borrarlas. El estado antiguo `edicion` se convierte en `grabado` al abrir la app.
 
 ### Estructura de `VersionesGuion.data`
 

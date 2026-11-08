@@ -1,6 +1,7 @@
 // Reglas del flujo Idea → … → Analizado. Un contenido = una idea (id CNT-…); todas las fichas cuelgan de ella.
 import { store } from '../core/store.js';
-import { PIPELINE, statusIndex, defaultBrandConfig } from '../core/schema.js';
+import { PIPELINE, statusIndex, defaultBrandConfig, LEGACY_STATUS } from '../core/schema.js';
+import { ensureBrandDocs } from './branddocs.js';
 import { nowISO, todayISO, clone, similarity } from '../core/utils.js';
 import { normalizeScript, emptyScript } from './scriptkit.js';
 import { STRUCTURES, byId, PUBLISH_FILTER } from './methodology.js';
@@ -20,25 +21,27 @@ export async function ensureBrandConfig(brandId) {
 export async function createBrand(data) {
   const b = await store.create('brands', { status: 'activa', color: '#4f46e5', ...data });
   await ensureBrandConfig(b.id);
+  await ensureBrandDocs(b.id);
   return b;
 }
 
-// Duplicar marca: copia identidad, configuración, plataformas, pilares, hooks, CTA y recursos (no contenidos).
+// Duplicar marca: copia identidad, configuración, documentos, plataformas, pilares, hooks, CTA y recursos (no contenidos).
 export async function duplicateBrand(brandId) {
   const src = store.get('brands', brandId);
   const { id, createdAt, updatedAt, version, brandId: _b, ...rest } = src;
-  const nb = await createBrand({ ...rest, name: `${src.name} (copia)` });
+  const nb = await store.create('brands', { status: 'activa', ...rest, name: `${src.name} (copia)` });
   const cfg = brandConfig(brandId);
   const nc = await ensureBrandConfig(nb.id);
   await store.update('brandConfigs', nc.id, { voice: clone(cfg.voice), visual: clone(cfg.visual), strategy: clone(cfg.strategy) }, { silent: true });
   const pillarMap = {};
-  for (const t of ['platforms', 'pillars', 'hooks', 'ctas', 'assets']) {
+  for (const t of ['brandDocs', 'platforms', 'pillars', 'hooks', 'ctas', 'assets']) {
     for (const r of store.all(t, { brandId })) {
       const { id: oid, createdAt: c1, updatedAt: u1, version: v1, ...copy } = r;
       const n = await store.create(t, { ...copy, brandId: nb.id }, { silent: true });
       if (t === 'pillars') pillarMap[oid] = n.id;
     }
   }
+  await ensureBrandDocs(nb.id);
   return nb;
 }
 
@@ -106,9 +109,6 @@ export async function approveVersion(ideaId, versionId) {
   const s = scriptFor(ideaId);
   await store.update('scripts', s.id, { approvedVersionId: versionId, currentVersionId: versionId, locked: true }, { summary: 'Versión aprobada y bloqueada' });
   await advanceTo(ideaId, 'guion_aprobado');
-  // Al aprobar se generan automáticamente las fichas de producción y edición (editables).
-  await ensureProduction(ideaId);
-  await ensureEdition(ideaId);
   await advanceTo(ideaId, 'por_grabar');
 }
 export async function unlockScript(ideaId) {
@@ -118,77 +118,46 @@ export async function unlockScript(ideaId) {
   if (statusIndex(idea.status) >= statusIndex('guion_aprobado')) await setStatus(ideaId, 'guion', 'Guion desbloqueado para cambios');
 }
 
-// ---------- Producción ----------
-export function productionFromScript(script) {
-  const scenes = [];
-  script.sections.forEach((sec, i) => {
-    const loc = /exterior|calle|tienda|local|cocina|quir|estudio/i.exec(sec.visual || '')?.[0] || 'Principal';
-    const last = scenes.at(-1);
-    const shot = { type: 'A-roll', framing: 'Plano medio vertical, ojos en el tercio superior', description: `Decir: sección ${i + 1}`, voiceRef: (sec.voice || '').slice(0, 120), done: false };
-    const broll = sec.visual ? [{ type: 'B-roll', framing: 'Detalle / plano recurso', description: sec.visual, voiceRef: '', done: false }] : [];
-    if (last && last.location === loc) { last.shots.push(shot, ...broll); last.sectionRefs.push(i); } else scenes.push({ title: `Escena ${scenes.length + 1}: ${sec.beat || sec.act}`, location: loc, sectionRefs: [i], shots: [shot, ...broll], direction: '', props: [] });
-  });
-  if (script.hook?.visual) scenes.unshift({ title: 'Hook visual (0–3 s)', location: 'Según hook', sectionRefs: [-1], shots: [{ type: 'Hook', framing: 'El plano más llamativo', description: script.hook.visual, voiceRef: script.hook.narrado, done: false }], direction: 'Grabar varias opciones del arranque. Empieza en movimiento, sin saludo.', props: [] });
-  const checklist = [
-    'Batería y almacenamiento suficientes', 'Lente limpia', 'Luz frontal suave (ventana o foco)', 'Micrófono conectado y probado',
-    'Grabar en vertical 9:16, 4K/1080p a 30 fps o más', 'Dejar 1 s de margen al inicio y final de cada toma',
-    'Grabar el hook con 2–3 variantes', 'Grabar B-roll de todas las secciones', 'Revisar que se entiende el producto/servicio',
-    'Máximo 2 intentos por frase si salen bien',
-  ].map((t) => ({ text: t, done: false }));
-  return { scenes, props: [], checklist, crewNotes: script.visualNotes || '' };
+// ---------- Grabación y edición ----------
+// Solo se registra si el contenido está grabado (teléfono) y editado (Claude). El estado del flujo
+// es la fuente de verdad: "grabado" = grabado y pendiente de editar; "listo" = editado.
+const LOCKED_AFTER = ['publicado', 'analizado'];
+export function productionState(idea) {
+  if (!idea || idea.status === 'descartada') return { recorded: false, edited: false, locked: true };
+  const i = statusIndex(idea.status);
+  const recorded = i >= statusIndex('grabado') || (idea.status === 'calendarizado');
+  const edited = i >= statusIndex('listo');
+  return { recorded, edited, locked: LOCKED_AFTER.includes(idea.status) };
 }
-export async function ensureProduction(ideaId, { regenerate = false } = {}) {
+const hasCalendar = (ideaId) => store.filter('calendar', (c) => c.ideaId === ideaId).length > 0;
+
+export async function setRecorded(ideaId, value) {
   const idea = store.get('ideas', ideaId);
-  const ver = approvedVersion(ideaId) || currentVersion(ideaId);
-  const existing = store.find('productions', (p) => p.ideaId === ideaId);
-  if (existing && !regenerate) return existing;
-  const p = productionFromScript(normalizeScript(ver?.data || {}));
-  if (existing) return store.update('productions', existing.id, { ...p, scriptVersionId: ver?.id }, { summary: 'Ficha de producción regenerada' });
-  return store.create('productions', { brandId: idea.brandId, ideaId, scriptVersionId: ver?.id, ...p, observations: '', recordedAt: null });
+  const st = productionState(idea);
+  if (st.locked || st.recorded === value) return idea;
+  if (value) return advanceTo(ideaId, 'grabado', 'Marcado como grabado');
+  return setStatus(ideaId, 'por_grabar', 'Desmarcado como grabado');
 }
-export async function markRecorded(ideaId) {
-  const p = store.find('productions', (x) => x.ideaId === ideaId);
-  if (p) await store.update('productions', p.id, { recordedAt: nowISO() });
-  await advanceTo(ideaId, 'grabado');
-  await ensureEdition(ideaId);
-  await advanceTo(ideaId, 'edicion');
+export async function setEdited(ideaId, value) {
+  const idea = store.get('ideas', ideaId);
+  const st = productionState(idea);
+  if (st.locked || st.edited === value) return idea;
+  if (value) {
+    await advanceTo(ideaId, 'listo', 'Marcado como editado');
+    if (hasCalendar(ideaId)) await advanceTo(ideaId, 'calendarizado');
+    return store.get('ideas', ideaId);
+  }
+  return setStatus(ideaId, 'grabado', 'Desmarcado como editado');
 }
 
-// ---------- Edición ----------
-export function editionFromScript(script, cfg) {
-  const vis = cfg.visual || {};
-  const guide = {
-    colors: vis.colors || [], fonts: vis.fonts || [], subtitleStyle: vis.subtitleStyle, textPosition: vis.textPosition,
-    pace: vis.pace, transitions: vis.transitions, music: vis.music, sfx: vis.sfx, graphics: vis.graphics,
-    intro: vis.intro, outro: vis.outro, editingStyle: vis.editingStyle, notes: script.editingNotes || '',
-  };
-  let t = 0; const wps = (cfg.strategy?.wpm || 160) / 60;
-  const scenes = [{ sectionIndex: -1, time: '0–3 s', onScreenText: script.hook.textual, subtitle: vis.subtitleStyle || '', broll: script.hook.visual, graphics: '', transition: 'Sin intro: empezar en la acción', sfx: script.hook.auditivo, music: '', camera: '', notes: 'Hook: las 4 capas deben decir lo mismo', done: false }];
-  t = 3;
-  script.sections.forEach((s, i) => {
-    const dur = Math.max(2, Math.round((s.voice || '').split(/\s+/).filter(Boolean).length / wps));
-    scenes.push({ sectionIndex: i, time: `${t}–${t + dur} s`, onScreenText: s.onScreenText, subtitle: vis.subtitleStyle || '', broll: s.visual, graphics: '', transition: vis.transitions || 'Corte', sfx: s.peak >= 2 ? 'Efecto sutil en la revelación (opcional)' : '', music: '', camera: s.peak >= 2 ? 'Zoom o cambio de plano en el pico' : '', notes: s.edit, done: false });
-    t += dur;
-  });
-  scenes.push({ sectionIndex: 99, time: `${t}–${t + 4} s`, onScreenText: script.cta.text, subtitle: vis.subtitleStyle || '', broll: script.cta.visual, graphics: vis.outro || '', transition: '', sfx: '', music: '', camera: '', notes: 'CTA', done: false });
-  const checklist = ['Subtítulos revisados (ortografía y sincronía)', 'Texto fuera de zonas seguras', 'Contraste de texto suficiente', 'Música por debajo de la voz', 'Colores y tipografías de la marca', 'Sin silencios ni respiraciones largas', 'El hook funciona sin sonido', 'Exportar 9:16 1080×1920']
-    .map((x) => ({ text: x, done: false }));
-  return { guide, scenes, checklist };
-}
-export async function ensureEdition(ideaId, { regenerate = false } = {}) {
-  const idea = store.get('ideas', ideaId);
-  const ver = approvedVersion(ideaId) || currentVersion(ideaId);
-  const existing = store.find('editions', (p) => p.ideaId === ideaId);
-  if (existing && !regenerate) return existing;
-  const e = editionFromScript(normalizeScript(ver?.data || {}), brandConfig(idea.brandId));
-  if (existing) return store.update('editions', existing.id, { ...e, scriptVersionId: ver?.id }, { summary: 'Ficha de edición regenerada' });
-  return store.create('editions', { brandId: idea.brandId, ideaId, scriptVersionId: ver?.id, ...e, editor: '', observations: '', readyAt: null });
-}
-export async function markReady(ideaId) {
-  const e = store.find('editions', (x) => x.ideaId === ideaId);
-  if (e) await store.update('editions', e.id, { readyAt: nowISO() });
-  await advanceTo(ideaId, 'listo');
-  if (store.filter('calendar', (c) => c.ideaId === ideaId).length) await advanceTo(ideaId, 'calendarizado');
+// Convierte estados que ya no existen (p. ej. "edicion") en su equivalente actual.
+export async function migrateLegacyStatuses() {
+  let n = 0;
+  for (const idea of store.all('ideas')) {
+    const to = LEGACY_STATUS[idea.status];
+    if (to) { await setStatus(idea.id, to, 'Migración: estado simplificado'); n++; }
+  }
+  return n;
 }
 
 // ---------- Calendario / publicación ----------
@@ -228,8 +197,6 @@ export function contentBundle(ideaId) {
   return {
     idea, brand: store.get('brands', idea.brandId), script,
     versions: script ? versionsFor(script.id) : [],
-    production: store.find('productions', (p) => p.ideaId === ideaId),
-    edition: store.find('editions', (p) => p.ideaId === ideaId),
     copies: store.filter('copies', (c) => c.ideaId === ideaId),
     calendar: store.filter('calendar', (c) => c.ideaId === ideaId),
     publications: store.filter('publications', (c) => c.ideaId === ideaId),

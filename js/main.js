@@ -7,6 +7,7 @@ import { icon, toast, delegate } from './core/ui.js';
 import { esc, fmtRelative } from './core/utils.js';
 import { startAutoSync, syncState, syncNow } from './services/sync.js';
 import { isConfigured } from './services/api.js';
+import { migrateLegacyStatuses } from './services/workflow.js';
 
 import * as dashboard from './views/dashboard.js';
 import * as ideas from './views/ideas.js';
@@ -21,7 +22,7 @@ import * as settingsView from './views/settings.js';
 const NAV = [
   { path: '/', label: 'Inicio', icon: 'home', view: dashboard },
   { path: '/ideas', label: 'Ideas', icon: 'bulb', view: ideas },
-  { path: '/contenidos', label: 'Producción', icon: 'film', view: contents },
+  { path: '/contenidos', label: 'Contenidos', icon: 'film', view: contents },
   { path: '/calendario', label: 'Calendario', icon: 'calendar', view: calendar },
   { path: '/resultados', label: 'Resultados', icon: 'chart', view: results },
   { path: '/marcas', label: 'Marcas', icon: 'brand', view: brands },
@@ -127,6 +128,9 @@ async function boot() {
     return;
   }
   requestPersistence();
+  // Estados antiguos (p. ej. "En edición") → equivalentes actuales. También tras recibir cambios remotos.
+  await migrateLegacyStatuses().catch((e) => console.warn('Migración de estados', e));
+  on('change', (p) => { if (p?.remote || p?.import) migrateLegacyStatuses().catch(() => {}); });
   delegate(document.getElementById('brand-switch'), 'click', '.brand-btn', (e, el) => openBrandMenu(el));
   document.getElementById('sync-pill').addEventListener('click', async () => {
     if (!isConfigured()) { go('/ajustes/conexion'); return; }

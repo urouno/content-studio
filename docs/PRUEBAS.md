@@ -26,14 +26,24 @@ Marca cada caso como ✅ o ❌ al probar. Preparación: `npm start`, abrir <http
 | F4 | Escribe un hook de 20 palabras | La revisión automática muestra "difícil de decir en ~3 s" |
 | F5 | Escribe en Promesa y espera 1 s | El indicador superior muestra "Guardado"; al recargar, el texto sigue ahí |
 | F6 | Duplicar → cambia una sección → Comparar | La sección cambiada aparece resaltada |
-| F7 | Aprobar versión → Aprobar y bloquear | Versión bloqueada; aparecen las fichas de Producción y Edición; estado "Pendiente de grabación" |
-| F8 | Producción → marca tomas y checklist | El progreso se actualiza y se guarda |
-| F9 | Marcar como grabado → Edición | Estado "En edición"; la guía muestra los colores y tipografías de la marca |
-| F10 | Marcar video listo → Publicación → Programar | Estado "Calendarizado"; aparece en el Calendario |
+| F7 | Aprobar versión → Aprobar y bloquear | Versión bloqueada; estado "Por grabar"; no hay pestañas de Producción ni Edición |
+| F8 | Marca la casilla **Grabado** en la cabecera | Estado "Grabado · por editar" |
+| F9 | Marca **Editado**; después desmárcalo y vuelve a marcarlo | "Editado"; al desmarcar vuelve a "Grabado · por editar" |
+| F10 | Publicación → Programar | Estado "Calendarizado"; aparece en el Calendario |
 | F11 | Calendario → arrastra el evento a otro día | Cambia la fecha; "Deshacer" la devuelve |
 | F12 | Publicación → Marcar publicado | Estado "Publicado" |
 | F13 | Resultados → Registrar medición | Estado "Analizado"; se ven tasas calculadas; aparece en Resultados con su patrón |
 | F14 | Retrocede el estado con el botón "←" | Cambia el estado y **no** se pierden el guion ni las fichas |
+
+### Documentos de marca
+| ID | Pasos | Resultado esperado |
+|---|---|---|
+| D1 | Marcas → una marca → Documentos | Aparecen 11 documentos; los que la ficha ya cubría vienen precargados |
+| D2 | Escribe en *Buyer persona* y espera 1 s; recarga | El texto sigue ahí; la barra de completitud avanza |
+| D3 | *Ver lo que recibe la IA* → tarea Ideas y luego Guiones | Las indicaciones en gris no aparecen; *Voz, tono y estilo* solo aparece en Guiones |
+| D4 | Desmarca *Usar como contexto para la IA* | El documento sale del contexto y aparece atenuado en la lista |
+| D5 | *Importar .md* (lista lateral) con un archivo propio | Se crea un documento propio con el título del `# encabezado` |
+| D6 | Nueva idea | El formulario no tiene el campo "Responsable" |
 
 ### Multimarca
 | ID | Pasos | Resultado esperado |
@@ -80,7 +90,7 @@ Marca cada caso como ✅ o ❌ al probar. Preparación: `npm start`, abrir <http
 ## Pruebas realizadas en el desarrollo
 
 - Pruebas automáticas: 23 de 23 superadas.
-- En el navegador (Chromium, `localhost`): carga de la demostración, panel, ideas, tablero, editor de guion con autoguardado y revisión automática, aprobación con creación de fichas, producción, marcar grabado, edición con guía de marca, calendario (mes y semana), resultados con patrones, ficha de marca (visual y redes), cadena de IA con respuesta de Gemini **simulada** (sin clave real) y carga desde la caché del Service Worker con el servidor detenido.
+- En el navegador (Chromium, `localhost`): carga de la demostración, panel, ideas, tablero, editor de guion con autoguardado y revisión automática, aprobación, casillas Grabado y Editado, documentos de marca (edición, vista previa y contexto enviado a la IA), calendario (mes y semana), resultados con patrones, ficha de marca (visual y redes), cadena de IA con respuesta de Gemini **simulada** (sin clave real) y carga desde la caché del Service Worker con el servidor detenido.
 - Flujo completo idea → analizado con todas las transiciones automáticas, prueba XSS (E6), guardado de copies al cambiar de pestaña y diseño a 375 px en modo claro.
 - Fallos encontrados y corregidos durante las pruebas:
   - guardado de una versión ya bloqueada al salir del editor;
