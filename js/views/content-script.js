@@ -29,7 +29,7 @@ export function render(host, b, ctx) {
 
   if (!current) {
     host.innerHTML = `<div class="card">${emptyState('Todavía no hay guion', 'Genera versiones con IA a partir de la idea, la identidad de la marca y la metodología, o escribe uno desde cero con la estructura en tres actos.',
-      `<div class="row" style="justify-content:center"><button class="btn btn-ai" data-gen>${icon('sparkle')}Generar con IA</button><button class="btn" data-blank>${icon('edit')}Escribir manualmente</button></div>`, 'edit')}</div>`;
+      `<div class="row" style="justify-content:center"><button class="btn btn-ai" data-gen>${icon('sparkle')}Generar con IA</button><button class="btn" data-blank>${icon('edit')}Escribir manualmente</button><a class="btn btn-ghost" href="#/metodo">${icon('book')}Ver Método</a></div>`, 'edit')}</div>`;
     host.querySelector('[data-gen]').onclick = () => openGenerate(idea, ctx);
     host.querySelector('[data-blank]').onclick = async () => { await newBlankVersion(store.get('ideas', idea.id)); ctx.refresh(); };
     return null;
@@ -63,6 +63,7 @@ export function render(host, b, ctx) {
             <button class="btn btn-sm" data-dup>${icon('copy', 'ic-sm')}Duplicar</button>
             <button class="btn btn-sm" data-compare ${versions.length < 2 ? 'disabled' : ''}>${icon('compare', 'ic-sm')}Comparar</button>
             <button class="btn btn-sm" data-export>${icon('download', 'ic-sm')}Texto</button>
+            <a class="btn btn-sm btn-ghost" href="#/metodo" title="Guía de estructuras, hooks y CTA">${icon('book', 'ic-sm')}Método</a>
             ${lk ? `<button class="btn btn-sm" data-unlock>${icon('unlock', 'ic-sm')}Desbloquear</button>` : `<button class="btn btn-sm btn-primary" data-approve>${icon('lock', 'ic-sm')}Aprobar versión</button>`}
           </div></div></div>
 

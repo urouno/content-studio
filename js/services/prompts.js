@@ -10,7 +10,7 @@ const TRUTH_RULES = `REGLAS DE VERACIDAD (obligatorias):
 - Distingue recomendaciones de hechos. No prometas viralidad ni resultados garantizados.`;
 
 export function brandContext(ctx) {
-  const { brand, config = {}, platforms = [], pillars = [], hooks = [], ctas = [], examples = [], learnings = [], docs = '', filled = new Set() } = ctx;
+  const { brand, config = {}, platforms = [], pillars = [], hooks = [], ctas = [], examples = [], learnings = [], docs = '', filled = new Set(), references = [] } = ctx;
   const v = config.voice || {}; const vis = config.visual || {};
   const lvl = byId(KNOWLEDGE_LEVELS, Number(v.knowledgeLevel)) || KNOWLEDGE_LEVELS[1];
   const lines = [
@@ -47,6 +47,8 @@ export function brandContext(ctx) {
     ctas.filter((c) => c.status === 'evitar').length && `CTA A EVITAR: ${ctas.filter((c) => c.status === 'evitar').slice(0, 8).map((c) => `"${c.text}"`).join(' | ')}`,
     examples.length && `GUIONES APROBADOS DE ESTA MARCA (resumen): ${examples.map((e) => `"${e.hook}" → ${e.structure}`).join(' | ')}`,
     learnings.length && `APRENDIZAJES DE RESULTADOS (hipótesis, no reglas): ${learnings.join(' | ')}`,
+    vis.references && `REFERENCIAS GENERALES DE LA MARCA: ${String(vis.references).slice(0, 1500)}`,
+    references.filter((r) => r.title || r.url).length && `REFERENCIAS GUARDADAS (inspiración de estilo, no copiar): ${references.filter((r) => r.title || r.url).slice(0, 10).map((r) => `[${r.kind}] ${r.title || r.url}${r.metrics ? ` (${r.metrics})` : ''}${r.notes ? ` — ${r.notes}` : ''}`).join(' | ')}`,
     docs && `\n=== DOCUMENTOS DE REFERENCIA DE ${String(brand.name).toUpperCase()} (contexto fijo: síguelos siempre) ===\n${docs}\n=== FIN DE LOS DOCUMENTOS ===`,
   ];
   return lines.filter(Boolean).join('\n');

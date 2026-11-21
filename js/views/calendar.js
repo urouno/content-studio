@@ -5,12 +5,14 @@ import { statusInfo, statusIndex, PIPELINE } from '../core/schema.js';
 import { icon, toast, emptyState } from '../core/ui.js';
 import { esc, toDateKey, parseDateKey, addDays, startOfWeek, todayISO, fmtDate } from '../core/utils.js';
 import { PLATFORMS } from '../services/methodology.js';
-import { pageHeader, filterBar, platformShort, platformLabel, brandTag, statusBadge, renderBoard } from './shared.js';
+import { pageHeader, filterBar, platformShort, platformLabel, brandTag, statusBadge } from './shared.js';
 import { openSchedule } from './content-publish.js';
-import { setStatus, schedule } from '../services/workflow.js';
+import { schedule } from '../services/workflow.js';
 
-const VIEWS = [{ id: 'mes', label: 'Mes', icon: 'calendar' }, { id: 'semana', label: 'Semana', icon: 'columns' }, { id: 'dia', label: 'Día', icon: 'clock' }, { id: 'lista', label: 'Lista', icon: 'list' }, { id: 'tablero', label: 'Tablero', icon: 'layers' }];
-const state = { cursor: new Date(), platform: '', status: '', showUnscheduled: true };
+// Vistas: Mes, Semana y Lista. ("Día" y "Tablero" se quitaron: el tablero ya está en Producción.)
+const VIEWS = [{ id: 'mes', label: 'Mes', icon: 'calendar' }, { id: 'semana', label: 'Semana', icon: 'columns' }, { id: 'lista', label: 'Lista', icon: 'list' }];
+const state = { cursor: new Date(), platform: '', status: '', showUnscheduled: true, day: null };
+const isPhone = () => matchMedia('(max-width: 760px)').matches;
 const MONTHS = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' });
 const WD = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -22,11 +24,11 @@ export function render(main, { params }) {
     if (state.platform) entries = entries.filter((c) => c.platform === state.platform);
     if (state.status) entries = entries.filter((c) => (state.status === 'publicado' ? c.status === 'publicado' : state.status === 'pendiente' ? c.status !== 'publicado' : true));
     const conflicts = conflictKeys(entries);
-    const title = view === 'mes' ? MONTHS.format(state.cursor) : view === 'semana' ? `Semana del ${fmtDate(startOfWeek(state.cursor))}` : view === 'dia' ? new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' }).format(state.cursor) : view === 'lista' ? 'Próximas y recientes' : 'Tablero de producción';
+    const title = view === 'mes' ? MONTHS.format(state.cursor) : view === 'semana' ? `Semana del ${fmtDate(startOfWeek(state.cursor))}` : 'Todas las fechas';
     main.innerHTML = `${pageHeader({ title: 'Calendario editorial', sub: 'Programación interna. La publicación se hace manualmente en cada red.',
       actions: `<div class="btn-group">${VIEWS.map((v) => `<button class="btn ${v.id === view ? 'active' : ''}" data-view="${v.id}">${icon(v.icon)}${v.label}</button>`).join('')}</div>` })}
       <div class="row-between cal-bar">
-        <div class="row">${['mes', 'semana', 'dia'].includes(view) ? `<button class="icon-btn" data-nav="-1" aria-label="Anterior">${icon('left')}</button><button class="btn btn-sm" data-today>Hoy</button><button class="icon-btn" data-nav="1" aria-label="Siguiente">${icon('right')}</button>` : ''}<h2 class="cal-title">${esc(title)}</h2></div>
+        <div class="row">${['mes', 'semana'].includes(view) ? `<button class="icon-btn" data-nav="-1" aria-label="Anterior">${icon('left')}</button><button class="btn btn-sm" data-today>Hoy</button><button class="icon-btn" data-nav="1" aria-label="Siguiente">${icon('right')}</button>` : ''}<h2 class="cal-title">${esc(title)}</h2></div>
         <div class="row">${filterBar([{ name: 'platform', label: 'Plataforma', options: PLATFORMS.map((p) => ({ value: p.id, label: p.name })) }, { name: 'status', label: 'Estado', options: [{ value: 'pendiente', label: 'Pendientes' }, { value: 'publicado', label: 'Publicados' }] }], state)}
         ${['mes', 'semana'].includes(view) ? `<label class="check"><input type="checkbox" data-unsch ${state.showUnscheduled ? 'checked' : ''}>Sin fecha</label>` : ''}</div>
       </div>
@@ -35,23 +37,24 @@ export function render(main, { params }) {
     const host = main.querySelector('.cal-host');
     if (view === 'mes') drawMonth(host, entries, conflicts);
     if (view === 'semana') drawWeek(host, entries, conflicts, 7);
-    if (view === 'dia') drawWeek(host, entries, conflicts, 1);
     if (view === 'lista') drawList(host, entries);
-    if (view === 'tablero') renderBoard(host, store.all('ideas', { brandId: bId }).filter((i) => i.status !== 'descartada'), { showBrand: bId === 'all', onOpen: (id) => go(`/contenido/${id}`), onMove: async (id, st) => { const i = store.get('ideas', id); if (i.status !== st) { await setStatus(id, st, 'Movido en el tablero'); toast(`"${i.title}" → ${statusInfo(st).name}`, 'success'); } } });
     const side = main.querySelector('.cal-side');
     if (side) drawUnscheduled(side, bId);
 
     main.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => { view = b.dataset.view; history.replaceState(null, '', `#/calendario/${view}`); draw(); }));
-    main.querySelectorAll('[data-nav]').forEach((b) => (b.onclick = () => { const n = Number(b.dataset.nav); state.cursor = view === 'mes' ? new Date(state.cursor.getFullYear(), state.cursor.getMonth() + n, 1) : addDays(state.cursor, n * (view === 'semana' ? 7 : 1)); draw(); }));
-    main.querySelector('[data-today]')?.addEventListener('click', () => { state.cursor = new Date(); draw(); });
+    main.querySelectorAll('[data-nav]').forEach((b) => (b.onclick = () => { const n = Number(b.dataset.nav); state.cursor = view === 'mes' ? new Date(state.cursor.getFullYear(), state.cursor.getMonth() + n, 1) : addDays(state.cursor, n * 7); state.day = null; draw(); }));
+    main.querySelector('[data-today]')?.addEventListener('click', () => { state.cursor = new Date(); state.day = null; draw(); });
     main.querySelector('.filterbar').addEventListener('change', (e) => { state[e.target.name] = e.target.value; draw(); });
     main.querySelector('[data-unsch]')?.addEventListener('change', (e) => { state.showUnscheduled = e.target.checked; draw(); });
     main.querySelectorAll('[data-day]').forEach((d) => d.addEventListener('dblclick', (e) => { if (e.target.closest('.cev')) return; pickIdeaForDay(d.dataset.day); }));
+    main.querySelector('[data-pick-day]')?.addEventListener('click', (e) => pickIdeaForDay(e.currentTarget.dataset.pickDay));
   };
   draw();
   const unbind = bindDnD(main);
+  const onRedraw = () => { draw(); main.querySelector('.day-agenda')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
+  main.addEventListener('cal:redraw', onRedraw);
   const off = on('change', (p) => { if (!p?.remote && ['calendar', 'ideas', undefined].includes(p?.table)) draw(); });
-  return () => { off(); unbind(); };
+  return () => { off(); unbind(); main.removeEventListener('cal:redraw', onRedraw); };
 }
 
 function conflictKeys(entries) {
@@ -73,20 +76,27 @@ function drawMonth(host, entries, conflicts) {
   const first = new Date(state.cursor.getFullYear(), state.cursor.getMonth(), 1);
   const start = startOfWeek(first); const month = first.getMonth(); const today = todayISO();
   const byDay = groupByDay(entries);
-  const weeklyTarget = weeklyTargetFor(app.brandId);
+  const weeklyTarget = Math.round(weeklyTargetFor(app.brandId));
+  const thisWeek = toDateKey(startOfWeek(new Date()));
   let html = `<div class="month">${WD.map((d) => `<div class="mh">${d}</div>`).join('')}<div class="mh">Semana</div>`;
   for (let w = 0; w < 6; w++) {
     let weekCount = 0;
     for (let d = 0; d < 7; d++) {
       const day = addDays(start, w * 7 + d); const k = toDateKey(day); const list = byDay.get(k) || [];
       weekCount += list.length;
-      html += `<div class="mday ${day.getMonth() !== month ? 'out' : ''} ${k === today ? 'today' : ''}" data-day="${k}"><span class="mnum">${day.getDate()}</span>${list.map((c) => ev(c, conflicts)).join('')}</div>`;
+      html += `<div class="mday ${day.getMonth() !== month ? 'out' : ''} ${k === today ? 'today' : ''} ${k === state.day ? 'sel' : ''}" data-day="${k}"><span class="mnum">${day.getDate()}</span>${list.map((c) => ev(c, conflicts)).join('')}</div>`;
     }
-    const gap = weeklyTarget && weekCount < weeklyTarget;
-    html += `<div class="mweek ${gap ? 'gap' : ''}" title="${weeklyTarget ? `Objetivo semanal: ${weeklyTarget}` : 'Define la frecuencia por plataforma en la marca'}"><b>${weekCount}</b>${weeklyTarget ? `/${weeklyTarget}` : ''}${gap ? '<span class="xs">hueco</span>' : ''}</div>`;
+    // Solo se marca "faltan" en la semana actual y las siguientes (las pasadas ya no se pueden llenar).
+    const wk = toDateKey(addDays(start, w * 7));
+    const gap = weeklyTarget && wk >= thisWeek && weekCount < weeklyTarget;
+    html += `<div class="mweek ${gap ? 'gap' : ''}" title="${weeklyTarget ? `Objetivo semanal: ${weeklyTarget}` : 'Define la frecuencia por plataforma en la marca'}"><b>${weekCount}</b>${weeklyTarget ? `<span>de ${weeklyTarget}</span>` : ''}${gap ? `<span class="xs">faltan ${weeklyTarget - weekCount}</span>` : ''}</div>`;
     if (addDays(start, (w + 1) * 7).getMonth() !== month && w >= 3) break;
   }
-  host.innerHTML = `${html}</div><p class="xs muted" style="margin-top:8px">Arrastra para cambiar la fecha. Doble clic en un día para programar. La columna "Semana" compara con la frecuencia objetivo de las plataformas.</p>`;
+  // En celular: al tocar un día se muestra abajo la lista de ese día.
+  const sel = state.day || (isPhone() ? today : null);
+  const agenda = isPhone() && sel ? `<section class="day-agenda"><div class="row-between"><h3>${esc(new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' }).format(parseDateKey(sel)))}</h3><button class="btn btn-sm" data-pick-day="${sel}">${icon('plus', 'ic-sm')}Programar</button></div>
+    <div class="stack">${(byDay.get(sel) || []).sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(dayCard).join('') || '<p class="small muted">Sin publicaciones este día.</p>'}</div></section>` : '';
+  host.innerHTML = `${html}</div><p class="xs muted cal-help" style="margin-top:8px">Arrastra para cambiar la fecha. Doble clic en un día para programar. La columna "Semana" compara con la frecuencia objetivo de las plataformas.</p>${agenda}`;
 }
 
 function drawWeek(host, entries, conflicts, days) {
@@ -116,7 +126,7 @@ function drawList(host, entries) {
 function drawUnscheduled(side, bId) {
   const items = store.all('ideas', { brandId: bId }).filter((i) => statusIndex(i.status) >= statusIndex('aprobada') && statusIndex(i.status) < statusIndex('publicado') && !store.find('calendar', (c) => c.ideaId === i.id))
     .sort((a, b) => statusIndex(b.status) - statusIndex(a.status));
-  side.innerHTML = `<div class="card-h"><h3>Sin fecha</h3><span class="xs muted">${items.length}</span></div><div class="card-b stack">${items.length ? items.map((i) => `<div class="cev side" draggable="true" data-idea="${i.id}" style="--bc:${esc(store.get('brands', i.brandId)?.color || '#888')}"><span class="cev-t">${esc(i.title)}</span><span class="xs muted">${esc(statusInfo(i.status).name)}</span></div>`).join('') : '<p class="xs muted">Todo lo aprobado tiene fecha.</p>'}<p class="xs muted">Arrastra un contenido a un día para programarlo.</p></div>`;
+  side.innerHTML = `<div class="card-h"><h3>Sin fecha</h3><span class="xs muted">${items.length}</span></div><div class="card-b stack">${items.length ? items.map((i) => `<div class="cev side" draggable="true" data-idea="${i.id}" style="--bc:${esc(store.get('brands', i.brandId)?.color || '#888')}"><span class="cev-t">${esc(i.title)}</span><span class="xs muted">${esc(statusInfo(i.status).name)}</span></div>`).join('') : '<p class="xs muted">Todo lo aprobado tiene fecha.</p>'}<p class="xs muted">Arrastra un contenido a un día, o tócalo para programarlo.</p></div>`;
 }
 
 function bindDnD(main) {
@@ -139,7 +149,11 @@ function bindDnD(main) {
       const i = store.get('ideas', p.idea); openSchedule(i, null, { date: d.dataset.day });
     }
   };
-  const onClick = (e) => { const el = e.target.closest('.cev'); if (el && el.closest('.cal-host, .cal-side')) go(`/contenido/${el.dataset.idea}/publicacion`); };
+  const onClick = (e) => {
+    const cell = e.target.closest('.month [data-day]');
+    if (cell && isPhone()) { state.day = cell.dataset.day; main.dispatchEvent(new CustomEvent('cal:redraw')); return; }
+    const el = e.target.closest('.cev'); if (el && el.closest('.cal-host, .cal-side')) go(`/contenido/${el.dataset.idea}/publicacion`);
+  };
   const pairs = [['dragstart', onStart], ['dragend', onEnd], ['dragover', onOver], ['drop', onDrop], ['click', onClick]];
   pairs.forEach(([t, f]) => main.addEventListener(t, f));
   return () => pairs.forEach(([t, f]) => main.removeEventListener(t, f));

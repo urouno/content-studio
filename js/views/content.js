@@ -3,12 +3,12 @@ import { store } from '../core/store.js';
 import { go } from '../core/app.js';
 import { on } from '../core/events.js';
 import { PIPELINE, statusIndex, statusInfo, ALL_STATUSES } from '../core/schema.js';
-import { icon, tabs, toast, confirmDialog, renderFields, bindAutosave, withBusy, emptyState, modal } from '../core/ui.js';
+import { icon, tabs, toast, confirmDialog, bindAutosave, withBusy, emptyState, modal } from '../core/ui.js';
 import { esc, fmtDateTime, fmtRelative } from '../core/utils.js';
 import { PUBLISH_FILTER } from '../services/methodology.js';
-import { contentBundle, setStatus, nextStatus, prevStatus, scriptFor, ensureScript, productionState, setRecorded, setEdited } from '../services/workflow.js';
+import { contentBundle, setStatus, nextStatus, scriptFor, ensureScript, productionState, setRecorded, setEdited } from '../services/workflow.js';
 import { aiResearch } from '../services/assistant.js';
-import { brandTag, statusBadge, ideaFields, aiGuard } from './shared.js';
+import { brandTag, statusBadge, ideaFields, aiGuard, renderIdeaForm } from './shared.js';
 import * as scriptTab from './content-script.js';
 import * as pubTab from './content-publish.js';
 
@@ -38,22 +38,22 @@ export function render(main, { params }) {
     const b = contentBundle(id); if (!b) return;
     const { idea } = b;
     const idx = statusIndex(idea.status);
-    const nx = nextStatus(idea.status); const pv = prevStatus(idea.status);
+    const nx = nextStatus(idea.status);
     const ps = productionState(idea);
     const flag = (key, label, ic, on, hint) => `<label class="pflag ${on ? 'on' : ''} ${ps.locked ? 'locked' : ''}" title="${esc(hint)}"><input type="checkbox" data-flag="${key}" ${on ? 'checked' : ''} ${ps.locked ? 'disabled' : ''}>${icon(ic, 'ic-sm')}<span>${label}</span></label>`;
-    head.innerHTML = `<div class="crumbs"><a href="#/contenidos">Contenidos</a>${icon('right', 'ic-sm')}${brandTag(idea.brandId)}<span class="mono xs">${idea.id}</span></div>
-      <div class="row-between" style="align-items:flex-start;margin-bottom:12px">
-        <div><h1 class="content-title">${esc(idea.title)}</h1><div class="row small muted" style="margin-top:4px">${statusBadge(idea.status)}<span>Actualizado ${fmtRelative(idea.updatedAt)}</span></div>
-          ${idea.status === 'descartada' ? '' : `<div class="row pflags" style="margin-top:10px">${flag('rec', 'Grabado', 'camera', ps.recorded, ps.locked ? 'Ya está publicado' : 'Grabado con el teléfono')}${flag('edit', 'Editado', 'scissors', ps.edited, ps.locked ? 'Ya está publicado' : 'Editado con Claude')}</div>`}</div>
-        <div class="row">
-          ${pv ? `<button class="btn btn-sm" data-prev title="Regresar a la etapa anterior sin perder información">${icon('left', 'ic-sm')}${esc(statusInfo(pv).name)}</button>` : ''}
-          ${nx && idea.status !== 'descartada' ? `<button class="btn btn-sm btn-primary" data-next>${esc(statusInfo(nx).name)}${icon('right', 'ic-sm')}</button>` : ''}
-          <select class="input input-sm" data-status aria-label="Cambiar estado" style="width:auto">${ALL_STATUSES.map((s) => `<option value="${s.id}" ${s.id === idea.status ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-          <button class="icon-btn" data-del title="Enviar a la papelera">${icon('trash')}</button>
+    const nextBtn = nx && idea.status !== 'descartada' ? `<button class="btn btn-primary" data-next>Avanzar a: ${esc(statusInfo(nx).name)}${icon('right', 'ic-sm')}</button>` : '';
+    head.innerHTML = `<div class="crumbs"><a href="#/contenidos">Contenidos</a>${icon('right', 'ic-sm')}${brandTag(idea.brandId)}</div>
+      <h1 class="content-title">${esc(idea.title)}</h1>
+      <div class="content-meta">
+        <div class="row small muted">${statusBadge(idea.status)}<span>Actualizado ${fmtRelative(idea.updatedAt)}</span>
+          ${idea.status === 'descartada' ? '' : `<span class="row pflags">${flag('rec', 'Grabado', 'camera', ps.recorded, ps.locked ? 'Ya está publicado' : 'Grabado con el teléfono')}${flag('edit', 'Editado', 'scissors', ps.edited, ps.locked ? 'Ya está publicado' : 'Editado con Claude')}</span>`}</div>
+        <div class="head-actions">${nextBtn}
+          <select class="input input-sm" data-status aria-label="Cambiar etapa" title="Cambiar a cualquier etapa (no se pierde información)">${ALL_STATUSES.map((s) => `<option value="${s.id}" ${s.id === idea.status ? 'selected' : ''}>${s.id === idea.status ? 'Etapa: ' : ''}${esc(s.name)}</option>`).join('')}</select>
+          <button class="icon-btn" data-del title="Enviar a la papelera" aria-label="Enviar a la papelera">${icon('trash')}</button>
         </div></div>
-      <ol class="stepper">${PIPELINE.map((p, i) => `<li class="${i < idx ? 'done' : i === idx ? 'cur' : ''}" title="${esc(p.name)}"><span></span><em>${esc(p.name)}</em></li>`).join('')}</ol>`;
+      <ol class="stepper" aria-label="Etapa ${idx + 1} de ${PIPELINE.length}">${PIPELINE.map((p, i) => `<li class="${i < idx ? 'done' : i === idx ? 'cur' : ''}" title="${esc(p.name)}"><span></span><em>${esc(p.name)}</em></li>`).join('')}</ol>
+      ${idx >= 0 ? `<p class="stepper-m xs muted">Etapa ${idx + 1} de ${PIPELINE.length}: <b>${esc(PIPELINE[idx].name)}</b></p>` : ''}`;
     head.querySelector('[data-next]')?.addEventListener('click', () => setStatus(id, nx));
-    head.querySelector('[data-prev]')?.addEventListener('click', () => setStatus(id, pv, 'Regreso manual'));
     head.querySelector('[data-status]').addEventListener('change', (e) => setStatus(id, e.target.value, 'Cambio manual'));
     head.querySelectorAll('[data-flag]').forEach((cb) => cb.addEventListener('change', async () => {
       const on = cb.checked;
@@ -109,7 +109,7 @@ function strategyTab(host, b, ctx) {
   const filter = script?.publishFilter || PUBLISH_FILTER.map(() => false);
   host.innerHTML = `<div class="split">
     <section class="card"><div class="card-h"><h3>Propósito de la idea</h3><span class="xs muted">Se guarda automáticamente</span></div>
-      <div class="card-b"><form class="form-grid cols-3" data-form>${renderFields(fields, idea)}</form></div></section>
+      <div class="card-b"><form class="form-grid cols-3" data-form>${renderIdeaForm(fields, idea)}</form></div></section>
     <aside class="stack-lg sticky">
       <section class="card"><div class="card-h"><h3>${icon('search')}Investigación</h3></div><div class="card-b stack">
         <p class="small muted">Busca preguntas frecuentes, mitos y datos con fuentes. Usa Google Search cuando el modelo y tu nivel lo permiten.</p>
@@ -140,6 +140,7 @@ function strategyTab(host, b, ctx) {
           const add = `\n\n--- Investigación IA (${new Date().toLocaleDateString('es')}) · verificar antes de usar ---\n${r.text}\n${r.sources.map((s) => `- ${s.title}: ${s.uri}`).join('\n')}`;
           await store.update('ideas', idea.id, { references: `${cur.references || ''}${add}`.trim() });
           form.querySelector('[name="references"]').value = store.get('ideas', idea.id).references;
+          form.querySelector('.more-fields')?.setAttribute('open', '');
           toast('Añadido a referencias', 'success');
         };
       } catch (err) { toast(err.message, 'error'); }

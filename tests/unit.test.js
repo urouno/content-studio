@@ -1,7 +1,8 @@
 // Pruebas unitarias de lógica pura del frontend.  Ejecutar: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { similarity, wordCount, estimateSeconds, median, deepSet, deepGet } from '../js/core/utils.js';
+import { similarity, wordCount, estimateSeconds, median, deepSet, deepGet, debounce } from '../js/core/utils.js';
+import { hasRealChanges } from '../js/core/store.js';
 import { localEvaluate, normalizeScript, scriptStats, emptyScript } from '../js/services/scriptkit.js';
 import { derive } from '../js/services/analytics.js';
 import { brandContext, scriptPrompt, systemPrompt } from '../js/services/prompts.js';
@@ -148,4 +149,18 @@ test('mdToHtml escapa HTML y muestra las indicaciones como ayuda', () => {
   assert.ok(!h.includes('<script>')); assert.ok(h.includes('&lt;script&gt;'));
   assert.ok(h.includes('class="md-hint"')); assert.ok(h.includes('<b>uno</b>')); assert.ok(h.includes('<mark>'));
   assert.ok(h.includes('<table'));
+});
+
+test('salir de un formulario sin editar no guarda (debounce.flush sin llamada pendiente)', () => {
+  let n = 0; const d = debounce(() => { n += 1; }, 1000);
+  d.flush(); assert.equal(n, 0);
+  d(); d.flush(); assert.equal(n, 1);
+  d.flush(); assert.equal(n, 1);
+});
+
+test('hasRealChanges: vacío = vacío, y solo cuenta cambios de contenido', () => {
+  const base = { id: 'CNT-1', title: 'Hola', topic: undefined, notes: null, version: 3, updatedAt: 'a' };
+  assert.equal(hasRealChanges(base, { ...base, topic: '', notes: '', version: 4, updatedAt: 'b' }), false);
+  assert.equal(hasRealChanges(base, { ...base, title: 'Hola 2' }), true);
+  assert.equal(hasRealChanges({ platforms: ['ig'] }, { platforms: ['ig', 'tt'] }), true);
 });

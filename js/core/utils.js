@@ -32,8 +32,11 @@ export const fmtNum = (n, d = 0) => (n == null || Number.isNaN(n) ? '—' : Numb
 export const fmtPct = (n, d = 1) => (n == null || Number.isNaN(n) ? '—' : `${(n * 100).toLocaleString('es', { maximumFractionDigits: d })} %`);
 
 export function debounce(fn, ms = 400) {
-  let t; const d = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
-  d.flush = (...a) => { clearTimeout(t); fn(...a); };
+  // flush() solo ejecuta si hay una llamada pendiente (evita guardados sin cambios al salir de una vista).
+  let t; let pending = false;
+  const d = (...a) => { clearTimeout(t); pending = true; t = setTimeout(() => { pending = false; fn(...a); }, ms); };
+  d.flush = (...a) => { clearTimeout(t); if (!pending) return; pending = false; return fn(...a); };
+  d.pending = () => pending;
   return d;
 }
 

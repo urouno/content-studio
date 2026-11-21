@@ -5,29 +5,34 @@ import { PIPELINE, statusInfo, statusIndex } from '../core/schema.js';
 import { icon, toast, emptyState } from '../core/ui.js';
 import { esc, fmtDate } from '../core/utils.js';
 import { PLATFORMS } from '../services/methodology.js';
-import { pageHeader, renderBoard, filterBar, brandTag, statusBadge, platformShort, openIdeaModal } from './shared.js';
+import { pageHeader, renderBoard, filterBar, brandTag, statusBadge, platformShort, openIdeaModal, FLOW_STEPS } from './shared.js';
+
+const stepStatuses = (g) => FLOW_STEPS.find((f) => f.id === g)?.statuses || [];
 import { setStatus, productionState } from '../services/workflow.js';
 
-const state = { view: 'tablero', q: '', platform: '', hideEarly: false };
+const state = { view: 'tablero', g: '', q: '', platform: '', hideEarly: false };
 
 export function render(main, { query }) {
-  if (query.st) { state.view = 'lista'; state.st = query.st; } else state.st = '';
+  // ?g=paso del flujo (desde Inicio) o ?st=estado: muestra la lista filtrada por ese paso.
+  const g0 = FLOW_STEPS.some((f) => f.id === query.g) ? query.g : query.st ? (FLOW_STEPS.find((f) => f.statuses.includes(query.st))?.id || '') : '';
+  state.g = g0 || ''; // el filtro por grupo muestra la lista sin cambiar la vista que eligió el usuario
   const draw = () => {
+    const view = state.g ? 'lista' : state.view;
     const bId = app.brandId;
     let ideas = store.all('ideas', { brandId: bId }).filter((i) => i.status !== 'descartada');
     ideas = ideas.filter((i) => (!state.platform || (i.platforms || []).includes(state.platform))
       && (!state.q || i.title.toLowerCase().includes(state.q.toLowerCase())));
     const cols = state.hideEarly ? PIPELINE.filter((p) => statusIndex(p.id) >= statusIndex('aprobada')) : PIPELINE;
-    main.innerHTML = `${pageHeader({ title: 'Contenidos', sub: 'Todo el flujo de un vistazo. Arrastra las tarjetas para cambiar de etapa; ningún dato se pierde al retroceder.',
-      actions: `<div class="btn-group"><button class="btn ${state.view === 'tablero' ? 'active' : ''}" data-v="tablero">${icon('columns')}Tablero</button><button class="btn ${state.view === 'lista' ? 'active' : ''}" data-v="lista">${icon('list')}Lista</button></div><button class="btn btn-primary" data-new>${icon('plus')}Nueva idea</button>` })}
-      <div class="row-between" style="margin-bottom:12px">${filterBar([
+    main.innerHTML = `${pageHeader({ title: 'Contenidos', sub: 'Todo el flujo de un vistazo. Arrastra las tarjetas o usa «Mover a…» para cambiar de etapa; ningún dato se pierde al retroceder.',
+      actions: `<div class="btn-group"><button class="btn ${view === 'tablero' ? 'active' : ''}" data-v="tablero">${icon('columns')}Tablero</button><button class="btn ${view === 'lista' ? 'active' : ''}" data-v="lista">${icon('list')}Lista</button></div><button class="btn btn-primary" data-new>${icon('plus')}Nueva idea</button>` })}
+      <div class="toolbar">${filterBar([
         { type: 'search', name: 'q', placeholder: 'Buscar contenido…' },
         { name: 'platform', label: 'Plataforma', options: PLATFORMS.map((p) => ({ value: p.id, label: p.name })) },
       ], state)}<label class="check"><input type="checkbox" data-hide ${state.hideEarly ? 'checked' : ''}>Ocultar ideas sin aprobar</label></div>
-      ${state.st ? `<div class="notice" style="margin-bottom:12px">${icon('filter')}<div>Mostrando: <b>${esc(statusInfo(state.st).name)}</b> y etapas del mismo grupo. <a href="#/contenidos">Quitar filtro</a></div></div>` : ''}
+      ${state.g ? `<div class="notice" style="margin-bottom:12px">${icon('filter')}<div>Mostrando solo: <b>${esc(stepStatuses(state.g).map((x) => statusInfo(x).name).join(', '))}</b>. <a href="#/contenidos">Quitar filtro</a></div></div>` : ''}
       <div class="board-host"></div>`;
     const host = main.querySelector('.board-host');
-    if (state.view === 'tablero') {
+    if (view === 'tablero') {
       renderBoard(host, ideas, {
         columns: cols, showBrand: bId === 'all',
         onOpen: (id) => go(`/contenido/${id}`),
@@ -39,14 +44,14 @@ export function render(main, { query }) {
         },
       });
     } else {
-      const grp = state.st ? statusInfo(state.st).group : null;
-      const rows = ideas.filter((i) => !grp || statusInfo(i.status).group === grp).sort((a, b) => statusIndex(a.status) - statusIndex(b.status));
+      const sts = state.g ? stepStatuses(state.g) : null;
+      const rows = ideas.filter((i) => !sts || sts.includes(i.status)).sort((a, b) => statusIndex(a.status) - statusIndex(b.status));
       host.innerHTML = `<div class="card">${rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Contenido</th>${bId === 'all' ? '<th>Marca</th>' : ''}<th>Estado</th><th>Plataformas</th><th>Grabado</th><th>Editado</th><th>Publicación</th><th>Actualizado</th></tr></thead><tbody>
-        ${rows.map((i) => { const c = store.filter('calendar', (x) => x.ideaId === i.id).sort((a, b) => a.date.localeCompare(b.date))[0]; return `<tr class="clickable" data-id="${i.id}"><td><b>${esc(i.title)}</b><div class="xs muted mono">${i.id}</div></td>${bId === 'all' ? `<td>${brandTag(i.brandId)}</td>` : ''}<td>${statusBadge(i.status)}</td><td>${(i.platforms || []).map((p) => `<span class="tag">${platformShort(p)}</span>`).join(' ')}</td>${(() => { const ps = productionState(i); return `<td class="small">${ps.recorded ? icon('check', 'ic-sm') : '—'}</td><td class="small">${ps.edited ? icon('check', 'ic-sm') : '—'}</td>`; })()}<td class="small">${c ? fmtDate(c.date) : '—'}</td><td class="small muted">${fmtDate(i.updatedAt)}</td></tr>`; }).join('')}
+        ${rows.map((i) => { const c = store.filter('calendar', (x) => x.ideaId === i.id).sort((a, b) => a.date.localeCompare(b.date))[0]; return `<tr class="clickable" data-id="${i.id}"><td><b>${esc(i.title)}</b></td>${bId === 'all' ? `<td>${brandTag(i.brandId)}</td>` : ''}<td>${statusBadge(i.status)}</td><td>${(i.platforms || []).map((p) => `<span class="tag">${platformShort(p)}</span>`).join(' ')}</td>${(() => { const ps = productionState(i); return `<td class="small">${ps.recorded ? icon('check', 'ic-sm') : '—'}</td><td class="small">${ps.edited ? icon('check', 'ic-sm') : '—'}</td>`; })()}<td class="small">${c ? fmtDate(c.date) : '—'}</td><td class="small muted">${fmtDate(i.updatedAt)}</td></tr>`; }).join('')}
         </tbody></table></div>` : emptyState('Sin contenidos', 'No hay contenidos en esta etapa.', '', 'film')}</div>`;
       host.querySelector('tbody')?.addEventListener('click', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) go(`/contenido/${tr.dataset.id}`); });
     }
-    main.querySelectorAll('[data-v]').forEach((b) => (b.onclick = () => { state.view = b.dataset.v; state.st = ''; draw(); }));
+    main.querySelectorAll('[data-v]').forEach((b) => (b.onclick = () => { state.view = b.dataset.v; state.g = ''; history.replaceState(null, '', '#/contenidos'); draw(); }));
     main.querySelector('[data-new]').onclick = () => openIdeaModal({ onSaved: (i) => go(`/contenido/${i.id}`) });
     main.querySelector('[data-hide]').onchange = (e) => { state.hideEarly = e.target.checked; draw(); };
     main.querySelector('.filterbar').addEventListener('input', (e) => { state[e.target.name] = e.target.value; if (e.target.type !== 'search') draw(); else { clearTimeout(draw._t); draw._t = setTimeout(() => { draw(); const s = main.querySelector('[name="q"]'); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }, 250); } });

@@ -26,10 +26,16 @@ const NAV = [
   { path: '/calendario', label: 'Calendario', icon: 'calendar', view: calendar },
   { path: '/resultados', label: 'Resultados', icon: 'chart', view: results },
   { path: '/marcas', label: 'Marcas', icon: 'brand', view: brands },
-  { path: '/metodo', label: 'Método', icon: 'book', view: method },
+];
+// Celular: 4 secciones abajo + "Más" (el resto, incluido Método, que salió del menú principal).
+const BOTTOM = ['/', '/ideas', '/contenidos', '/calendario'];
+const MORE = [
+  { path: '/resultados', label: 'Resultados', icon: 'chart' }, { path: '/marcas', label: 'Marcas', icon: 'brand' },
+  { path: '/metodo', label: 'Método (guía de guiones)', icon: 'book' }, { path: '/ajustes', label: 'Ajustes', icon: 'settings' },
 ];
 const ROUTES = [
   ...NAV,
+  { path: '/metodo', view: method },
   { path: '/contenido', view: content },
   { path: '/ajustes', view: settingsView },
 ];
@@ -65,7 +71,12 @@ function renderNav(base) {
   const nav = document.getElementById('mainnav');
   const bId = app.brandId;
   const pendingIdeas = store.all('ideas', { brandId: bId }).filter((i) => i.status === 'idea').length;
-  nav.innerHTML = NAV.map((n) => `<a href="#${n.path}" class="${n.path === base ? 'active' : ''}" ${n.path === base ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span>${n.path === '/ideas' && pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</a>`).join('');
+  const link = (n) => `<a href="#${n.path}" class="${n.path === base ? 'active' : ''}" ${n.path === base ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span>${n.path === '/ideas' && pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</a>`;
+  nav.innerHTML = NAV.map(link).join('');
+  const moreActive = MORE.some((m) => m.path === base);
+  document.getElementById('bottomnav').innerHTML = NAV.filter((n) => BOTTOM.includes(n.path)).map(link).join('')
+    + `<button type="button" class="${moreActive ? 'active' : ''}" data-more aria-haspopup="true" aria-expanded="false">${icon('list')}<span>Más</span></button>
+    <div class="more-sheet" hidden role="menu">${MORE.map((m) => `<a href="#${m.path}" role="menuitem" class="${m.path === base ? 'active' : ''}">${icon(m.icon)}${m.label}</a>`).join('')}</div>`;
   renderBrandSwitch();
 }
 
@@ -116,6 +127,29 @@ function renderSyncPill() {
   ].filter(Boolean).join('\n');
 }
 
+// Celular: las tablas se muestran como tarjetas. Cada celda recibe el nombre de su columna (data-label).
+function labelTables(root) {
+  root.querySelectorAll('table.tbl').forEach((t) => {
+    const heads = [...t.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+    if (!heads.length) return;
+    t.querySelectorAll('tbody tr').forEach((tr) => [...tr.children].forEach((td, i) => { if (!td.hasAttribute('data-label')) td.setAttribute('data-label', heads[i] ?? ''); }));
+  });
+}
+let labelQueued = false;
+const tableObserver = new MutationObserver(() => {
+  if (labelQueued) return; labelQueued = true;
+  requestAnimationFrame(() => {
+    labelQueued = false; labelTables(document.getElementById('main')); labelTables(document.getElementById('modal-root'));
+    // Pestañas en pantallas estrechas: deja visible la pestaña activa.
+    document.querySelectorAll('#main .tabs').forEach((nav) => {
+      const act = nav.querySelector('.tab.active');
+      if (!act || nav.dataset.scrolledTo === act.dataset.tab || nav.scrollWidth <= nav.clientWidth) return;
+      nav.dataset.scrolledTo = act.dataset.tab || '1';
+      nav.scrollLeft = act.offsetLeft - (nav.clientWidth - act.offsetWidth) / 2;
+    });
+  });
+});
+
 function updateOnline() {
   document.getElementById('offline-banner').hidden = navigator.onLine;
   renderSyncPill();
@@ -132,6 +166,16 @@ async function boot() {
   await migrateLegacyStatuses().catch((e) => console.warn('Migración de estados', e));
   on('change', (p) => { if (p?.remote || p?.import) migrateLegacyStatuses().catch(() => {}); });
   delegate(document.getElementById('brand-switch'), 'click', '.brand-btn', (e, el) => openBrandMenu(el));
+  // Menú "Más" del celular.
+  const bnav = document.getElementById('bottomnav');
+  const closeMore = () => { const sh = bnav.querySelector('.more-sheet'); if (sh) sh.hidden = true; bnav.querySelector('[data-more]')?.setAttribute('aria-expanded', 'false'); };
+  bnav.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-more]');
+    if (b) { const sh = bnav.querySelector('.more-sheet'); sh.hidden = !sh.hidden; b.setAttribute('aria-expanded', String(!sh.hidden)); return; }
+    if (e.target.closest('.more-sheet a')) closeMore();
+  });
+  document.addEventListener('click', (e) => { if (!bnav.contains(e.target)) closeMore(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); });
   document.getElementById('sync-pill').addEventListener('click', async () => {
     if (!isConfigured()) { go('/ajustes/conexion'); return; }
     if (syncState.conflicts) { go('/ajustes/conflictos'); return; }
@@ -161,6 +205,8 @@ async function boot() {
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
   }
+  tableObserver.observe(document.getElementById('main'), { childList: true, subtree: true });
+  tableObserver.observe(document.getElementById('modal-root'), { childList: true, subtree: true });
   updateOnline();
   startAutoSync();
   await route();

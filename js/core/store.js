@@ -67,6 +67,8 @@ export const store = {
     if (!before) throw new Error(`No existe ${table}/${id}`);
     const next = typeof patch === 'function' ? patch(clone(before)) : { ...clone(before), ...patch };
     next.id = before.id; next.createdAt = before.createdAt;
+    // Sin cambios reales (vacío = vacío): no crea versión, historial ni operación pendiente.
+    if (!hasRealChanges(before, next)) return before;
     next.updatedAt = nowISO(); next.version = (before.version || 0) + 1; next.updatedBy = deviceId();
     await persist(table, next, before, 'update', silent, summary);
     return next;
@@ -194,6 +196,19 @@ async function persist(table, rec, before, action, silent, summary) {
   if (hist) { cache.history.set(hist.id, hist); outbox.set(`history:${hist.id}`, entries.at(-1).value); }
   emit(`change:${table}`, { id: rec.id, action }); emit('change', { table, id: rec.id, action }); emit('outbox', outbox.size);
   window.dispatchEvent(new Event('cs:local-change'));
+}
+
+const META_KEYS = new Set(['updatedAt', 'version', 'updatedBy']);
+const isBlank = (v) => v == null || v === '';
+export function hasRealChanges(before, after) {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  for (const k of keys) {
+    if (META_KEYS.has(k)) continue;
+    const a = before[k]; const b = after[k];
+    if (isBlank(a) && isBlank(b)) continue;
+    if (JSON.stringify(a) !== JSON.stringify(b)) return true;
+  }
+  return false;
 }
 
 function describeChange(before, after, action) {

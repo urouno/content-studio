@@ -21,6 +21,7 @@ export function brandCtx(brandId, task) {
     hooks: store.all('hooks', { brandId }), ctas: store.all('ctas', { brandId }),
     examples, learnings: learningsFor(brandId),
     ...docsCtx(brandId, task),
+    references: store.all('references', { brandId }),
   };
 }
 function docsCtx(brandId, task, opts) {

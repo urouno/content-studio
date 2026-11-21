@@ -1,13 +1,23 @@
 // Piezas de interfaz compartidas entre vistas.
 import { store } from '../core/store.js';
 import { app, go } from '../core/app.js';
-import { PIPELINE, ALL_STATUSES, statusInfo, PRIORITIES, DIFFICULTIES } from '../core/schema.js';
+import { PIPELINE, ALL_STATUSES, statusInfo, PRIORITIES } from '../core/schema.js';
 import { OBJECTIVES, FUNNEL, CONTENT_TYPES, STRUCTURES, PLATFORMS, KNOWLEDGE_LEVELS, byId } from '../services/methodology.js';
 import { icon, modal, renderFields, readFields, validateFields, toast, badge, withBusy } from '../core/ui.js';
 import { esc, fmtDate, todayISO } from '../core/utils.js';
 import { aiAvailable } from '../services/ai.js';
 import { findSimilarIdeas } from '../services/workflow.js';
 import { aiAngles } from '../services/assistant.js';
+
+// Pasos del flujo para Inicio y para filtrar Contenidos (?g=…). Cada paso agrupa una o más etapas.
+export const FLOW_STEPS = [
+  { id: 'ideas', name: 'Ideas', statuses: ['idea', 'aprobada'] },
+  { id: 'guion', name: 'Guion', statuses: ['guion', 'guion_aprobado'] },
+  { id: 'grabar', name: 'Por grabar', statuses: ['por_grabar'] },
+  { id: 'editar', name: 'Por editar', statuses: ['grabado'] },
+  { id: 'publicar', name: 'Por publicar', statuses: ['listo', 'calendarizado'] },
+  { id: 'publicado', name: 'Publicados', statuses: ['publicado', 'analizado'] },
+];
 
 export const statusBadge = (s) => { const i = statusInfo(s); return badge(i.name, i.color, 'dot'); };
 export function brandTag(brandId) {
@@ -29,26 +39,34 @@ export function requireBrandSelect(label = 'Marca') {
 
 export function ideaFields(brandId) {
   const pillars = brandId ? store.all('pillars', { brandId }) : [];
+  // Campos principales primero; los marcados como `advanced` van en "Más detalles (opcional)".
+  // "Tema" y "Dificultad de grabación" ya no se muestran (no se usaban); sus datos se conservan.
   return [
     { name: 'title', label: 'Título', required: true, span: 3, placeholder: 'Ej.: Si te pasa esto, tu café está quemado' },
-    { name: 'topic', label: 'Tema' },
+    { name: 'problem', label: 'Problema del espectador', type: 'textarea', rows: 2, span: 3, hint: 'Qué le pasa o qué duda tiene quien lo va a ver.' },
     { name: 'pillarId', label: 'Pilar de contenido', type: 'select', options: pillars.map((p) => ({ value: p.id, label: p.name })), empty: pillars.length ? '—' : 'Define pilares en la marca' },
-    { name: 'audience', label: 'Público objetivo', placeholder: 'Situación concreta del espectador' },
-    { name: 'keyword', label: 'Palabra clave del público', hint: 'Las palabras exactas que usa (ayuda a buscar y al SEO de la plataforma).' },
-    { name: 'problem', label: 'Problema del espectador', type: 'textarea', rows: 2, span: 3 },
     { name: 'objective', label: 'Objetivo', type: 'select', options: OBJECTIVES.map((o) => ({ value: o.id, label: o.name })) },
-    { name: 'funnel', label: 'Etapa del embudo', type: 'select', options: FUNNEL.map((o) => ({ value: o.id, label: o.name })) },
-    { name: 'contentType', label: 'Tipo de contenido', type: 'select', options: CONTENT_TYPES.map((o) => ({ value: o.id, label: o.name })) },
-    { name: 'format', label: 'Formato / estructura sugerida', type: 'select', options: STRUCTURES.map((o) => ({ value: o.id, label: o.name })) },
+    { name: 'format', label: 'Estructura del guion', type: 'select', options: STRUCTURES.map((o) => ({ value: o.id, label: o.name })) },
     { name: 'platforms', label: 'Plataformas', type: 'chips', options: PLATFORMS.map((p) => ({ value: p.id, label: p.name })), span: 3 },
-    { name: 'knowledgeLevel', label: 'Nivel de conocimiento', type: 'select', cast: 'number', options: KNOWLEDGE_LEVELS.map((l) => ({ value: l.id, label: `${l.id} · ${l.name}` })) },
     { name: 'priority', label: 'Prioridad', type: 'select', cast: 'number', options: PRIORITIES.map((p) => ({ value: p.id, label: p.name })) },
-    { name: 'difficulty', label: 'Dificultad de grabación', type: 'select', options: DIFFICULTIES.map((p) => ({ value: p.id, label: p.name })) },
     { name: 'targetDate', label: 'Fecha objetivo', type: 'date' },
-    { name: 'experimental', label: 'Contenido experimental (20 %)', type: 'checkbox' },
-    { name: 'references', label: 'Referencias y conocimiento disponible', type: 'textarea', rows: 3, span: 3, hint: 'Enlaces a videos de referencia, datos verificados, fichas técnicas. La IA solo usará esto como fuente.' },
-    { name: 'notes', label: 'Notas', type: 'textarea', rows: 2, span: 3 },
+    { name: 'audience', label: 'Público objetivo', placeholder: 'Situación concreta del espectador', advanced: true },
+    { name: 'keyword', label: 'Palabra clave del público', hint: 'Las palabras exactas que usa (ayuda al buscador de la red).', advanced: true },
+    { name: 'funnel', label: 'Etapa del embudo', type: 'select', options: FUNNEL.map((o) => ({ value: o.id, label: o.name })), advanced: true },
+    { name: 'contentType', label: 'Tipo de contenido', type: 'select', options: CONTENT_TYPES.map((o) => ({ value: o.id, label: o.name })), advanced: true },
+    { name: 'knowledgeLevel', label: 'Nivel de conocimiento', type: 'select', cast: 'number', options: KNOWLEDGE_LEVELS.map((l) => ({ value: l.id, label: `${l.id} · ${l.name}` })), advanced: true },
+    { name: 'experimental', label: 'Contenido experimental (20 %)', type: 'checkbox', advanced: true },
+    { name: 'references', label: 'Referencias y datos verificados', type: 'textarea', rows: 3, span: 3, hint: 'Enlaces, datos comprobados, fichas técnicas. La IA solo usará esto como fuente.', advanced: true },
+    { name: 'notes', label: 'Notas', type: 'textarea', rows: 2, span: 3, advanced: true },
   ];
+}
+
+/** Formulario de idea: campos principales + sección plegable "Más detalles (opcional)". */
+export function renderIdeaForm(fields, data = {}) {
+  const main = fields.filter((f) => !f.advanced); const adv = fields.filter((f) => f.advanced);
+  if (!adv.length) return renderFields(main, data);
+  const filled = adv.filter((f) => f.name !== 'knowledgeLevel' && (Array.isArray(data[f.name]) ? data[f.name].length : data[f.name] != null && data[f.name] !== '' && data[f.name] !== false)).length;
+  return `${renderFields(main, data)}<details class="more-fields span-3"><summary>${icon('down', 'ic-sm')}Más detalles (opcional)${filled ? ` <span class="muted">· ${filled} con datos</span>` : ''}</summary><div class="form-grid cols-3">${renderFields(adv, data)}</div></details>`;
 }
 
 export function openIdeaModal({ idea = null, brandId = null, preset = {}, onSaved } = {}) {
@@ -57,7 +75,7 @@ export function openIdeaModal({ idea = null, brandId = null, preset = {}, onSave
   const data = idea || { priority: 2, knowledgeLevel: 1, platforms: [], status: 'idea', brandId: bId, ...preset };
   const fields = [...(idea ? [] : [requireBrandSelect()]), ...ideaFields(bId)];
   const body = document.createElement('div');
-  body.innerHTML = `<form class="form-grid cols-3" novalidate>${renderFields(fields, data)}</form><div class="dup-box" style="margin-top:12px"></div>`;
+  body.innerHTML = `<form class="form-grid cols-3" novalidate>${renderIdeaForm(fields, data)}</form><div class="dup-box" style="margin-top:12px"></div>`;
   const form = body.querySelector('form');
   // Al cambiar de marca, recarga los pilares de esa marca.
   form.querySelector('[name="brandId"]')?.addEventListener('change', (e) => {
@@ -117,24 +135,48 @@ export function ideaCard(idea, { draggable = false, showBrand = true } = {}) {
     ${showBrand ? `<div class="kcard-brand">${brandTag(idea.brandId)}</div>` : ''}
     <div class="kcard-t">${esc(idea.title)}</div>
     <div class="row xs muted">${pl}${idea.priority === 1 ? `<span class="badge" style="--bc:var(--danger)">Alta</span>` : ''}${idea.experimental ? '<span class="tag">20 %</span>' : ''}${cal ? `<span class="${late ? 'late-txt' : ''}">${icon('calendar', 'ic-sm')} ${fmtDate(cal.date)}</span>` : ''}</div>
+    ${draggable ? `<button type="button" class="kmove" data-move title="Mover a otra etapa" aria-label="Mover a otra etapa">${icon('arrow', 'ic-sm')}<span>Mover a…</span></button>` : ''}
   </article>`;
 }
 
-/** Tablero Kanban por estado con drag & drop. onMove(id, status). */
+/** Tablero Kanban por estado con drag & drop. onMove(id, status).
+ *  En celular se muestra una etapa a la vez (selector de etapas arriba) y cada tarjeta tiene "Mover a…". */
+let boardCur = null;
 export function renderBoard(host, ideas, { onMove, onOpen, showBrand = true, columns = PIPELINE } = {}) {
-  host.innerHTML = `<div class="board">${columns.map((col) => {
+  const counts = Object.fromEntries(columns.map((c) => [c.id, ideas.filter((i) => i.status === c.id).length]));
+  if (!columns.some((c) => c.id === boardCur)) boardCur = (columns.find((c) => counts[c.id]) || columns[0]).id;
+  host.innerHTML = `<div class="board-stages" role="tablist" aria-label="Etapas">${columns.map((c) => `<button type="button" role="tab" class="stage-chip ${c.id === boardCur ? 'active' : ''}" data-stage="${c.id}" aria-selected="${c.id === boardCur}"><span class="dotc" style="background:${c.color}"></span>${esc(c.name)}<em>${counts[c.id]}</em></button>`).join('')}</div>
+    <div class="board">${columns.map((col) => {
     const items = ideas.filter((i) => i.status === col.id);
-    return `<section class="bcol" data-status="${col.id}" aria-label="${esc(col.name)}">
+    return `<section class="bcol ${col.id === boardCur ? 'cur' : ''}" data-status="${col.id}" aria-label="${esc(col.name)}">
       <header><span class="dotc" style="background:${col.color}"></span><h4>${esc(col.name)}</h4><em>${items.length}</em></header>
-      <div class="bcol-b">${items.map((i) => ideaCard(i, { draggable: true, showBrand })).join('') || '<div class="bcol-empty">—</div>'}</div></section>`;
+      <div class="bcol-b">${items.map((i) => ideaCard(i, { draggable: true, showBrand })).join('') || '<div class="bcol-empty">Sin contenidos en esta etapa</div>'}</div></section>`;
   }).join('')}</div>`;
+  const chips = host.querySelector('.board-stages');
+  const act = chips.querySelector('.active'); if (act) chips.scrollLeft = act.offsetLeft - 16;
+  chips.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-stage]'); if (!c) return;
+    boardCur = c.dataset.stage;
+    chips.querySelectorAll('.stage-chip').forEach((x) => { const on = x === c; x.classList.toggle('active', on); x.setAttribute('aria-selected', on); });
+    host.querySelectorAll('.bcol').forEach((x) => x.classList.toggle('cur', x.dataset.status === boardCur));
+  });
   let dragId = null;
   host.addEventListener('dragstart', (e) => { const c = e.target.closest('.kcard'); if (!c) return; dragId = c.dataset.id; e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); });
   host.addEventListener('dragend', (e) => { e.target.closest('.kcard')?.classList.remove('dragging'); host.querySelectorAll('.bcol.over').forEach((x) => x.classList.remove('over')); });
   host.addEventListener('dragover', (e) => { const col = e.target.closest('.bcol'); if (!col) return; e.preventDefault(); host.querySelectorAll('.bcol.over').forEach((x) => x !== col && x.classList.remove('over')); col.classList.add('over'); });
   host.addEventListener('drop', (e) => { const col = e.target.closest('.bcol'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || dragId; col.classList.remove('over'); if (id) onMove?.(id, col.dataset.status); });
-  host.addEventListener('click', (e) => { const c = e.target.closest('.kcard'); if (c) onOpen?.(c.dataset.id); });
-  host.addEventListener('keydown', (e) => { const c = e.target.closest('.kcard'); if (c && e.key === 'Enter') onOpen?.(c.dataset.id); });
+  host.addEventListener('click', (e) => {
+    const mv = e.target.closest('[data-move]');
+    if (mv) { e.stopPropagation(); openMoveMenu(mv.closest('.kcard').dataset.id, columns, onMove); return; }
+    const c = e.target.closest('.kcard'); if (c) onOpen?.(c.dataset.id);
+  });
+  host.addEventListener('keydown', (e) => { const c = e.target.closest('.kcard'); if (c && e.key === 'Enter' && !e.target.closest('[data-move]')) onOpen?.(c.dataset.id); });
+}
+
+function openMoveMenu(id, columns, onMove) {
+  const idea = store.get('ideas', id); if (!idea) return;
+  const m = modal({ title: 'Mover a otra etapa', size: 'sm', body: `<p class="small muted" style="margin-top:0">${esc(idea.title)}</p><div class="move-list">${columns.map((c) => `<button type="button" class="btn ${c.id === idea.status ? 'active' : ''}" data-to="${c.id}" ${c.id === idea.status ? 'disabled' : ''}><span class="dotc" style="background:${c.color}"></span>${esc(c.name)}${c.id === idea.status ? ' <span class="muted">(actual)</span>' : ''}</button>`).join('')}</div>`, actions: [{ label: 'Cancelar' }] });
+  m.body.addEventListener('click', (e) => { const b = e.target.closest('[data-to]'); if (!b) return; m.close(); boardCur = b.dataset.to; onMove?.(id, b.dataset.to); });
 }
 
 export function statusSelect(current, name = 'status') {
@@ -148,8 +190,11 @@ export function aiGuard() {
 }
 
 export function filterBar(filters, values) {
-  return `<div class="filterbar">${filters.map((f) => {
-    if (f.type === 'search') return `<label class="searchbox">${icon('search', 'ic-sm')}<input class="input input-sm" type="search" name="${f.name}" value="${esc(values[f.name] || '')}" placeholder="${esc(f.placeholder || 'Buscar…')}" aria-label="Buscar"></label>`;
-    return `<select class="input input-sm" name="${f.name}" aria-label="${esc(f.label)}"><option value="">${esc(f.label)}: todas</option>${f.options.map((o) => `<option value="${esc(o.value)}" ${String(values[f.name] ?? '') === String(o.value) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
-  }).join('')}</div>`;
+  const search = filters.filter((f) => f.type === 'search'); const sels = filters.filter((f) => f.type !== 'search');
+  const active = sels.filter((f) => values[f.name] && values[f.name] !== f.def).length;
+  const wide = typeof matchMedia === 'function' && matchMedia('(min-width: 761px)').matches;
+  const sel = (f) => `<select class="input input-sm" name="${f.name}" aria-label="${esc(f.label)}"><option value="">${esc(f.label)}: todas</option>${f.options.map((o) => `<option value="${esc(o.value)}" ${String(values[f.name] ?? '') === String(o.value) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
+  // En celular los filtros quedan dentro de un botón "Filtros"; en escritorio siempre visibles.
+  return `<div class="filterbar">${search.map((f) => `<label class="searchbox">${icon('search', 'ic-sm')}<input class="input input-sm" type="search" name="${f.name}" value="${esc(values[f.name] || '')}" placeholder="${esc(f.placeholder || 'Buscar…')}" aria-label="Buscar"></label>`).join('')}
+    ${sels.length ? `<details class="fdet" ${wide || active ? 'open' : ''}><summary class="btn btn-sm">${icon('filter', 'ic-sm')}Filtros${active ? ` <em>${active}</em>` : ''}</summary><div class="fdet-b">${sels.map(sel).join('')}</div></details>` : ''}</div>`;
 }

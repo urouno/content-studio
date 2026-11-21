@@ -3,7 +3,7 @@
 ## Visión general
 
 ```
-┌──────────────────────── Navegador (escritorio) ────────────────────────┐
+┌──────────────────── Navegador (escritorio y celular) ──────────────────┐
 │  Vistas (js/views)  ──►  Servicios (js/services)  ──►  Núcleo (js/core) │
 │   Dashboard, Ideas,       workflow  (reglas del flujo)    store (caché + │
 │   Contenidos, Contenido,  assistant (tareas de IA)        historial +    │
@@ -28,12 +28,12 @@
 
 | Módulo | Archivo | Responsabilidad |
 |---|---|---|
-| Dashboard | `views/dashboard.js` | Indicadores, alertas de retraso o riesgo, flujo por etapas, cumplimiento del calendario, próximas fechas |
+| Dashboard | `views/dashboard.js` | Resumen (retrasos, próximos 7 días, publicados vs. meta), flujo de contenidos en 6 pasos, alertas, cumplimiento del calendario y próximas fechas |
 | Marcas | `views/brands.js`, `views/brand-docs.js` | Crear, duplicar y archivar marcas. Ficha de identidad general, **documentos de referencia (Markdown)**, comunicación, visual, redes, pilares, hooks/CTA y referencias |
 | Banco de ideas | `views/ideas.js` | Registro, filtros, ideas generadas con IA y detección de duplicados |
-| Contenidos (tablero) | `views/contents.js` | Kanban de todo el flujo con arrastrar y soltar, y vista de lista |
+| Contenidos (tablero) | `views/contents.js` | Kanban de todo el flujo con arrastrar y soltar o «Mover a…», y vista de lista |
 | Contenido | `views/content*.js` | Espacio de trabajo por contenido con pestañas: Estrategia, Guion, Copies, Publicación, Resultados e Historial. En la cabecera, casillas **Grabado** y **Editado** |
-| Calendario | `views/calendar.js` | Vistas de mes, semana, día, lista y tablero. Arrastrar y soltar, conflictos y semanas por debajo del objetivo |
+| Calendario | `views/calendar.js` | Vistas de mes, semana y lista. Arrastrar y soltar, conflictos y semanas por debajo del objetivo. En celular, al tocar un día se muestra su lista |
 | Resultados | `views/results.js` | Métricas derivadas, patrones por dimensión, mejores contenidos por objetivo y propuestas de IA |
 | Método | `views/method.js` | Biblioteca de metodología (la misma que recibe la IA) |
 | Ajustes | `views/settings.js` | Conexión y sync, IA, copias de seguridad, papelera, conflictos y tema |
@@ -120,6 +120,12 @@ La sincronización se dispara al editar (8 s después del último cambio), cada 
 | Token en el navegador | Se guarda en `localStorage` del dispositivo. En equipos compartidos, usa un perfil de navegador propio y revoca el token si se pierde el equipo |
 
 **Limitaciones conocidas.** La autenticación por token es adecuada para equipos pequeños. Para muchos usuarios externos convendría OAuth con Google Identity y un backend dedicado. Los archivos subidos (logos e imágenes) se guardan **solo en el dispositivo**, porque Sheets no admite archivos; para compartirlos, usa enlaces de Drive.
+
+## Celular
+
+- `css/mobile.css` contiene la adaptación: menú inferior (Inicio, Ideas, Producción, Calendario, Más), tablas convertidas en tarjetas, tablero de una etapa a la vez con botón «Mover a…», filtros dentro de un botón, ventanas como hoja inferior y casillas de 16 px para evitar el zoom del iPhone.
+- `main.js` añade a cada celda de tabla el nombre de su columna (`data-label`) para mostrarlas como tarjetas.
+- El autoguardado solo escribe si hubo un cambio real (`hasRealChanges` en `core/store.js`); abrir y cerrar un formulario ya no crea versiones ni cambios pendientes.
 
 ## Decisiones técnicas
 

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Content Studio</title>
   <meta name="description" content="Centro de operaciones de contenido multimarca: estrategia, guiones, producción, calendario y resultados.">
   <meta name="theme-color" content="#4338ca">
@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/views.css">
+  <link rel="stylesheet" href="css/mobile.css">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -82,6 +83,7 @@
   </header>
   <div class="offline-banner" id="offline-banner" hidden>Sin conexión: puedes seguir trabajando. Los cambios se guardan en este dispositivo y se sincronizarán al volver la conexión. La IA no está disponible.</div>
   <main id="main" tabindex="-1"></main>
+  <nav class="bottomnav" id="bottomnav" aria-label="Menú (celular)"></nav>
   <div id="modal-root"></div>
   <div id="toasts" class="toasts" aria-live="polite"></div>
   <noscript><p style="padding:2rem">Content Studio necesita JavaScript.</p></noscript>

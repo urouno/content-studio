@@ -26,17 +26,17 @@ export function render(main) {
       return true;
     }).sort((a, b) => (a.priority || 2) - (b.priority || 2) || b.createdAt.localeCompare(a.createdAt));
 
-    main.innerHTML = `${pageHeader({ title: 'Banco de ideas', sub: 'Cada idea es un contenido con identificador único que avanza por todo el flujo.',
+    main.innerHTML = `${pageHeader({ title: 'Banco de ideas', sub: 'Aprueba las ideas que valen la pena; cada una avanza después por todo el flujo.',
       actions: `<button class="btn" data-dups>${icon('compare')}Detectar duplicados</button><button class="btn btn-ai" data-ai>${icon('sparkle')}Generar ideas con IA</button><button class="btn btn-primary" data-new>${icon('plus')}Nueva idea</button>` })}
       ${filterBar([
         { type: 'search', name: 'q', placeholder: 'Buscar por título, tema, problema…' },
-        { name: 'status', label: 'Estado', options: [{ value: 'pendientes', label: 'Pendientes (idea / aprobada)' }, { value: 'todas', label: 'Todas' }, { value: 'idea', label: 'Idea registrada' }, { value: 'aprobada', label: 'Aprobada' }, { value: 'descartada', label: 'Descartadas' }] },
+        { name: 'status', label: 'Estado', def: 'pendientes', options: [{ value: 'pendientes', label: 'Pendientes (idea / aprobada)' }, { value: 'todas', label: 'Todas' }, { value: 'idea', label: 'Idea registrada' }, { value: 'aprobada', label: 'Aprobada' }, { value: 'descartada', label: 'Descartadas' }] },
         { name: 'pillar', label: 'Pilar', options: pillars.map((p) => ({ value: p.id, label: p.name })) },
         { name: 'objective', label: 'Objetivo', options: OBJECTIVES.map((o) => ({ value: o.id, label: o.name })) },
         { name: 'priority', label: 'Prioridad', options: PRIORITIES.map((p) => ({ value: String(p.id), label: p.name })) },
       ], state).replace('<option value="">Estado: todas</option>', '')}
       <div class="card">${list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Idea</th>${bId === 'all' ? '<th>Marca</th>' : ''}<th>Pilar</th><th>Objetivo</th><th>Formato</th><th>Plataformas</th><th>Prioridad</th><th>Estado</th><th></th></tr></thead><tbody>
-        ${list.map((i) => `<tr class="clickable" data-id="${i.id}"><td style="max-width:380px"><b>${esc(i.title)}</b>${i.problem ? `<div class="xs muted truncate">${esc(i.problem)}</div>` : ''}<div class="xs muted mono">${i.id}</div></td>
+        ${list.map((i) => `<tr class="clickable" data-id="${i.id}"><td style="max-width:380px"><b>${esc(i.title)}</b>${i.problem ? `<div class="xs muted truncate">${esc(i.problem)}</div>` : ''}</td>
           ${bId === 'all' ? `<td>${brandTag(i.brandId)}</td>` : ''}
           <td class="small">${esc(store.get('pillars', i.pillarId)?.name || '—')}</td>
           <td class="small">${esc(byId(OBJECTIVES, i.objective)?.name || '—')}</td>

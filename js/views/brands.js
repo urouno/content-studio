@@ -43,7 +43,6 @@ const VISUAL = [
   { name: 'visual.transitions', label: 'Transiciones' }, { name: 'visual.music', label: 'Música' }, { name: 'visual.sfx', label: 'Efectos de sonido' },
   { name: 'visual.graphics', label: 'Recursos gráficos y referencias', type: 'textarea', rows: 2 },
   { name: 'visual.intro', label: 'Intro (si corresponde)' }, { name: 'visual.outro', label: 'Outro (si corresponde)' },
-  { name: 'visual.references', label: 'Referencias visuales y audiovisuales', type: 'textarea', rows: 3, span: 2, hint: 'Enlaces a videos o cuentas de referencia (de cualquier nicho).' },
 ];
 
 export function render(main, { params, query }) {
@@ -209,6 +208,14 @@ function tabPlatforms(host, id) {
   });
 }
 
+// "Real": % de contenidos activos de ese pilar, comparado con la meta (se marca si se aleja más de 10 puntos).
+function pillarReal(p, ideas) {
+  const n = ideas.filter((i) => i.pillarId === p.id).length;
+  const pct = ideas.length ? Math.round((n / ideas.length) * 100) : 0;
+  const off = p.share != null && p.share !== '' && Math.abs(pct - Number(p.share)) > 10;
+  return `<span title="${n} de ${ideas.length} contenidos"><span class="${off ? 'late-txt' : ''}">${pct} %</span> <span class="xs muted">(${n})</span></span>`;
+}
+
 function tabStrategy(host, id) {
   const STRAT = [
     { name: 'strategy.monthlyTarget', label: 'Meta de publicaciones al mes', type: 'number', min: 0, hint: 'La agencia de referencia recomienda 4–12 al mes.' },
@@ -222,10 +229,10 @@ function tabStrategy(host, id) {
     const exp = ideas.filter((i) => i.experimental).length;
     host.innerHTML = `<div class="split"><div class="stack-lg">
       <section class="card"><div class="card-h"><h3>Pilares de contenido</h3><button class="btn btn-sm btn-primary" data-addp>${icon('plus', 'ic-sm')}Pilar</button></div>
-        ${pillars.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Pilar</th><th>Descripción</th><th>Objetivo</th><th class="num">% deseado</th><th class="num">Contenidos</th><th></th></tr></thead><tbody>
+        ${pillars.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Pilar</th><th>Descripción</th><th>Objetivo</th><th class="num">% meta</th><th class="num">Real</th><th></th></tr></thead><tbody>
         ${pillars.map((p) => `<tr data-p="${p.id}"><td><input class="input input-sm" data-f="name" value="${esc(p.name)}"></td><td><input class="input input-sm" data-f="description" value="${esc(p.description || '')}"></td>
           <td><select class="input input-sm" data-f="objective"><option value="">—</option>${OBJECTIVES.map((o) => `<option value="${o.id}" ${p.objective === o.id ? 'selected' : ''}>${o.name}</option>`).join('')}</select></td>
-          <td class="num"><input class="input input-sm" type="number" min="0" max="100" data-f="share" value="${esc(p.share ?? '')}" style="width:70px"></td><td class="num">${ideas.filter((i) => i.pillarId === p.id).length}</td><td><button class="icon-btn sm" data-delp="${p.id}">${icon('trash', 'ic-sm')}</button></td></tr>`).join('')}
+          <td class="num"><input class="input input-sm" type="number" min="0" max="100" data-f="share" value="${esc(p.share ?? '')}" style="width:70px"></td><td class="num">${pillarReal(p, ideas)}</td><td><button class="icon-btn sm" data-delp="${p.id}">${icon('trash', 'ic-sm')}</button></td></tr>`).join('')}
         </tbody></table></div>` : '<div class="card-b small muted">Define 3–5 pilares: territorios donde se cruzan lo que la marca sabe y lo que a su audiencia le importa.</div>'}</section>
       <section class="card"><div class="card-h"><h3>Parámetros</h3></div><div class="card-b"><form class="form-grid cols-3" data-sf>${renderFields(STRAT, brandConfig(id))}</form></div></section>
     </div><aside class="stack-lg"><section class="card"><div class="card-h"><h3>Equilibrio actual</h3></div><div class="card-b stack small">
@@ -278,10 +285,14 @@ function tabLibrary(host, id) {
   });
 }
 
+const REF_NOTES = [{ name: 'visual.references', label: 'Notas generales de referencia', type: 'textarea', rows: 3, span: 2, hint: 'Cuentas, estilos o ideas que inspiran a la marca. La IA también lo lee.' }];
 function tabRefs(host, id) {
+  const cfgId = () => store.find('brandConfigs', (c) => c.brandId === id).id;
+  host.innerHTML = `<section class="card" style="margin-bottom:16px"><div class="card-h"><h3>Notas generales</h3><span class="xs muted">Se guarda automáticamente</span></div><div class="card-b"><form class="form-grid" data-rform>${renderFields(REF_NOTES, brandConfig(id))}</form></div></section><div data-rlist></div>`;
+  const list = host.querySelector('[data-rlist]');
   const draw = () => {
     const refs = store.all('references', { brandId: id });
-    host.innerHTML = `<section class="card"><div class="card-h"><h3>Referencias de la marca</h3><button class="btn btn-sm btn-primary" data-add>${icon('plus', 'ic-sm')}Referencia</button></div>
+    list.innerHTML = `<section class="card"><div class="card-h"><h3>Referencias de la marca</h3><button class="btn btn-sm btn-primary" data-add>${icon('plus', 'ic-sm')}Referencia</button></div>
       ${refs.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Título</th><th>Enlace</th><th>Métricas observadas</th><th>Notas</th><th></th></tr></thead><tbody>${refs.map((r) => `<tr data-r="${r.id}">
         <td><select class="input input-sm" data-f="kind">${['video', 'competencia', 'cuenta', 'articulo', 'dato', 'otro'].map((k) => `<option ${r.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select></td>
         <td><input class="input input-sm" data-f="title" value="${esc(r.title)}"></td><td><input class="input input-sm" data-f="url" value="${esc(r.url)}">${r.url ? `<a class="xs" href="${esc(r.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</td>
@@ -289,12 +300,14 @@ function tabRefs(host, id) {
         <td><button class="icon-btn sm" data-del="${r.id}">${icon('trash', 'ic-sm')}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="card-b small muted">Registra videos de referencia con buenos resultados (de cualquier nicho), cuentas de competencia y datos verificados. Método sugerido: busca el tema en la plataforma y filtra por Me gusta en los últimos meses.</div>'}</section>`;
   };
   draw();
+  const auto = bindAutosave(host.querySelector('[data-rform]'), REF_NOTES, () => brandConfig(id), (d) => store.update('brandConfigs', cfgId(), (r) => ({ ...r, visual: { ...brandConfig(id).visual, references: d.visual.references } })));
   host.addEventListener('change', async (e) => { const r = e.target.closest('[data-r]'); if (r && e.target.dataset.f) await store.update('references', r.dataset.r, { [e.target.dataset.f]: e.target.value }); });
   host.addEventListener('click', async (e) => {
     const t = e.target.closest('button'); if (!t) return;
     if (t.dataset.add != null) { await store.create('references', { brandId: id, ideaId: '', kind: 'video', title: '', url: '', metrics: '', notes: '' }); draw(); }
     if (t.dataset.del) { await store.remove('references', t.dataset.del); draw(); }
   });
+  return () => auto.destroy();
 }
 
 export { fmtDate };
