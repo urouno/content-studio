@@ -7,7 +7,7 @@ import { esc, download, copyText, fmtRelative } from '../core/utils.js';
 import { brandConfig } from '../services/workflow.js';
 import {
   COLOR_ROLES, FONT_ROLES, SUBTITLE_ANIMATIONS, CARD_STYLES, CAMERA_MOVES, SFX_TYPES, MUSIC_STYLES, SKILL_GRAPHICS,
-  editOf, buildMarcaJson, buildStyleGuide, parseMarcaJson, missingForSkill, marcaFileName, guideFileName, slugify,
+  editOf, buildMarcaJson, mergeStyleGuide, stripGuideBlock, GUIDE_MAX, parseMarcaJson, missingForSkill, marcaFileName, guideFileName, slugify,
 } from '../services/reels.js';
 
 const missText = (miss) => (miss.length ? `Para que la skill la use sin preguntar falta: ${esc(miss.join(', '))}.` : 'La skill la usará directamente, sin preguntas de estilo.');
@@ -95,6 +95,8 @@ export function tabEdit(host, brandId) {
           <p class="xs muted" style="margin:0">Si ya tienes esta marca en la skill, impórtala primero: se rellenan los campos y se conservan sus medidas (tamaños y posiciones afinados en el editor en vivo).</p>
           <label class="btn btn-sm">${icon('upload', 'ic-sm')}Importar marcas/….json<input type="file" accept=".json,application/json" hidden data-import></label>
           ${edit.importedAt ? `<p class="xs muted" style="margin:0">Importado ${esc(fmtRelative(edit.importedAt))}${edit.raw ? ` · ${Object.keys(edit.raw).length} claves conservadas` : ''}.</p>` : ''}
+          <label class="btn btn-sm">${icon('upload', 'ic-sm')}Importar ${esc(guideFileName(brand))}<input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden data-import-guide></label>
+          <p class="xs muted" style="margin:0">${edit.guide ? `Guía de la skill importada ${esc(fmtRelative(edit.guideImportedAt))} (${edit.guide.length.toLocaleString('es')} caracteres). Al descargarla se conserva entera y solo se añade al final el bloque de Content Studio.` : 'Si la skill ya tiene una guía de esta marca, impórtala: al descargar se conserva entera (con lo «Aprendido en los reels») y solo se añade un bloque al final. Sin importarla, la descarga sería una guía nueva que <b>sustituiría</b> la tuya.'}</p>
         </div></section>
       </aside></div>`;
     const form = host.querySelector('[data-eform]');
@@ -120,7 +122,7 @@ export function tabEdit(host, brandId) {
   const files = () => {
     const brand = store.get('brands', brandId); const cfg = brandConfig(brandId);
     const assets = store.all('assets', { brandId });
-    return { brand, cfg, json: JSON.stringify(buildMarcaJson({ brand, config: cfg }), null, 2), md: buildStyleGuide({ brand, config: cfg, assets }) };
+    return { brand, cfg, json: JSON.stringify(buildMarcaJson({ brand, config: cfg }), null, 2), md: mergeStyleGuide(editOf(cfg).guide, { brand, config: cfg, assets }) };
   };
 
   host.addEventListener('click', async (e) => {
@@ -136,6 +138,13 @@ export function tabEdit(host, brandId) {
     }
   });
   host.addEventListener('change', async (e) => {
+    if (e.target.dataset.importGuide != null && e.target.files?.[0]) {
+      const file = e.target.files[0]; e.target.value = '';
+      const text = stripGuideBlock(await file.text());
+      if (text.length > GUIDE_MAX) { toast(`La guía tiene ${text.length.toLocaleString('es')} caracteres; el máximo es ${GUIDE_MAX.toLocaleString('es')}.`, 'error'); return; }
+      await save({ ...editOf(brandConfig(brandId)), guide: text, guideImportedAt: new Date().toISOString() });
+      toast(`Guía importada: al descargarla se conservará entera.`, 'success'); draw(); return;
+    }
     if (e.target.dataset.import == null || !e.target.files?.[0]) return;
     const file = e.target.files[0]; e.target.value = '';
     try {

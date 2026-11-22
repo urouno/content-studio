@@ -247,3 +247,23 @@ test('marca para la skill: exporta lo estable y conserva lo afinado en el editor
   const md = R.buildStyleGuide({ brand, config: { ...config, visual: { ...config.visual, pace: 'Cambio de plano cada 2-4 s', intro: 'Logo 1 s' } } });
   assert.match(md, /^# Reglas de estilo · Café Lumbre/); assert.match(md, /Cambio de plano cada 2-4 s/); assert.match(md, /Intro: Logo 1 s/); assert.match(md, /220 px/);
 });
+
+test('guía de la skill: se conserva entera y solo se pone al día el bloque de Content Studio', async () => {
+  const R = await import('../js/services/reels.js');
+  const brand = { name: 'Marca X' };
+  const config = { voice: { tone: 'Cercano', avoid: 'barato' }, visual: { colors: [{ name: 'Rojo', hex: '#D90B0B' }], edit: { roles: { acento: '#D90B0B' } } } };
+  const skillGuide = '# Reglas de estilo · Marca X\n\n## Subtítulos\n- Montserrat 800, 84 px.\n\n## Aprendido en los reels\n- Whisper escribe «Marca Equis».\n';
+  const once = R.mergeStyleGuide(skillGuide, { brand, config });
+  assert.ok(once.startsWith(skillGuide.trim()));               // lo de la skill, intacto y primero
+  assert.match(once, /Aprendido en los reels/); assert.match(once, /84 px/);
+  assert.equal(once.split(R.GUIDE_START).length, 2);           // un solo bloque
+  assert.match(once, /Tono: Cercano/); assert.match(once, /### Color/);
+  // Volver a descargar con otros datos sustituye el bloque, no lo duplica.
+  const twice = R.mergeStyleGuide(once, { brand, config: { ...config, voice: { tone: 'Directo' } } });
+  assert.equal(twice.split(R.GUIDE_START).length, 2); assert.match(twice, /Tono: Directo/); assert.doesNotMatch(twice, /Tono: Cercano/);
+  assert.ok(twice.startsWith(skillGuide.trim()));
+  // Al importar una guía que ya trae el bloque, se guarda sin él.
+  assert.equal(R.stripGuideBlock(once), skillGuide.trim());
+  // Sin guía previa, se genera una entera.
+  assert.match(R.mergeStyleGuide('', { brand, config }), /^# Reglas de estilo · Marca X/);
+});

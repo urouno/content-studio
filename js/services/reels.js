@@ -59,6 +59,7 @@ export function defaultEdit() {
   return {
     file: '', roles: {}, fonts: {}, fontFiles: {}, subtitles: { animacion: '', mayusculas: null, contorno: null, sin_puntuacion: null },
     cards: '', camera: null, sfx: [], music: '', graphicsAllowed: [], never: '', corrections: '', raw: null, importedAt: '',
+    guide: '', guideImportedAt: '', // la guía que ya tenía la skill (sin el bloque de Content Studio)
   };
 }
 export const editOf = (cfg) => ({ ...defaultEdit(), ...(cfg?.visual?.edit || {}) });
@@ -223,3 +224,41 @@ export function parseMarcaJson(json, { fileName = '' } = {}) {
     raw: j, importedAt: new Date().toISOString(),
   };
 }
+
+// ---------- La guía que ya tiene la skill ----------
+// La guía de la skill (`Reglas-de-estilo-<Marca>.md`) crece con cada reel («Aprendido en los reels») y lleva medidas
+// afinadas a mano. Nunca se sustituye: Content Studio solo mantiene un bloque marcado al final, que reescribe en cada
+// descarga sin tocar lo demás.
+
+export const GUIDE_START = '<!-- content-studio:inicio (este bloque lo reescribe Content Studio; edita la marca allí) -->';
+export const GUIDE_END = '<!-- content-studio:fin -->';
+export const GUIDE_MAX = 40000; // cabe en una celda de Google Sheets
+
+/** El bloque de Content Studio para añadir a una guía existente: lo de la marca que la guía no tiene por qué saber. */
+export function buildGuideBlock({ brand, config, assets = [] }) {
+  const full = buildStyleGuide({ brand, config, assets }).split('\n').slice(1).join('\n').trim();
+  const body = full.replace(/^## /gm, '### ');
+  return `${GUIDE_START}
+## Desde Content Studio
+Datos de la ficha de la marca en Content Studio. Para lo visual afinado en los reels (medidas, tiempos, posiciones), manda lo
+escrito más arriba en esta guía.
+
+${body}
+${GUIDE_END}`;
+}
+
+/** Guía final: la existente con el bloque de Content Studio puesto al día (o la generada entera si no hay ninguna). */
+export function mergeStyleGuide(existing, { brand, config, assets = [] }) {
+  const ex = String(existing || '').replace(/\r/g, '').trim();
+  if (!ex) return buildStyleGuide({ brand, config, assets });
+  const block = buildGuideBlock({ brand, config, assets });
+  const i = ex.indexOf(GUIDE_START); const j = ex.indexOf(GUIDE_END);
+  if (i !== -1 && j > i) return `${ex.slice(0, i).trimEnd()}\n\n${block}\n${ex.slice(j + GUIDE_END.length).trim() ? `\n${ex.slice(j + GUIDE_END.length).trim()}\n` : ''}`;
+  return `${ex}\n\n${block}\n`;
+}
+
+/** Quita el bloque de Content Studio de una guía (para guardar solo lo que escribió la skill o el usuario). */
+export const stripGuideBlock = (md) => {
+  const s = String(md || ''); const i = s.indexOf(GUIDE_START); const j = s.indexOf(GUIDE_END);
+  return i !== -1 && j > i ? `${s.slice(0, i).trimEnd()}\n${s.slice(j + GUIDE_END.length)}`.trim() : s.trim();
+};
