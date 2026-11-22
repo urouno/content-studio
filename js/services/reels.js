@@ -393,7 +393,11 @@ export function buildPropuestaMd({ script, opts }) {
   const [fl, pa] = PRESETS[opts?.graphics] || PRESETS.equilibrado;
   const rows = [];
   if (s.hook?.textual) rows.push(['0', `«${cell(s.hook.narrado)}»`, cell(s.hook.textual), 'gancho']);
-  (s.sections || []).forEach((x, i) => { const r = x.resource || {}; if (r.type) rows.push([String(i + 1), `«${cell(r.anchor || x.voice.split(/[.!?]/)[0])}»`, cell(r.what), SKILL_NAME[r.type] || r.type]); });
+  (s.sections || []).forEach((x, i) => {
+    const r = x.resource || {}; if (!r.type) return;
+    const lib = String(r.what || '').match(/biblioteca:\s*([^\s·]+)/i);
+    rows.push([String(i + 1), `«${cell(r.anchor || x.voice.split(/[.!?]/)[0])}»`, cell(r.what), `${SKILL_NAME[r.type] || r.type}${lib ? ` (de la biblioteca: ${lib[1]})` : ''}`]);
+  });
   if (s.cta?.text) rows.push(['fin', `«${cell(s.cta.text)}»`, cell(s.cta.visual || s.cta.text), 'cierre']);
   return [
     '# Propuesta de gráficos (de Content Studio)', '',
@@ -448,4 +452,28 @@ export function creditsFromSources(md) {
     if (lic && autor) out.push(`${autor.trim()} (${lic.toUpperCase().replace(/[\s-]+/g, (m) => (m.includes('-') ? '-' : ' '))})`);
   });
   return [...new Set(out)];
+}
+
+// ---------- Biblioteca de escenas de la marca (animar-reels-claude, Mi estilo/escenas/<marca>/) ----------
+
+/** De los tipos de escena de la skill a los recursos de Content Studio. */
+export const SCENE_TO_RESOURCE = { mapa: 'escena-mapa', lista_iconos: 'escena-iconos', cifra: 'escena-cifra', comparar: 'escena-comparar', mecanismo: 'escena-mecanismo', objeto: 'escena-objeto', pieza3d: 'escena-3d', foto: 'escena-foto', palabras: 'escena-objeto', fondo_vivo: 'escena-objeto', pasos: 'pasos' };
+
+/** Carpetas donde puede estar la biblioteca de una marca (la skill usa el nombre de la marca o el de su archivo). */
+export function libraryDirs(brand, config) {
+  const e = editOf(config);
+  return [...new Set([e.file, slugify(brand.name), e.raw?.nombre, brand.name].filter(Boolean).map(String))];
+}
+
+/** Una línea por escena guardada, con lo que la IA necesita para proponer reutilizarla. */
+export function librarySummary(entries) {
+  return (entries || []).map(({ id, json }) => {
+    const j = isObj(json) ? json : {};
+    const sc = isObj(j.escena) ? j.escena : j;
+    const tipo = sc.tipo || j.tipo || '';
+    const para = j.para || j.para_que || j.para_que_sirve || j.uso_descripcion || j.descripcion || j.nota || '';
+    const texto = sc.texto || sc.titulo || sc.clave || '';
+    const reel = j.reel || j.en_reel || j.origen || '';
+    return { id, tipo, resource: SCENE_TO_RESOURCE[tipo] || '', para: String(para).slice(0, 140), texto: String(texto).slice(0, 80), reel: String(reel).slice(0, 80) };
+  }).filter((x) => x.tipo);
 }

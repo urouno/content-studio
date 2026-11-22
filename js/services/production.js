@@ -4,7 +4,7 @@ import { store } from '../core/store.js';
 import * as F from './folder.js';
 import {
   buildProyecto, buildGuionMd, buildPropuestaMd, buildVocab, reelFolderName, takeName, takesOf, finalOf, spokenFromPlan,
-  buildMarcaJson, mergeStyleGuide, stripGuideBlock, parseMarcaJson, editOf, marcaFileName, guideFileName, creditsFromSources,
+  buildMarcaJson, mergeStyleGuide, stripGuideBlock, parseMarcaJson, editOf, marcaFileName, guideFileName, creditsFromSources, libraryDirs, librarySummary,
 } from './reels.js';
 import { scriptFor, ensureScript, approvedVersion, brandConfig, productionState, setRecorded, setEdited } from './workflow.js';
 import { scriptStats } from './scriptkit.js';
@@ -139,4 +139,19 @@ export async function skillBrandFiles() { return (await F.list(`${STYLE}/marcas`
 function saveEdit(brandId, edit) {
   const c = store.find('brandConfigs', (x) => x.brandId === brandId);
   return store.update('brandConfigs', c.id, (r) => ({ ...r, visual: { ...brandConfig(brandId).visual, edit } }));
+}
+
+/** Escenas guardadas en la biblioteca de la marca (vacío si no hay carpeta conectada o no hay biblioteca). */
+export async function sceneLibrary(brandId) {
+  const st = await F.folderState().catch(() => ({}));
+  if (!st.connected || !st.granted) return [];
+  const brand = store.get('brands', brandId); const cfg = brandConfig(brandId);
+  for (const dir of libraryDirs(brand, cfg)) {
+    const files = (await F.list(`${STYLE}/escenas/${dir}`).catch(() => [])).filter((f) => f.kind === 'file' && f.name.endsWith('.json'));
+    if (!files.length) continue;
+    const entries = [];
+    for (const f of files.slice(0, 40)) entries.push({ id: f.name.replace(/\.json$/, ''), json: await F.readJSON(`${STYLE}/escenas/${dir}/${f.name}`) });
+    return librarySummary(entries);
+  }
+  return [];
 }

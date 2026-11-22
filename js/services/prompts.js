@@ -112,7 +112,7 @@ function pitchLines(p) {
 }
 
 /** Reglas de los recursos visuales (las mismas que aplica la skill de edición al montar el video). */
-export function resourcesBrief(production = 'cabeza', graphics = 'equilibrado') {
+export function resourcesBrief(production = 'cabeza', graphics = 'equilibrado', library = []) {
   const pt = byId(PRODUCTION_TYPES, production) || PRODUCTION_TYPES[0];
   const pr = byId(GRAPHICS_PRESETS, graphics) || GRAPHICS_PRESETS[2];
   const cat = resourcesFor(production).filter((r) => pr.id !== 'sin' || ['escena', 'camara', 'broll'].includes(r.kind));
@@ -124,10 +124,13 @@ Reglas:
 - ${production === 'animado' ? 'Video animado: CADA sección lleva una escena (tipo escena-*), una cada 3-5 s, sin repetir el mismo tipo dos veces seguidas.' : 'Como mucho un recurso por sección y solo si una frase lo pide. Mejor pocos y fieles que muchos de relleno.'}
 - Un recurso ILUSTRA lo que dice la voz en ese momento, con sus palabras. Nada de datos, adjetivos o comparaciones que la voz no dice.
 - NINGUNA cifra en pantalla que no se pronuncie. Una lista solo si la voz enumera; un mapa solo si se nombra el lugar (hoy solo México y sus estados).
-- "anchor" son palabras exactas de la voz de esa sección: ahí aparece el recurso.`;
+- "anchor" son palabras exactas de la voz de esa sección: ahí aparece el recurso.${library.length ? `
+ESCENAS YA HECHAS EN LA BIBLIOTECA DE LA MARCA (reutilízalas cuando una frase pida eso mismo: mismo estilo y menos trabajo):
+${library.slice(0, 25).map((e) => `- ${e.id} [${e.resource || e.tipo}]${e.para ? `: ${e.para}` : ''}${e.texto ? ` (texto: «${e.texto}»)` : ''}`).join('\n')}
+Para reutilizar una: "type" = su tipo de recurso y "what" = «biblioteca: <id> · <texto nuevo con las palabras de la voz>».` : ''}`;
 }
 
-export function scriptPrompt({ idea, pillar, platform, durationSec, structureId, knowledgeLevel, versions = 1, recentHooks = [], extra = '', production, graphics = 'equilibrado' }) {
+export function scriptPrompt({ idea, pillar, platform, durationSec, structureId, knowledgeLevel, versions = 1, recentHooks = [], extra = '', production, graphics = 'equilibrado', library = [] }) {
   const st = structureId ? byId(STRUCTURES, structureId) : null;
   const lvl = byId(KNOWLEDGE_LEVELS, Number(knowledgeLevel)) || KNOWLEDGE_LEVELS[1];
   const ctaHint = (CTA_FOR_OBJECTIVE[idea.objective] || []).join(', ');
@@ -146,7 +149,7 @@ PARÁMETROS:
 - Marca con "peak" (1-3) los momentos de mayor interés; deben crecer hacia el final.
 - Que la última frase empalme con el principio: TikTok y Reels repiten el video solos.
 
-${resourcesBrief(production || idea.productionType || 'cabeza', graphics)}
+${resourcesBrief(production || idea.productionType || 'cabeza', graphics, library)}
 ${recentHooks.length ? `- NO repitas ni parafrasees estos hooks recientes de la marca: ${recentHooks.slice(0, 20).map((h) => `"${h}"`).join(' | ')}` : ''}
 ${extra ? `- Indicaciones del usuario: ${extra}` : ''}
 

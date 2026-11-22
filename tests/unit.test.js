@@ -395,3 +395,19 @@ Revisa este archivo antes de publicar: algunas licencias piden atribución.
 `;
   assert.deepEqual(creditsFromSources(md), ['Autora Uno (CC BY 3.0)', 'Autor Dos (CC BY 2.0)']);
 });
+
+test('biblioteca de escenas: resumen para la IA y marca «de la biblioteca» en la propuesta', async () => {
+  const R = await import('../js/services/reels.js'); const P = await import('../js/services/prompts.js');
+  const lib = R.librarySummary([
+    { id: 'engranes-presion', json: { escena: { tipo: 'mecanismo', titulo: 'Soporta la presión' }, para: 'Explicar que algo aguanta', reel: '2026-11-18 · Kit' } },
+    { id: 'gancho-fugas', json: { tipo: 'palabras', texto: '¿Fugas de presión?', descripcion: 'Gancho con pregunta' } },
+    { id: 'roto', json: null },
+  ]);
+  assert.equal(lib.length, 2); assert.equal(lib[0].resource, 'escena-mecanismo'); assert.equal(lib[0].para, 'Explicar que algo aguanta'); assert.equal(lib[1].texto, '¿Fugas de presión?');
+  assert.deepEqual(R.libraryDirs({ name: 'Afinazone' }, { visual: { edit: { file: 'afinazone', raw: { nombre: 'Afinazone' } } } }), ['afinazone', 'Afinazone']);
+  const brief = P.resourcesBrief('producto', 'pocos', lib);
+  assert.match(brief, /BIBLIOTECA DE LA MARCA/); assert.match(brief, /engranes-presion \[escena-mecanismo\]: Explicar que algo aguanta/);
+  assert.doesNotMatch(P.resourcesBrief('producto', 'pocos', []), /BIBLIOTECA/);
+  const prop = R.buildPropuestaMd({ script: { sections: [{ voice: 'Resiste el calor de la transmisión.', resource: { type: 'escena-mecanismo', what: 'biblioteca: engranes-presion · Resiste el calor', anchor: 'Resiste el calor' } }] }, opts: { graphics: 'pocos' } });
+  assert.match(prop, /escena · mecanismo \(de la biblioteca: engranes-presion\)/);
+});

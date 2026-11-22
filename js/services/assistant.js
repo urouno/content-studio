@@ -29,6 +29,11 @@ function docsCtx(brandId, task, opts) {
   return { docs: d.text, filled: new Set(d.used.map((u) => u.type)), docsUsed: d.used };
 }
 
+/** Escenas de la biblioteca de la marca en la carpeta conectada (nunca bloquea la generación). */
+async function libraryFor(brandId) {
+  try { const { sceneLibrary } = await import('./production.js'); return await sceneLibrary(brandId); } catch { return []; }
+}
+
 function recentHooks(brandId, excludeIdeaId) {
   return store.all('scriptVersions', { brandId }).filter((v) => v.ideaId !== excludeIdeaId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((v) => v.data?.hook?.narrado).filter(Boolean).slice(0, 25);
@@ -60,7 +65,7 @@ export async function aiScripts(idea, opts) {
   const r = await generate({ task: 'guion',
     // Una versión cabe de sobra en 7.000 tokens; varias necesitan más.
     system: P.systemPrompt(ctx), maxTokens: (opts.versions || 1) > 1 ? 12000 : 7000,
-    prompt: P.scriptPrompt({ idea, pillar, ...opts, recentHooks: recentHooks(idea.brandId, idea.id) }),
+    prompt: P.scriptPrompt({ idea, pillar, ...opts, recentHooks: recentHooks(idea.brandId, idea.id), library: await libraryFor(idea.brandId) }),
   });
   const arr = r.json?.versions || (Array.isArray(r.json) ? r.json : [r.json]);
   const production = opts.production || idea.productionType || 'cabeza';
@@ -68,7 +73,7 @@ export async function aiScripts(idea, opts) {
 }
 
 export async function aiRewrite(idea, script, opts) {
-  const r = await generate({ task: 'guion', system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: `${P.rewritePrompt({ script, ...opts })}\n\n${P.resourcesBrief(script.productionType, script.graphics)}`, temperature: 0.8, maxTokens: 7000 });
+  const r = await generate({ task: 'guion', system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: `${P.rewritePrompt({ script, ...opts })}\n\n${P.resourcesBrief(script.productionType, script.graphics, await libraryFor(idea.brandId))}`, temperature: 0.8, maxTokens: 7000 });
   // La reescritura conserva el tipo de producción y la cantidad de gráficos elegidos.
   return normalizeScript({ ...(r.json?.versions?.[0] || r.json), productionType: script.productionType, graphics: script.graphics });
 }
