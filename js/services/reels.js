@@ -412,16 +412,16 @@ export function buildVocab({ idea, brand, config }) {
   return [...new Set([brand.name, ...Object.values(corr), idea.keyword].map((x) => String(x || '').trim()).filter(Boolean))].join(', ') + '\n';
 }
 
-/** El mensaje para pegar en Claude Code. */
+/**
+ * El mensaje para pegar en Claude Code. Corto: la skill reconoce el encargo de Content Studio por su proyecto.json
+ * («contenido») y ya sabe usar el guion, el vocabulario y la propuesta de gráficos (fase 7, bloque 1).
+ */
 export function editMessage({ folderName, opts, take }) {
   const skill = skillFor(opts.production);
   return [
-    `Usa la skill ${skill} con el reel «Reels/${folderName}».`,
-    'Lo preparó Content Studio: su proyecto.json ya trae las respuestas de la entrevista (marca, tipo, gráficos, música, red, editor), así que no las vuelvas a preguntar; solo confírmalas en una frase.',
-    take ? `La toma es «Tomas/${take}».` : 'La toma está en Tomas/ con el id del contenido delante del nombre.',
-    'Lee trabajo/guion-aprobado.md antes de cortar y usa trabajo/vocab.txt en --vocab al transcribir.',
-    'En la pasada de gráficos, parte de trabajo/propuesta-graficos.md: ánclala a las palabras reales y enséñame la tabla antes de construir.',
-  ].join('\n');
+    `Usa la skill ${skill} con el reel «Reels/${folderName}» (encargo de Content Studio).`,
+    take ? `La toma es «Tomas/${take}».` : '',
+  ].filter(Boolean).join(' ');
 }
 
 /** Lo que se dijo de verdad, desde el plan de la skill (sus subtítulos), para los copies. */

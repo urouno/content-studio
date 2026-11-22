@@ -334,7 +334,7 @@ test('encargo de edición: archivos del reel, tomas y mensaje para Claude Code',
   assert.deepEqual(R.takesOf(idea.id, files).map((f) => f.name), ['CNT-ab12-cd34 toma1.mov']);
   assert.equal(R.finalOf([{ kind: 'file', name: 'preview.mp4' }, { kind: 'file', name: 'FINAL - Café.mp4' }]).name, 'FINAL - Café.mp4');
   const msg = R.editMessage({ folderName: '2026-11-23 · Café', opts, take: 'CNT-ab12-cd34 toma1.mov' });
-  assert.match(msg, /skill editar-reels-claude con el reel «Reels\/2026-11-23 · Café»/); assert.match(msg, /no las vuelvas a preguntar/); assert.match(msg, /propuesta-graficos\.md/);
+  assert.equal(msg, 'Usa la skill editar-reels-claude con el reel «Reels/2026-11-23 · Café» (encargo de Content Studio). La toma es «Tomas/CNT-ab12-cd34 toma1.mov».');
   assert.equal(R.spokenFromPlan({ subtitulos: [{ frase: 'No tienes que | abrir *editor*' }, { palabras: [{ w: 'de' }, { w: 'vídeos' }] }] }), 'No tienes que abrir editor de vídeos');
 });
 
