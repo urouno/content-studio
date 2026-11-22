@@ -4,7 +4,7 @@ import { on } from '../core/events.js';
 import { statusInfo, statusIndex, PIPELINE } from '../core/schema.js';
 import { icon, toast, emptyState } from '../core/ui.js';
 import { esc, toDateKey, parseDateKey, addDays, startOfWeek, todayISO, fmtDate } from '../core/utils.js';
-import { PLATFORMS } from '../services/methodology.js';
+import { PLATFORMS, CONTENT_TYPES, byId } from '../services/methodology.js';
 import { pageHeader, filterBar, platformShort, platformLabel, brandTag, statusBadge } from './shared.js';
 import { openSchedule } from './content-publish.js';
 import { schedule } from '../services/workflow.js';
@@ -118,7 +118,7 @@ function dayCard(c) {
 function drawList(host, entries) {
   const rows = entries.sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
   host.innerHTML = `<div class="card">${rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Contenido</th><th>Marca</th><th>Plataforma</th><th>Estado</th><th>Responsable</th><th>Prioridad</th><th>Tipo</th></tr></thead><tbody>
-    ${rows.map((c) => { const i = store.get('ideas', c.ideaId); const late = c.status !== 'publicado' && c.date < todayISO(); return `<tr class="clickable" data-open="${i.id}"><td class="nowrap ${late ? 'late-txt' : ''}">${fmtDate(c.date)} ${c.time || ''}${late ? ' · retrasado' : ''}</td><td><b>${esc(i.title)}</b></td><td>${brandTag(c.brandId)}</td><td>${esc(platformLabel(c.platform))}</td><td>${c.status === 'publicado' ? '<span class="badge" style="--bc:var(--ok)">Publicado</span>' : statusBadge(i.status)}</td><td class="small">${esc(c.owner || '—')}</td><td class="small">${i.priority === 1 ? 'Alta' : i.priority === 3 ? 'Baja' : 'Media'}</td><td class="small">${esc(i.contentType || '—')}</td></tr>`; }).join('')}
+    ${rows.map((c) => { const i = store.get('ideas', c.ideaId); const late = c.status !== 'publicado' && c.date < todayISO(); return `<tr class="clickable" data-open="${i.id}"><td class="nowrap ${late ? 'late-txt' : ''}">${fmtDate(c.date)} ${c.time || ''}${late ? ' · retrasado' : ''}</td><td><b>${esc(i.title)}</b></td><td>${brandTag(c.brandId)}</td><td>${esc(platformLabel(c.platform))}</td><td>${c.status === 'publicado' ? '<span class="badge" style="--bc:var(--ok)">Publicado</span>' : statusBadge(i.status)}</td><td class="small">${esc(c.owner || '—')}</td><td class="small">${i.priority === 1 ? 'Alta' : i.priority === 3 ? 'Baja' : 'Media'}</td><td class="small">${esc(byId(CONTENT_TYPES, i.contentType)?.name || i.contentType || '—')}</td></tr>`; }).join('')}
     </tbody></table></div>` : emptyState('Sin publicaciones programadas', 'Programa contenidos desde su pestaña Publicación o arrastrándolos al calendario.', '', 'calendar')}</div>`;
   host.querySelector('tbody')?.addEventListener('click', (e) => { const tr = e.target.closest('[data-open]'); if (tr) go(`/contenido/${tr.dataset.open}`); });
 }

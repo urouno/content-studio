@@ -10,6 +10,8 @@
 .cal-layout > *, .cal-host, .board-host, .content-body, .bbody { min-width: 0; }
 .tabs { position: relative; }
 summary { list-style: none; cursor: pointer; }
+/* Al saltar a una sección, que no quede debajo de la barra superior */
+.docs-main, .day-agenda, #alertas { scroll-margin-top: calc(var(--topbar-h) + env(safe-area-inset-top) + 12px); }
 summary::-webkit-details-marker { display: none; }
 
 /* Barra de herramientas (filtros + casilla a la derecha), sin desbordes */
@@ -74,6 +76,14 @@ button.kpi { display: block; width: 100%; text-align: left; font: inherit; color
 .mweek span { font-size: var(--fs-xs); }
 .day-agenda { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
 .day-agenda h3::first-letter { text-transform: uppercase; }
+
+/* Laptop estrecha: el menú superior solo con iconos (salvo la sección activa) para que no se corte */
+@media (min-width: 861px) and (max-width: 1100px) {
+  .mainnav a:not(.active) span { display: none; }
+  .mainnav a { padding: 7px 9px; }
+}
+
+.sort-m { display: none; }
 
 /* Menú inferior (solo celular) */
 .bottomnav { display: none; }
@@ -174,6 +184,9 @@ button.kpi { display: block; width: 100%; text-align: left; font: inherit; color
   .tbl tr.clickable:active { background: var(--surface-2); }
   .tbl td .truncate { white-space: normal; }
 
+  .sort-m { display: flex; align-items: center; gap: 8px; margin: 12px 14px 4px; color: var(--text-2); }
+  .sort-m select { flex: 1; }
+
   /* Tablero de producción: una etapa a la vez */
   .board-stages { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 10px; padding: 0 16px 4px; scrollbar-width: none; }
   .board-stages::-webkit-scrollbar { display: none; }
@@ -207,6 +220,7 @@ button.kpi { display: block; width: 100%; text-align: left; font: inherit; color
   .wday-b { min-height: 0; }
   .wempty { margin: 4px 0; text-align: left; }
   .wday .cev { padding: 8px; font-size: var(--fs-sm); }
+  .wday .cev-t { display: block; }
   .cal-side .cev.side { padding: 8px; }
 
   /* Encabezado de contenido */
@@ -234,4 +248,11 @@ button.kpi { display: block; width: 100%; text-align: left; font: inherit; color
   .row > .input { min-width: 0; }
   .alerts li { flex-direction: column; align-items: flex-start; gap: 4px; }
   .script-toolbar .row { width: 100%; }
+  /* Barras de herramientas dentro de tarjetas: una debajo de otra */
+  .card-b.row-between { flex-direction: column; align-items: stretch; }
+  /* Documentos de marca: encabezado del editor apilado */
+  .docs-main .card-h { flex-direction: column; align-items: stretch; }
+  .docs-main .card-h .btn-group { width: 100%; }
+  .docs-main .card-h .btn-group .btn { flex: 1; justify-content: center; }
+  textarea.doc-ta { min-height: 55vh; font-size: 16px; }
 }

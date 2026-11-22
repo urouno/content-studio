@@ -29,6 +29,8 @@ export function tabDocs(host, brandId, docParam) {
     selected = id;
     history.replaceState(null, '', `#/marcas/${brandId}/documentos/${id}`);
     drawList(); drawEditor();
+    // En pantallas estrechas la lista va arriba del editor: lleva la vista al documento elegido.
+    if (matchMedia('(max-width: 1000px)').matches) host.querySelector('.docs-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const draw = async () => {

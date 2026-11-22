@@ -71,13 +71,23 @@ function renderNav(base) {
   const nav = document.getElementById('mainnav');
   const bId = app.brandId;
   const pendingIdeas = store.all('ideas', { brandId: bId }).filter((i) => i.status === 'idea').length;
-  const link = (n) => `<a href="#${n.path}" class="${n.path === base ? 'active' : ''}" ${n.path === base ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span>${n.path === '/ideas' && pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</a>`;
+  const link = (n) => `<a href="#${n.path}" title="${n.label}" class="${n.path === base ? 'active' : ''}" ${n.path === base ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span>${n.path === '/ideas' && pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</a>`;
   nav.innerHTML = NAV.map(link).join('');
   const moreActive = MORE.some((m) => m.path === base);
   document.getElementById('bottomnav').innerHTML = NAV.filter((n) => BOTTOM.includes(n.path)).map(link).join('')
     + `<button type="button" class="${moreActive ? 'active' : ''}" data-more aria-haspopup="true" aria-expanded="false">${icon('list')}<span>Más</span></button>
     <div class="more-sheet" hidden role="menu">${MORE.map((m) => `<a href="#${m.path}" role="menuitem" class="${m.path === base ? 'active' : ''}">${icon(m.icon)}${m.label}</a>`).join('')}</div>`;
   renderBrandSwitch();
+}
+
+function renderNavBadge() {
+  const n = store.all('ideas', { brandId: app.brandId }).filter((i) => i.status === 'idea').length;
+  document.querySelectorAll('#mainnav a[href="#/ideas"], #bottomnav a[href="#/ideas"]').forEach((a) => {
+    let em = a.querySelector('em');
+    if (!n) { em?.remove(); return; }
+    if (!em) { em = document.createElement('em'); a.append(em); }
+    em.textContent = n;
+  });
 }
 
 function renderBrandSwitch() {
@@ -188,6 +198,9 @@ async function boot() {
   window.addEventListener('hashchange', route);
   window.addEventListener('beforeunload', (e) => { if (document.querySelector('.save-ind.dirty, .save-ind.saving')) { e.preventDefault(); e.returnValue = ''; } });
   // Cambios remotos (sincronización): refresca la vista si el usuario no está escribiendo.
+  // Mantiene al día el número de ideas pendientes del menú al crear, aprobar o descartar ideas.
+  let navQueued = false;
+  on('change', (p) => { if (navQueued || (p?.table && p.table !== 'ideas')) return; navQueued = true; requestAnimationFrame(() => { navQueued = false; renderNavBadge(); }); });
   on('change', (p) => { if (p?.remote || p?.import || p?.wipe) { const a = document.activeElement; if (!a || !/INPUT|TEXTAREA|SELECT/.test(a.tagName)) route(); } });
 
   if (location.protocol === 'file:') toast('Abierto como archivo local: el modo sin conexión y algunos módulos no funcionan. Usa un servidor local (ver README).', 'error', { timeout: 12000 });

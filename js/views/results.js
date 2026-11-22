@@ -39,6 +39,7 @@ export function render(main) {
     main.querySelector('[data-dim]')?.addEventListener('change', (e) => { state.dim = e.target.value; draw(); });
     main.querySelector('[data-metric]')?.addEventListener('change', (e) => { state.metric = e.target.value; draw(); });
     main.querySelector('[data-obj]')?.addEventListener('change', (e) => { state.objective = e.target.value; draw(); });
+    main.querySelector('[data-sortsel]')?.addEventListener('change', (e) => { state.sort = e.target.value; state.dir = e.target.value === 'title' ? 1 : -1; draw(); });
     main.querySelectorAll('[data-sort]').forEach((th) => th.addEventListener('click', () => { if (state.sort === th.dataset.sort) state.dir *= -1; else { state.sort = th.dataset.sort; state.dir = -1; } draw(); }));
     main.querySelectorAll('[data-res]').forEach((b) => b.addEventListener('click', () => openResultForm(store.get('publications', b.dataset.res), null, draw)));
     main.querySelector('tbody.mt')?.addEventListener('click', (e) => { const tr = e.target.closest('[data-idea]'); if (tr) go(`/contenido/${tr.dataset.idea}/resultados`); });
@@ -82,7 +83,9 @@ function contentsTable(rows, bId) {
   const cols = [['title', 'Contenido'], ['views', 'Vistas'], ['avgPct', '% visto'], ['likeRate', 'MG/alc.'], ['commentRate', 'Com./alc.'], ['sendRate', 'Comp./alc.'], ['saveRate', 'Guard./alc.'], ['followsPer1k', 'Seg./1k'], ['inquiriesPer1k', 'Cons./1k'], ['conversionsPer1k', 'Conv./1k']];
   const val = (r, k) => (k === 'title' ? r.title : r.m[k]);
   const sorted = [...rows].sort((a, b) => { const x = val(a, state.sort); const y = val(b, state.sort); if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * state.dir; });
-  return `<div class="table-wrap"><table class="tbl"><thead><tr>${cols.map(([k, l]) => `<th class="${k === 'title' ? '' : 'num'} sortable" data-sort="${k}">${l}${state.sort === k ? (state.dir < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}<th>Plataforma</th><th>Días</th>${bId === 'all' ? '<th>Marca</th>' : ''}</tr></thead><tbody class="mt">
+  // En celular los encabezados se ocultan (tabla en tarjetas): se ordena con este selector.
+  const sortSel = `<label class="sort-m small">Ordenar por <select class="input input-sm" data-sortsel>${cols.map(([k, l]) => `<option value="${k}" ${state.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
+  return `${sortSel}<div class="table-wrap"><table class="tbl"><thead><tr>${cols.map(([k, l]) => `<th class="${k === 'title' ? '' : 'num'} sortable" data-sort="${k}">${l}${state.sort === k ? (state.dir < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}<th>Plataforma</th><th>Días</th>${bId === 'all' ? '<th>Marca</th>' : ''}</tr></thead><tbody class="mt">
     ${sorted.map((r) => `<tr class="clickable" data-idea="${r.ideaId}"><td><b>${esc(r.title)}</b><div class="xs muted">${esc(r.dims.structure)} · ${esc(r.dims.hookPattern)} · ${esc(r.dims.duration)}</div></td>${cols.slice(1).map(([k]) => `<td class="num">${fmtM(k, r.m[k])}</td>`).join('')}<td class="small">${esc(platformLabel(r.platform))}</td><td class="num">${r.days ?? '—'}</td>${bId === 'all' ? `<td>${brandTag(r.brandId)}</td>` : ''}</tr>`).join('')}
   </tbody></table></div>`;
 }
