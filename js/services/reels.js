@@ -436,8 +436,10 @@ export function spokenFromPlan(plan) {
  */
 export function creditsFromSources(md) {
   const text = String(md || '');
-  // Un bloque por clip: secciones «## …» si las hay; si no, cada línea (tablas o listas de una línea).
-  const blocks = /^#{2,3}\s/m.test(text) ? text.split(/\n(?=#{2,3}\s)/) : text.split('\n');
+  // Un bloque por clip: secciones «## …»; o puntos de lista sin sangría con sus sublíneas (el formato de la skill:
+  // «- **B1** · … » y debajo «  - Autor: …», «  - Licencia: …»); o, si no, cada línea (tablas).
+  const blocks = /^#{2,3}\s/m.test(text) ? text.split(/\n(?=#{2,3}\s)/)
+    : /^[-*]\s/m.test(text) ? text.split(/\n(?=[-*]\s)/) : text.split('\n');
   const out = [];
   blocks.forEach((b) => {
     if (/\bCC0\b|dominio p[uú]blico|public domain/i.test(b)) return;

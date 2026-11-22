@@ -375,3 +375,23 @@ test('créditos del material de terceros (FUENTES.md) para los copies', async ()
   assert.deepEqual(creditsFromSources('| B1 | Autor: Mia | CC BY 4.0 |'), ['Mia (CC BY 4.0)']);
   assert.deepEqual(creditsFromSources(''), []);
 });
+
+test('créditos: el formato real de FUENTES.md de la skill (lista con sublíneas)', async () => {
+  const { creditsFromSources } = await import('../js/services/reels.js');
+  const md = `# Fuentes del B-roll de bancos libres
+
+Revisa este archivo antes de publicar: algunas licencias piden atribución.
+- **B1** · moka pot stove · video · Wikimedia Commons
+  - Autor: Autora Uno
+  - Licencia: CC BY 3.0 · requiere atribución
+  - URL: https://commons.wikimedia.org/wiki/File:x.webm
+  - Archivo: trabajo/broll-banco/B1.mp4 (en el plan: \`assets/broll-B1.mp4\`)
+- **H4** · earth from space · video · NASA
+  - Autor: NASA
+  - Licencia: dominio público
+- **G2** · coffee · foto · Openverse
+  - Autor: Autor Dos
+  - Licencia: CC BY 2.0 · requiere atribución
+`;
+  assert.deepEqual(creditsFromSources(md), ['Autora Uno (CC BY 3.0)', 'Autor Dos (CC BY 2.0)']);
+});
