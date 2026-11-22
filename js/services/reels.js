@@ -315,7 +315,10 @@ export const SKILL_NAME = {
   'escena-mecanismo': 'escena · mecanismo', 'escena-objeto': 'escena · objeto', 'escena-3d': 'escena · pieza3d', 'escena-foto': 'escena · foto',
   camara: 'cámara (plan.py camara)', broll: 'toma de apoyo (marco o toma)',
 };
-const TIPO = { cabeza: 'cabeza parlante', producto: 'producto con voz en off', animado: 'video animado' };
+// Los valores que escribe la propia skill en proyecto.json (comprobado con sus reels).
+export const TIPO = { cabeza: 'cabeza parlante', producto: 'voz en off + imagenes de producto', animado: 'animacion' };
+/** Formato de animar-reels-claude según la duración: corto 30-45 s · medio 50-70 · largo 70-95 · extendido 100-120. */
+export const animFormat = (sec) => (!sec || sec <= 47 ? 'corto' : sec <= 72 ? 'medio' : sec <= 97 ? 'largo' : 'extendido');
 
 const fileSafe = (t) => String(t || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
 const localDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -342,7 +345,7 @@ export function defaultVideoOpts({ idea, script }) {
 }
 
 /** proyecto.json del reel. Las claves son las que crea la skill en su paso 1; `contenido` y `content_studio` son nuestras. */
-export function buildProyecto({ idea, brand, config, opts, take = '' }) {
+export function buildProyecto({ idea, brand, config, opts, take = '', durationSec = 0 }) {
   const edit = editOf(config);
   const [flotantes, pantalla] = PRESETS[opts.graphics] || PRESETS.equilibrado;
   const p = {
@@ -360,6 +363,8 @@ export function buildProyecto({ idea, brand, config, opts, take = '' }) {
     },
   };
   if (p.musica === undefined) delete p.musica;
+  // crear.py (animar-reels-claude) lee «voz» y «formato» de proyecto.json. «voz_aprobada» la pone la skill tras oír la muestra.
+  if (opts.production === 'animado') { p.voz = opts.voice || 'grabada'; p.formato = animFormat(durationSec); }
   return p;
 }
 

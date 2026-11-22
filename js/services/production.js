@@ -7,6 +7,7 @@ import {
   buildMarcaJson, mergeStyleGuide, stripGuideBlock, parseMarcaJson, editOf, marcaFileName, guideFileName,
 } from './reels.js';
 import { scriptFor, ensureScript, approvedVersion, brandConfig, productionState, setRecorded, setEdited } from './workflow.js';
+import { scriptStats } from './scriptkit.js';
 
 const REELS = 'Reels'; const TAKES = 'Tomas'; const STYLE = 'Mi estilo';
 
@@ -44,7 +45,8 @@ export async function sendToEdit(ideaId, opts, folderName) {
   const takes = takesOf(ideaId, await F.list(TAKES));
   // Si el proyecto ya existía (la skill lo pudo cambiar), se conserva lo suyo y se actualiza lo nuestro.
   const prev = (await F.readJSON(`${base}/proyecto.json`)) || {};
-  const proyecto = { ...prev, ...buildProyecto({ idea, brand, config, opts, take: prev.toma || takes[0]?.name || '' }) };
+  const durationSec = scriptStats(ver.data, config.strategy?.wpm || 160).seconds;
+  const proyecto = { ...prev, ...buildProyecto({ idea, brand, config, opts, take: prev.toma || takes[0]?.name || '', durationSec }) };
   await F.writeText(`${base}/proyecto.json`, JSON.stringify(proyecto, null, 1));
   await F.writeText(`${base}/trabajo/guion-aprobado.md`, buildGuionMd({ idea, brand, script: ver.data }));
   await F.writeText(`${base}/trabajo/propuesta-graficos.md`, buildPropuestaMd({ script: ver.data, opts }));

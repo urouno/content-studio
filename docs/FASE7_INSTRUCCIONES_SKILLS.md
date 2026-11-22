@@ -48,7 +48,9 @@ Contexto (no lo cambies, es lo que Content Studio ya hace):
     proyecto.json  → las claves de la entrevista (toma, marca, tipo, resolucion, revision, con_graficos, flotantes,
                      pantalla, detras, musica, red, editor) + "contenido": "CNT-…" + un bloque "content_studio" con
                      skill, escenas (ninguna | algunas | video), voz (si es animado) y las rutas de los archivos de abajo.
-                     "tipo" vale «cabeza parlante», «producto con voz en off» o «video animado».
+                     "tipo" vale «cabeza parlante», «voz en off + imagenes de producto» o «animacion» (los de la
+                     skill). En «animacion» escribe también "voz" (grabada | clonada | generica) y "formato" (corto |
+                     medio | largo | extendido) arriba del todo, como crear.py; nunca "voz_aprobada".
     trabajo/guion-aprobado.md     → el guion aprobado (gancho, tabla de secciones, CTA, datos a verificar).
     trabajo/propuesta-graficos.md → tabla «# · Lo que dice · Qué aparece · Tipo» con los tipos del catálogo de la skill
                                     (gancho, lista, contador, cierre…) o «escena · mapa», «escena · lista_iconos»…
@@ -72,8 +74,8 @@ Cambia editar-reels-claude para que use el encargo de Content Studio cuando exis
 1. Paso «1 · Entrevista» del SKILL.md: si la carpeta del reel ya tiene proyecto.json con la clave "contenido",
    NO hagas la entrevista. Di en una frase lo que trae (marca, tipo, gráficos, música, red, editor) y pregunta solo lo
    que falte (normalmente nada; si "toma" está vacía, la toma: busca en Tomas/ los archivos que empiezan por el id del
-   contenido). Acepta los valores de Content Studio para "tipo" («cabeza parlante», «producto con voz en off»,
-   «video animado» → este último pásalo a animar-reels-claude) y, si "musica" falta, usa la de la marca.
+   contenido). "tipo" ya viene con tus valores («cabeza parlante», «voz en off + imagenes de producto»; «animacion» →
+   pásalo a animar-reels-claude). Si "musica" falta, usa la de la marca (como hoy).
 2. Pasada 1 (transcribir): si existe trabajo/vocab.txt, úsalo en --vocab. Antes de cortar, lee
    trabajo/guion-aprobado.md (una vez) para saber qué se quería decir y proponer qué tomas falsas quitar.
 3. Pasada 4 (gráficos): si existe trabajo/propuesta-graficos.md, parte de ahí: ancla cada fila a las palabras reales
@@ -101,9 +103,10 @@ tabla de gráficos y para ahí. Dime qué preguntó y qué no.
 ```text
 Cambia animar-reels-claude para que use el encargo de Content Studio:
 
-1. Modo B (video completo): si el reel tiene proyecto.json con "contenido" y "tipo": «video animado», no hagas la
-   entrevista. Toma la marca de "marca", la voz de content_studio.voz (grabada | clonada | generica; si es «grabada»,
-   busca el audio en Tomas/ por el id del contenido) y el formato por la duración del guion. El guion es
+1. Modo B (video completo): si el reel tiene proyecto.json con "contenido" y "tipo": «animacion», no hagas la
+   entrevista. Usa "marca", "voz" (grabada | clonada | generica; si es «grabada», busca el audio en Tomas/ por el id
+   del contenido) y "formato" de proyecto.json, como si los hubiera escrito crear.py nuevo. La muestra de voz sintética
+   se sigue enseñando antes de aprobarla (voz_aprobada la pones tú). El guion es
    trabajo/guion-aprobado.md: pásalo a trabajo/guion.txt (solo la voz, en orden) en vez de escribir uno nuevo. Enséñalo
    igualmente para el OK.
 2. Escenas: si existe trabajo/propuesta-graficos.md, sus filas «escena · <tipo>» son la propuesta de escenas.json
@@ -113,7 +116,7 @@ Cambia animar-reels-claude para que use el encargo de Content Studio:
 3. Modo A (b-roll en un reel grabado): lo mismo con las filas «escena · …» cuando editar-reels-claude te pase el reel.
 4. El vídeo final sigue siendo «FINAL - <tema>.mp4» en la raíz de la carpeta del reel, con portada.png.
 
-Prueba con un proyecto.json de ejemplo de tipo «video animado», voz «generica», y una propuesta con 3 escenas
+Prueba con un proyecto.json de ejemplo de tipo «animacion», voz «generica», formato «corto», y una propuesta con 3 escenas
 (una «escena · mapa» de un estado de México, una «escena · lista_iconos» y una «escena · cifra»): llega hasta la tabla de
 escenas y para. Dime qué preguntó y qué no.
 ```

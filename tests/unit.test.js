@@ -320,7 +320,10 @@ test('encargo de edición: archivos del reel, tomas y mensaje para Claude Code',
   const p = R.buildProyecto({ idea, brand, config, opts, take: 'CNT-ab12-cd34 toma1.mov' });
   assert.equal(p.marca, 'lumbre'); assert.equal(p.tipo, 'cabeza parlante'); assert.equal(p.flotantes, 3); assert.equal(p.pantalla, 1);
   assert.equal(p.musica, 'lofi'); assert.equal(p.contenido, idea.id); assert.equal(p.content_studio.skill, 'editar-reels-claude');
-  assert.equal(R.buildProyecto({ idea, brand, config, opts: { ...opts, production: 'animado' } }).content_studio.skill, 'animar-reels-claude');
+  const anim = R.buildProyecto({ idea, brand, config, opts: { ...opts, production: 'animado', voice: 'clonada' }, durationSec: 60 });
+  assert.equal(anim.content_studio.skill, 'animar-reels-claude'); assert.equal(anim.tipo, 'animacion'); assert.equal(anim.voz, 'clonada'); assert.equal(anim.formato, 'medio');
+  assert.equal(R.buildProyecto({ idea, brand, config, opts: { ...opts, production: 'producto' } }).tipo, 'voz en off + imagenes de producto');
+  assert.equal(R.animFormat(40), 'corto'); assert.equal(R.animFormat(90), 'largo'); assert.equal(R.animFormat(110), 'extendido');
   const md = R.buildGuionMd({ idea, brand, script });
   assert.match(md, /Si tu café sale así/); assert.match(md, /Hay tres errores \/ comunes/); assert.match(md, /Verificar antes de publicar/);
   const prop = R.buildPropuestaMd({ script, opts });
