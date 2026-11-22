@@ -164,3 +164,250 @@ test('hasRealChanges: vacío = vacío, y solo cuenta cambios de contenido', () =
   assert.equal(hasRealChanges(base, { ...base, title: 'Hola 2' }), true);
   assert.equal(hasRealChanges({ platforms: ['ig'] }, { platforms: ['ig', 'tt'] }), true);
 });
+
+test('IA: con búsqueda web van primero los proveedores que la admiten', async () => {
+  const { chainFor, DEFAULT_CHAIN } = await import('../js/services/ai.js');
+  assert.deepEqual(chainFor().map((c) => c.provider), DEFAULT_CHAIN);
+  const g = chainFor({ grounding: true }).map((c) => c.provider);
+  assert.equal(g[0], 'gemini'); assert.equal(g.length, DEFAULT_CHAIN.length);
+  assert.deepEqual(chainFor({ only: 'groq' }), [{ provider: 'groq', model: 'auto' }]);
+});
+
+test('IA: el presupuesto de documentos es menor en las tareas cortas', async () => {
+  const { TASK_LIMITS, DOC_LIMITS } = await import('../js/services/branddocs.js');
+  assert.equal(TASK_LIMITS.guion, DOC_LIMITS);
+  assert.ok(TASK_LIMITS.copies.total < DOC_LIMITS.total && TASK_LIMITS.hooks.total < DOC_LIMITS.total);
+});
+
+test('guion: los recursos visuales siguen las reglas de la skill de edición', async () => {
+  const { normalizeScript, localEvaluate } = await import('../js/services/scriptkit.js');
+  const base = { hook: { narrado: 'Por qué el chocolate te sube el ánimo', visual: 'taza', textual: 'Chocolate', p4: { promesa: 'sabrás por qué' } }, promise: 'x', cta: { text: 'Guárdalo para el chocolate' } };
+  const crit = (s) => localEvaluate(normalizeScript({ ...base, ...s }), {}).filter((f) => ['recursos', 'empaque'].includes(f.criterion)).map((f) => f.text);
+  // Cifra en pantalla que no se dice, anclaje que no está en la voz, enumeración sin lista y gancho sin prueba.
+  let t = crit({ graphics: 'pocos', sections: [{ act: 'inicio', voice: 'Hay tres razones para comerlo.', resource: { type: 'tarjeta', what: '70 % cacao', anchor: 'cinco motivos' } }] });
+  assert.ok(t.some((x) => /muestra 70/.test(x)));
+  assert.ok(t.some((x) => /no está en lo que se dice/.test(x)));
+  assert.ok(t.some((x) => /enumera/.test(x)));
+  assert.ok(t.some((x) => /prueba/.test(x)));
+  // Topes del video: 2 a pantalla completa con «pocos» (tope 1).
+  t = crit({ graphics: 'pocos', sections: [{ act: 'inicio', voice: 'Uno dos', resource: { type: 'dato', what: 'uno', anchor: 'Uno' } }, { act: 'desenlace', voice: 'Tres cuatro', resource: { type: 'pasos', what: 'tres', anchor: 'Tres' } }] });
+  assert.ok(t.some((x) => /2 gráficos a pantalla completa para un tope de 1/.test(x)));
+  // Video animado: cada sección necesita su escena; la palabra detrás de la cabeza no vale.
+  t = crit({ productionType: 'animado', sections: [{ act: 'inicio', voice: 'El cacao viene de lejos y tiene historia', resource: { type: 'detras', what: 'cacao', anchor: 'cacao' } }] });
+  assert.ok(t.some((x) => /sin escena en un video animado/.test(x)));
+  assert.ok(t.some((x) => /solo funciona con cabeza parlante/.test(x)));
+  // Uno correcto no tiene avisos de recursos.
+  t = crit({ graphics: 'equilibrado', hook: { ...base.hook, p4: { promesa: 'a', prueba: 'b' } }, sections: [{ act: 'inicio', voice: 'Tiene 70 por ciento de cacao.', resource: { type: 'contador', what: '70', anchor: '70 por ciento' } }] });
+  assert.deepEqual(t, []);
+});
+
+test('ideas: el empaque propuesto por la IA se guarda con la forma de la ficha', async () => {
+  const { ideaPitch } = await import('../js/services/assistant.js');
+  const p = ideaPitch({ firstFrameText: 'A', variants: [{ text: 'B' }, 'C'], p4: { prueba: 'P' } });
+  assert.equal(p.variants, 'B\nC'); assert.equal(p.p4.prueba, 'P'); assert.equal(p.p4.plan, '');
+});
+
+test('ideas: el prompt pide variantes de lo que ya funcionó, ordenadas de segura a arriesgada', async () => {
+  const { ideasPrompt } = await import('../js/services/prompts.js');
+  const p = ideasPrompt({ count: 5, winners: ['«Café quemado» · 12.000 vistas'] });
+  assert.match(p, /MÁS SEGURA a la MÁS ARRIESGADA/); assert.match(p, /Café quemado/); assert.match(p, /firstFrameText/); assert.match(p, /keepChange/);
+  assert.match(ideasPrompt({ count: 3 }), /Aún no hay resultados medidos/);
+});
+
+test('marca para la skill: exporta lo estable y conserva lo afinado en el editor en vivo', async () => {
+  const R = await import('../js/services/reels.js');
+  // Lo que ya tenía la skill: medidas finas, otras claves y efectos.
+  const skillFile = { nombre: 'Café Lumbre', estado: 'por confirmar', colores: { texto: '#ffffff', acento: '#000000' },
+    subtitulos: { tam: 92, y: 1350, animacion: 'linea' }, fuentes: { clave: { familia: 'Anton', ancho_car: 0.47 }, archivos: [{ familia: 'Anton', archivo: 'Anton.woff2' }] },
+    sonido: { musica_db: -12, efectos: { activo: true, tipos: { glitch: {}, riser: {} }, usos: { camara: 'riser' } } }, correcciones: { 'Lunbre': 'Lumbre' }, notas: ['Sin emojis'] };
+  const imported = R.parseMarcaJson(JSON.stringify(skillFile), { fileName: 'cafe-lumbre.json' });
+  assert.equal(imported.file, 'cafe-lumbre'); assert.equal(imported.fonts.clave, 'Anton'); assert.deepEqual(imported.sfx, ['glitch', 'riser']);
+  assert.equal(imported.never, 'Sin emojis'); assert.match(imported.corrections, /Lunbre = Lumbre/);
+  // Content Studio cambia lo estable.
+  const edit = { ...imported, status: '', guideLinked: true, roles: { texto: '#FFFFFF', acento: '#F59E0B' }, fonts: { texto: 'Rajdhani', clave: 'Anton' }, subtitles: { animacion: 'karaoke', mayusculas: true, contorno: null, sin_puntuacion: null }, cards: 'cristal', camera: [], sfx: ['whoosh', 'pop'], corrections: 'Lunbre = Lumbre\nexpreso = espresso' };
+  const brand = { name: 'Café Lumbre' };
+  const config = { voice: { avoid: 'barato, garantizado' }, visual: { fonts: [{ role: 'Títulos', family: 'Anton' }, { role: 'Texto', family: 'Rajdhani' }], colors: [{ name: 'Ámbar', hex: '#F59E0B' }], edit } };
+  const out = R.buildMarcaJson({ brand, config });
+  assert.equal(out.estado, 'definida');
+  assert.equal(out.colores.acento, '#F59E0B');
+  assert.equal(out.subtitulos.animacion, 'karaoke'); assert.equal(out.subtitulos.tam, 92); assert.equal(out.subtitulos.y, 1350); // medidas conservadas
+  assert.deepEqual(out.fuentes.clave, { familia: 'Anton', ancho_car: 0.47 }); // objeto de la skill respetado
+  assert.deepEqual(out.fuentes.texto, { familia: 'Rajdhani' });
+  assert.deepEqual(out.zoom.movimientos, []); // ninguno = solo zoom de fondo
+  assert.deepEqual(Object.keys(out.sonido.efectos.tipos), ['whoosh', 'pop']); // sin los tipos viejos
+  assert.equal(out.sonido.musica_db, -12); assert.equal(out.sonido.efectos.usos.camara, 'riser');
+  assert.equal(out.correcciones.expreso, 'espresso');
+  assert.ok(Array.isArray(out.notas) && out.notas.some((n) => /barato, garantizado/.test(n)));
+  assert.equal(out.guia, 'Reglas-de-estilo-Cafe-Lumbre.md');
+  assert.equal(out.nombre, 'Café Lumbre');
+  // Reimportar no duplica la línea de palabras prohibidas.
+  assert.ok(!R.parseMarcaJson(out).never.includes('barato'));
+  // Sin colores ni fuentes, queda por confirmar.
+  assert.equal(R.buildMarcaJson({ brand, config: { visual: {} } }).estado, 'pendiente');
+  // La guía corta usa los campos audiovisuales de texto libre de la ficha.
+  const md = R.buildStyleGuide({ brand, config: { ...config, visual: { ...config.visual, pace: 'Cambio de plano cada 2-4 s', intro: 'Logo 1 s' } } });
+  assert.match(md, /^# Reglas de estilo · Café Lumbre/); assert.match(md, /Cambio de plano cada 2-4 s/); assert.match(md, /Intro: Logo 1 s/); assert.match(md, /220 px/);
+});
+
+test('guía de la skill: se conserva entera y solo se pone al día el bloque de Content Studio', async () => {
+  const R = await import('../js/services/reels.js');
+  const brand = { name: 'Marca X' };
+  const config = { voice: { tone: 'Cercano', avoid: 'barato' }, visual: { colors: [{ name: 'Rojo', hex: '#D90B0B' }], edit: { roles: { acento: '#D90B0B' } } } };
+  const skillGuide = '# Reglas de estilo · Marca X\n\n## Subtítulos\n- Montserrat 800, 84 px.\n\n## Aprendido en los reels\n- Whisper escribe «Marca Equis».\n';
+  const once = R.mergeStyleGuide(skillGuide, { brand, config });
+  assert.ok(once.startsWith(skillGuide.trim()));               // lo de la skill, intacto y primero
+  assert.match(once, /Aprendido en los reels/); assert.match(once, /84 px/);
+  assert.equal(once.split(R.GUIDE_START).length, 2);           // un solo bloque
+  assert.match(once, /Tono: Cercano/); assert.match(once, /### Color/);
+  // Volver a descargar con otros datos sustituye el bloque, no lo duplica.
+  const twice = R.mergeStyleGuide(once, { brand, config: { ...config, voice: { tone: 'Directo' } } });
+  assert.equal(twice.split(R.GUIDE_START).length, 2); assert.match(twice, /Tono: Directo/); assert.doesNotMatch(twice, /Tono: Cercano/);
+  assert.ok(twice.startsWith(skillGuide.trim()));
+  // Al importar una guía que ya trae el bloque, se guarda sin él.
+  assert.equal(R.stripGuideBlock(once), skillGuide.trim());
+  // Sin guía previa, se genera una entera.
+  assert.match(R.mergeStyleGuide('', { brand, config }), /^# Reglas de estilo · Marca X/);
+});
+
+test('marca para la skill: el formato real de sus archivos (fuentes con peso, estado, nombre y guía)', async () => {
+  const R = await import('../js/services/reels.js');
+  // Forma real de un archivo de la skill (datos inventados).
+  const skillFile = { nombre: 'Marca Demo S.A.', estado: 'por confirmar', guia: 'Reglas-de-estilo.md',
+    fuentes: { archivos: [{ familia: 'Montserrat', peso: 800, archivo: 'montserrat-800.woff2' }, { familia: 'Montserrat', peso: 700, archivo: 'montserrat-700.woff2' }],
+      texto: { familia: 'Montserrat', peso: 700 }, clave: { familia: 'Montserrat', peso: 800, ancho_car: 0.72 }, tarjeta: { familia: 'Montserrat' } },
+    colores: { texto: '#FFFFFF', acento: '#3BAEEA' }, subtitulos: { tam: 70, animacion: 'resaltado' }, tarjetas: { estilo: 'blanca', y: 300 },
+    notas: ['Borrador del manual de identidad.'] };
+  const ed = R.parseMarcaJson(skillFile, { fileName: 'demo.json' });
+  assert.equal(ed.status, 'por confirmar'); assert.equal(ed.fonts.texto, 'Montserrat'); assert.equal(ed.fontWeights.texto, '700');
+  const brand = { name: 'Demo' };
+  // Sin cambios: el archivo sale igual (salvo las notas propias, que siguen siendo lista).
+  const same = R.buildMarcaJson({ brand, config: { visual: { edit: ed } } });
+  assert.equal(same.estado, 'por confirmar'); assert.equal(same.nombre, 'Marca Demo S.A.'); assert.equal(same.guia, 'Reglas-de-estilo.md');
+  assert.deepEqual(same.fuentes, skillFile.fuentes); assert.deepEqual(same.notas, skillFile.notas);
+  assert.equal(R.guideFileName(brand, { visual: { edit: ed } }), 'Reglas-de-estilo.md');
+  // Cambiar la clave a Anton: nuevo archivo anton-400.woff2 y su ancho de letra; se conservan los de Montserrat.
+  const out = R.buildMarcaJson({ brand, config: { visual: { edit: { ...ed, status: 'definida', fonts: { ...ed.fonts, clave: 'Anton' }, fontWeights: { ...ed.fontWeights, clave: '' } } } } });
+  assert.equal(out.estado, 'definida');
+  assert.deepEqual(out.fuentes.clave, { familia: 'Anton', ancho_car: 0.47 });
+  assert.deepEqual(out.fuentes.texto, { familia: 'Montserrat', peso: 700 });
+  assert.ok(out.fuentes.archivos.some((a) => a.archivo === 'anton-400.woff2' && a.peso === 400));
+  assert.equal(out.fuentes.archivos.filter((a) => a.familia === 'Montserrat').length, 2);
+  // Marca nueva: fuentes como objetos con peso y archivo con la convención de la skill.
+  const nueva = R.buildMarcaJson({ brand: { name: 'Nueva' }, config: { visual: { edit: { fonts: { texto: 'Outfit' }, fontWeights: { texto: '600' } } } } });
+  assert.deepEqual(nueva.fuentes.texto, { familia: 'Outfit', peso: 600 });
+  assert.deepEqual(nueva.fuentes.archivos, [{ familia: 'Outfit', peso: 600, archivo: 'outfit-600.woff2' }]);
+  assert.equal(nueva.estado, 'por confirmar');
+});
+
+test('marca para la skill: no nombra una guía que la skill no tiene', async () => {
+  const R = await import('../js/services/reels.js');
+  const ed = R.parseMarcaJson({ nombre: 'Sin guía', estado: 'pendiente', notas: ['No inventes colores.'] });
+  const out = R.buildMarcaJson({ brand: { name: 'Sin guía' }, config: { visual: { edit: ed } } });
+  assert.equal(out.guia, undefined); assert.equal(out.estado, 'pendiente'); assert.deepEqual(out.notas, ['No inventes colores.']);
+  assert.equal(R.buildMarcaJson({ brand: { name: 'Sin guía' }, config: { visual: { edit: { ...ed, guideLinked: true } } } }).guia, 'Reglas-de-estilo-Sin-guia.md');
+});
+
+test('encargo de edición: archivos del reel, tomas y mensaje para Claude Code', async () => {
+  const R = await import('../js/services/reels.js');
+  const idea = { id: 'CNT-ab12-cd34', title: 'Café: ¿quemado? / italiana', platforms: ['tiktok'], keyword: 'cafetera italiana', productionType: 'cabeza' };
+  const script = { productionType: 'cabeza', graphics: 'pocos', promise: 'Sabrás por qué', hook: { narrado: 'Si tu café sale así', textual: '¿Café quemado?', visual: 'Chorro oscuro' },
+    sections: [{ beat: 'Problema', voice: 'Hay tres errores | comunes.', onScreenText: '3 errores', resource: { type: 'lista', what: 'A · B · C', anchor: 'tres errores' } }, { voice: 'En Jalisco pasa mucho.', resource: { type: 'escena-mapa', what: 'Jalisco', anchor: 'Jalisco' } }],
+    cta: { text: 'Guárdalo' }, verify: [{ claim: 'tres errores', reason: 'fuente' }] };
+  const brand = { name: 'Lumbre' }; const config = { visual: { edit: { file: 'lumbre', music: 'lofi', corrections: 'Lunbre = Lumbre' } } };
+  assert.equal(R.reelFolderName(idea, new Date(2026, 10, 23)), '2026-11-23 · Café ¿quemado italiana');
+  const opts = R.defaultVideoOpts({ idea, script });
+  assert.equal(opts.scenes, 'algunas'); assert.equal(opts.platform, 'tiktok');
+  const p = R.buildProyecto({ idea, brand, config, opts, take: 'CNT-ab12-cd34 toma1.mov' });
+  assert.equal(p.marca, 'lumbre'); assert.equal(p.tipo, 'cabeza parlante'); assert.equal(p.flotantes, 3); assert.equal(p.pantalla, 1);
+  assert.equal(p.musica, 'lofi'); assert.equal(p.contenido, idea.id); assert.equal(p.content_studio.skill, 'editar-reels-claude');
+  const anim = R.buildProyecto({ idea, brand, config, opts: { ...opts, production: 'animado', voice: 'clonada' }, durationSec: 60 });
+  assert.equal(anim.content_studio.skill, 'animar-reels-claude'); assert.equal(anim.tipo, 'animacion'); assert.equal(anim.voz, 'clonada'); assert.equal(anim.formato, 'medio');
+  assert.equal(R.buildProyecto({ idea, brand, config, opts: { ...opts, production: 'producto' } }).tipo, 'voz en off + imagenes de producto');
+  assert.equal(R.animFormat(40), 'corto'); assert.equal(R.animFormat(90), 'largo'); assert.equal(R.animFormat(110), 'extendido');
+  const md = R.buildGuionMd({ idea, brand, script });
+  assert.match(md, /Si tu café sale así/); assert.match(md, /Hay tres errores \/ comunes/); assert.match(md, /Verificar antes de publicar/);
+  const prop = R.buildPropuestaMd({ script, opts });
+  assert.match(prop, /\| 1 \| «tres errores» \| A · B · C \| lista \|/); assert.match(prop, /escena · mapa/); assert.match(prop, /3 flotantes y 1 a pantalla completa/);
+  assert.equal(R.buildVocab({ idea, brand, config }), 'Lumbre, cafetera italiana\n');
+  assert.equal(R.takeName(idea.id, 2, '.MOV'), 'CNT-ab12-cd34 toma2.mov');
+  const files = [{ kind: 'file', name: 'CNT-ab12-cd34 toma1.mov' }, { kind: 'file', name: 'CNT-zz toma1.mov' }, { kind: 'file', name: 'otra.mov' }];
+  assert.deepEqual(R.takesOf(idea.id, files).map((f) => f.name), ['CNT-ab12-cd34 toma1.mov']);
+  assert.equal(R.finalOf([{ kind: 'file', name: 'preview.mp4' }, { kind: 'file', name: 'FINAL - Café.mp4' }]).name, 'FINAL - Café.mp4');
+  const msg = R.editMessage({ folderName: '2026-11-23 · Café', opts, take: 'CNT-ab12-cd34 toma1.mov' });
+  assert.equal(msg, 'Usa la skill editar-reels-claude con el reel «Reels/2026-11-23 · Café» (encargo de Content Studio). La toma es «Tomas/CNT-ab12-cd34 toma1.mov».');
+  assert.equal(R.spokenFromPlan({ subtitulos: [{ frase: 'No tienes que | abrir *editor*' }, { palabras: [{ w: 'de' }, { w: 'vídeos' }] }] }), 'No tienes que abrir editor de vídeos');
+});
+
+test('modo grabación: guion segundo a segundo y lista de qué preparar', async () => {
+  const { timeline, prepList } = await import('../js/views/recording.js');
+  const script = { hook: { narrado: 'Si tu café sale así lo estás quemando', visual: 'Chorro oscuro' }, cta: { text: 'Guárdalo para tu próximo café', visual: 'Taza servida' },
+    sections: [{ beat: 'Error 1', voice: 'Primer error: apretar el café con la cuchara', visual: 'Cuchara aplastando', resource: { type: 'broll', what: 'café suelto' } }],
+    verify: [{ claim: '25 segundos', reason: 'medir' }] };
+  const { rows, total } = timeline(script, 120); // 2 palabras por segundo
+  assert.deepEqual(rows.map((r) => r.kind), ['hook', 'section', 'cta']);
+  assert.equal(rows[0].from, 0); assert.equal(rows[0].to, 4); assert.equal(rows[1].from, 4); assert.equal(total, rows.at(-1).to);
+  const prep = prepList(script, 'cabeza').map((p) => p.text);
+  assert.ok(prep.includes('Primer cuadro: Chorro oscuro'));
+  assert.ok(prep.some((t) => /Toma de apoyo: café suelto/.test(t)));
+  assert.ok(prep.some((t) => /Comprobar antes de grabar: 25 segundos/.test(t)));
+  assert.ok(prep.some((t) => /Luz de frente/.test(t)));
+  assert.ok(prepList(script, 'producto').some((p) => /Una toma por frase/.test(p.text)));
+});
+
+test('vía Claude: el pedido trae todo el contexto y la respuesta vuelve con el formato de la IA', async () => {
+  const C = await import('../js/services/claudecode.js');
+  const req = C.buildRequest({ task: 'guion', system: 'Eres guionista…', prompt: 'Devuelve JSON: {…}', json: true, grounding: false, maxTokens: 7000 });
+  assert.match(req.id, /^PED-\d{14}-[a-z0-9]{4}$/); assert.equal(req.salida, 'json'); assert.equal(req.system, 'Eres guionista…'); assert.equal(req.max_palabras, 4900);
+  const r = C.toResult({ id: req.id, json: { versions: [{ title: 'A' }] } }, { json: true });
+  assert.deepEqual(r.json, { versions: [{ title: 'A' }] }); assert.equal(r.provider, 'claude-code');
+  // También si el JSON viene como texto, o el texto con fuentes.
+  assert.deepEqual(C.toResult({ texto: '```json\n{"ideas": []}\n```' }, { json: true }).json, { ideas: [] });
+  const t = C.toResult({ texto: '# Investigación', fuentes: [{ titulo: 'OMS', url: 'https://who.int' }, 'https://x.org'] }, { json: false });
+  assert.equal(t.text, '# Investigación'); assert.deepEqual(t.sources.map((s) => s.uri), ['https://who.int', 'https://x.org']);
+  assert.throws(() => C.toResult({ error: 'falta la marca' }, { json: true }), /falta la marca/);
+  assert.throws(() => C.toResult({ texto: 'no es json' }, { json: true }), /formato inesperado/);
+});
+
+test('créditos del material de terceros (FUENTES.md) para los copies', async () => {
+  const { creditsFromSources } = await import('../js/services/reels.js');
+  const md = `# Fuentes y derechos\n\n## B1 · moka pot\n- Autor: Shokuiku Cuisine\n- Licencia: CC BY 3.0\n- URL: https://commons.wikimedia.org/x\n\n## A2 · coffee\n- Autor: Ana\n- Licencia: CC0\n\n## C3\n- Autor: Pepe Pérez\n- Licencia: CC BY-SA 4.0\n`;
+  assert.deepEqual(creditsFromSources(md), ['Shokuiku Cuisine (CC BY 3.0)', 'Pepe Pérez (CC BY-SA 4.0)']);
+  assert.deepEqual(creditsFromSources('| B1 | Autor: Mia | CC BY 4.0 |'), ['Mia (CC BY 4.0)']);
+  assert.deepEqual(creditsFromSources(''), []);
+});
+
+test('créditos: el formato real de FUENTES.md de la skill (lista con sublíneas)', async () => {
+  const { creditsFromSources } = await import('../js/services/reels.js');
+  const md = `# Fuentes del B-roll de bancos libres
+
+Revisa este archivo antes de publicar: algunas licencias piden atribución.
+- **B1** · moka pot stove · video · Wikimedia Commons
+  - Autor: Autora Uno
+  - Licencia: CC BY 3.0 · requiere atribución
+  - URL: https://commons.wikimedia.org/wiki/File:x.webm
+  - Archivo: trabajo/broll-banco/B1.mp4 (en el plan: \`assets/broll-B1.mp4\`)
+- **H4** · earth from space · video · NASA
+  - Autor: NASA
+  - Licencia: dominio público
+- **G2** · coffee · foto · Openverse
+  - Autor: Autor Dos
+  - Licencia: CC BY 2.0 · requiere atribución
+`;
+  assert.deepEqual(creditsFromSources(md), ['Autora Uno (CC BY 3.0)', 'Autor Dos (CC BY 2.0)']);
+});
+
+test('biblioteca de escenas: resumen para la IA y marca «de la biblioteca» en la propuesta', async () => {
+  const R = await import('../js/services/reels.js'); const P = await import('../js/services/prompts.js');
+  const lib = R.librarySummary([
+    { id: 'engranes-presion', json: { escena: { tipo: 'mecanismo', titulo: 'Soporta la presión' }, para: 'Explicar que algo aguanta', reel: '2026-11-18 · Kit' } },
+    { id: 'gancho-fugas', json: { id: 'gancho-fugas', marca: 'marca-x', sirve: 'pregunta de gancho sobre un problema', reel: '2026-11-18 · Kit', origen_id: 'e2', escena: { tipo: 'palabras', texto: '¿Fugas de *presión*?', variante: 'golpe' } } },
+    { id: 'roto', json: null },
+  ]);
+  assert.equal(lib.length, 2); assert.equal(lib[0].resource, 'escena-mecanismo'); assert.equal(lib[0].para, 'Explicar que algo aguanta'); assert.equal(lib[1].texto, '¿Fugas de presión?'); assert.equal(lib[1].para, 'pregunta de gancho sobre un problema'); assert.equal(lib[1].resource, 'escena-palabras'); assert.equal(lib[1].reel, '2026-11-18 · Kit');
+  assert.deepEqual(R.libraryDirs({ name: 'Afinazone' }, { visual: { edit: { file: 'afinazone', raw: { nombre: 'Afinazone' } } } }), ['afinazone', 'Afinazone']);
+  const brief = P.resourcesBrief('producto', 'pocos', lib);
+  assert.match(brief, /BIBLIOTECA DE LA MARCA/); assert.match(brief, /engranes-presion \[escena-mecanismo\]: Explicar que algo aguanta/);
+  assert.doesNotMatch(P.resourcesBrief('producto', 'pocos', []), /BIBLIOTECA/);
+  const prop = R.buildPropuestaMd({ script: { sections: [{ voice: 'Resiste el calor de la transmisión.', resource: { type: 'escena-mecanismo', what: 'biblioteca: engranes-presion · Resiste el calor', anchor: 'Resiste el calor' } }] }, opts: { graphics: 'pocos' } });
+  assert.match(prop, /escena · mecanismo \(de la biblioteca: engranes-presion\)/);
+});

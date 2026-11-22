@@ -3,7 +3,7 @@ import { app, go } from '../core/app.js';
 import { on } from '../core/events.js';
 import { icon, emptyState, toast, modal, renderFields, readFields, validateFields, withBusy, confirmDialog } from '../core/ui.js';
 import { esc, fmtDate, similarity } from '../core/utils.js';
-import { OBJECTIVES, PLATFORMS, CONTENT_TYPES, STRUCTURES, byId } from '../services/methodology.js';
+import { OBJECTIVES, PLATFORMS, CONTENT_TYPES, STRUCTURES, PRODUCTION_TYPES, byId } from '../services/methodology.js';
 import { PRIORITIES } from '../core/schema.js';
 import { pageHeader, brandTag, statusBadge, openIdeaModal, filterBar, aiGuard, requireBrandSelect, platformShort, priorityLabel } from './shared.js';
 import { setStatus, findSimilarIdeas } from '../services/workflow.js';
@@ -99,9 +99,13 @@ function openAiIdeas(after) {
             out.innerHTML = `<div class="divider-label">Propuestas · selecciona las que quieras añadir</div>
               <div class="stack">${results.map((r, i) => {
                 const sim = findSimilarIdeas(o.brandId, `${r.title} ${r.problem}`);
-                return `<label class="card card-b check" style="align-items:flex-start"><input type="checkbox" data-i="${i}" ${sim.length ? '' : 'checked'}><span><b>${esc(r.title)}</b>
-                  <span class="row xs muted" style="margin:4px 0">${esc(byId(OBJECTIVES, r.objective)?.name || r.objective || '')} · ${esc(byId(CONTENT_TYPES, r.contentType)?.name || '')} · ${esc(byId(STRUCTURES, r.format)?.name || r.format || '')}${r.experimental ? ' · <span class="tag">experimental</span>' : ''}</span>
-                  <span class="small">${esc(r.problem || '')}</span>${r.why ? `<span class="xs muted" style="display:block;margin-top:4px">Hipótesis: ${esc(r.why)}</span>` : ''}
+                return `<label class="card card-b check" style="align-items:flex-start"><input type="checkbox" data-i="${i}" ${sim.length ? '' : 'checked'}><span><span class="xs muted">${i + 1} de ${results.length} · ${i < results.length / 3 ? 'más segura' : i >= (results.length * 2) / 3 ? 'más arriesgada' : 'intermedia'}</span><br><b>${esc(r.title)}</b>
+                  <span class="row xs muted" style="margin:4px 0">${esc(byId(OBJECTIVES, r.objective)?.name || r.objective || '')} · ${esc(byId(CONTENT_TYPES, r.contentType)?.name || '')} · ${esc(byId(STRUCTURES, r.format)?.name || r.format || '')} · ${esc(byId(PRODUCTION_TYPES, r.productionType)?.name || '')}${r.experimental ? ' · <span class="tag">experimental</span>' : ''}</span>
+                  ${r.firstFrameText ? `<span class="first-frame"><b>${esc(r.firstFrameText)}</b>${r.firstFrameVisual ? `<span class="xs muted">${esc(r.firstFrameVisual)}</span>` : ''}</span>` : ''}
+                  <span class="small">${esc(r.problem || '')}</span>
+                  ${r.basedOn ? `<span class="xs" style="display:block;margin-top:4px">${icon('refresh', 'ic-sm')} Variante de «${esc(r.basedOn)}»${r.keepChange ? `: ${esc(r.keepChange)}` : ''}</span>` : ''}
+                  ${r.why ? `<span class="xs muted" style="display:block;margin-top:4px">Por qué: ${esc(r.why)}</span>` : ''}
+                  ${r.risk ? `<span class="xs" style="display:block;margin-top:2px;color:var(--warn)">Riesgo: ${esc(r.risk)}</span>` : ''}
                   ${sim.length ? `<span class="xs" style="display:block;color:var(--warn);margin-top:4px">${icon('alert', 'ic-sm')} Parecida a: ${sim.map((s) => esc(s.idea.title)).join('; ')}</span>` : ''}</span></label>`;
               }).join('')}</div>
               <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn btn-primary" data-add>${icon('plus')}Añadir seleccionadas</button></div>`;
@@ -112,7 +116,9 @@ function openAiIdeas(after) {
                   brandId: brandForResults, title: r.title, topic: r.topic || '', pillarId: r.pillarId || '', audience: r.audience || '', problem: r.problem || '', keyword: r.keyword || '',
                   objective: r.objective || '', funnel: r.funnel || '', contentType: r.contentType || '', format: byId(STRUCTURES, r.format) ? r.format : '',
                   platforms: o.platform ? [o.platform] : [], priority: 2, difficulty: r.difficulty || '', experimental: !!r.experimental, knowledgeLevel: 1,
-                  notes: [r.hookIdea && `Idea de hook: ${r.hookIdea}`, r.why && `Por qué (hipótesis IA): ${r.why}`].filter(Boolean).join('\n'), status: 'idea', source: 'ai', statusHistory: [],
+                  productionType: byId(PRODUCTION_TYPES, r.productionType) ? r.productionType : '',
+                  pitch: r.pitch || {},
+                  notes: [r.hookIdea && `Idea de hook: ${r.hookIdea}`, r.cta && `CTA: ${r.cta}`].filter(Boolean).join('\n'), status: 'idea', source: 'ai', statusHistory: [],
                 });
               }
               toast(`${picked.length} ideas añadidas`, 'success'); m.close(); after?.();
@@ -137,3 +143,4 @@ function showDuplicates(bId) {
   modal({ title: 'Ideas similares', size: 'lg', body: pairs.length ? `<p class="muted small">Similitud calculada localmente (palabras y fragmentos de texto). Revisa si son la misma idea o enfoques distintos.</p><div class="table-wrap"><table class="tbl"><thead><tr><th>Idea A</th><th>Idea B</th><th class="num">Similitud</th></tr></thead><tbody>${pairs.slice(0, 40).map((p) => `<tr><td><a href="#/contenido/${p.a.id}">${esc(p.a.title)}</a></td><td><a href="#/contenido/${p.b.id}">${esc(p.b.title)}</a></td><td class="num">${Math.round(p.s * 100)} %</td></tr>`).join('')}</tbody></table></div>` : emptyState('Sin duplicados', 'No se encontraron ideas demasiado parecidas.', '', 'check'), actions: [{ label: 'Cerrar' }] });
   document.querySelectorAll('.modal a').forEach((a) => a.addEventListener('click', () => document.querySelector('.modal-backdrop')?.remove()));
 }
+

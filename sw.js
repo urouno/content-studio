@@ -1,6 +1,6 @@
 // Service Worker: caché del "app shell" para funcionamiento sin conexión.
 // Cambia CACHE_VERSION en cada despliegue para que los clientes reciban la nueva versión.
-const CACHE_VERSION = 'cs-v202611220157';
+const CACHE_VERSION = 'cs-v202611222329';
 const SHELL = [
   './',
   './assets/icons/apple-touch-icon.png',
@@ -31,15 +31,22 @@ const SHELL = [
   './js/services/api.js',
   './js/services/assistant.js',
   './js/services/branddocs.js',
+  './js/services/claudecode.js',
   './js/services/demo.js',
+  './js/services/folder.js',
   './js/services/methodology.js',
+  './js/services/production.js',
   './js/services/prompts.js',
+  './js/services/reels.js',
   './js/services/scriptkit.js',
   './js/services/sync.js',
   './js/services/workflow.js',
+  './js/version.js',
   './js/views/brand-docs.js',
+  './js/views/brand-edit.js',
   './js/views/brands.js',
   './js/views/calendar.js',
+  './js/views/content-edit.js',
   './js/views/content-publish.js',
   './js/views/content-script.js',
   './js/views/content.js',
@@ -47,6 +54,7 @@ const SHELL = [
   './js/views/dashboard.js',
   './js/views/ideas.js',
   './js/views/method.js',
+  './js/views/recording.js',
   './js/views/results.js',
   './js/views/settings.js',
   './js/views/shared.js',

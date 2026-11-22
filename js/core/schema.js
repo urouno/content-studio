@@ -8,8 +8,9 @@ export const TABLES = {
   brandConfigs: { sheet: 'ConfigMarca', prefix: 'CFG', cols: ['voice', 'visual', 'strategy'], json: ['voice', 'visual', 'strategy'] },
   platforms: { sheet: 'Plataformas', prefix: 'PLT', cols: ['platform', 'goal', 'formats', 'durationTarget', 'frequencyPerWeek', 'ctas', 'active'], json: ['formats', 'ctas'] },
   pillars: { sheet: 'Pilares', prefix: 'PIL', cols: ['name', 'description', 'objective', 'share'] },
-  ideas: { sheet: 'Ideas', prefix: 'CNT', cols: ['title', 'topic', 'pillarId', 'audience', 'problem', 'keyword', 'objective', 'funnel', 'contentType', 'platforms', 'format', 'priority', 'status', 'difficulty', 'experimental', 'knowledgeLevel', 'owner', 'targetDate', 'references', 'notes', 'source', 'statusHistory'], json: ['platforms', 'statusHistory'] },
-  scripts: { sheet: 'Guiones', prefix: 'GUI', cols: ['ideaId', 'currentVersionId', 'approvedVersionId', 'locked', 'publishFilter'], json: ['publishFilter'] },
+  ideas: { sheet: 'Ideas', prefix: 'CNT', cols: ['title', 'topic', 'pillarId', 'audience', 'problem', 'keyword', 'objective', 'funnel', 'contentType', 'platforms', 'format', 'priority', 'status', 'difficulty', 'experimental', 'knowledgeLevel', 'owner', 'targetDate', 'references', 'notes', 'source', 'statusHistory', 'productionType', 'pitch'], json: ['platforms', 'statusHistory', 'pitch'] },
+  // reelFolder: carpeta del reel en «Reels con Claude/Reels/»; finalText: lo que se dijo de verdad (subtítulos de la skill).
+  scripts: { sheet: 'Guiones', prefix: 'GUI', cols: ['ideaId', 'currentVersionId', 'approvedVersionId', 'locked', 'publishFilter', 'reelFolder', 'finalText', 'editOpts', 'credits'], json: ['publishFilter', 'editOpts'] },
   scriptVersions: { sheet: 'VersionesGuion', prefix: 'VER', cols: ['scriptId', 'ideaId', 'versionNo', 'label', 'origin', 'data', 'evaluation'], json: ['data', 'evaluation'] },
   copies: { sheet: 'Copies', prefix: 'CPY', cols: ['ideaId', 'platform', 'title', 'caption', 'description', 'ctaText', 'hashtags', 'coverText', 'variant', 'status'], json: ['hashtags'] },
   calendar: { sheet: 'Calendario', prefix: 'CAL', cols: ['ideaId', 'platform', 'date', 'time', 'owner', 'status', 'notes'] },

@@ -31,7 +31,10 @@ export function makeEnv({ geminiResponder } = {}) {
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (s) => ({ text: s, setMimeType() { return this; } }) },
     Utilities: { getUuid: () => crypto.randomUUID(), sleep() {}, DigestAlgorithm: { SHA_256: 'sha256' }, computeDigest: (_a, s) => [...crypto.createHash('sha256').update(s).digest()].map((b) => (b > 127 ? b - 256 : b)), formatDate: (d) => d.toISOString().slice(0, 10) },
     CacheService: { getScriptCache: () => ({ get: (k) => cache.get(k) || null, put: (k, v) => cache.set(k, v) }) },
-    UrlFetchApp: { fetch: (url, opts) => { fetchCalls.push({ url, opts }); const r = geminiResponder ? geminiResponder(url, opts) : { code: 200, body: { candidates: [] } }; return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) }; } },
+    UrlFetchApp: {
+      fetch: (url, opts) => { fetchCalls.push({ url, opts }); const r = geminiResponder ? geminiResponder(url, opts) : { code: 200, body: { candidates: [] } }; return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) }; },
+      fetchAll(reqs) { return reqs.map((q) => this.fetch(q.url, q)); },
+    },
   };
   vm.createContext(ctx);
   vm.runInContext(readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8'), ctx);

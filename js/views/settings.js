@@ -7,12 +7,16 @@ import { estimateStorage } from '../core/db.js';
 import { TABLES } from '../core/schema.js';
 import { call, isConfigured } from '../services/api.js';
 import { syncNow, fullPull, syncState, resolveConflict } from '../services/sync.js';
-import { listModels, usageToday, generate, providerName } from '../services/ai.js';
+import { listModels, usageToday, generate, AI_PROVIDERS, aiChain, modelFor, providerInfo } from '../services/ai.js';
 import { loadDemo } from '../services/demo.js';
+import * as F from '../services/folder.js';
+import { syncAll } from '../services/production.js';
+import { CC_TASKS, CC_MESSAGE, listRequests, discardRequest } from '../services/claudecode.js';
 import { pageHeader } from './shared.js';
+import { APP_VERSION } from '../version.js';
 
 const TABS = [
-  { id: 'conexion', label: 'Conexión y sync', icon: 'cloud' }, { id: 'ia', label: 'IA (Gemini / Claude)', icon: 'sparkle' },
+  { id: 'conexion', label: 'Conexión y sync', icon: 'cloud' }, { id: 'ia', label: 'IA (proveedores)', icon: 'sparkle' }, { id: 'carpeta', label: 'Carpeta de reels', icon: 'film' },
   { id: 'datos', label: 'Datos y copias', icon: 'download' }, { id: 'papelera', label: 'Papelera', icon: 'trash' },
   { id: 'conflictos', label: 'Conflictos', icon: 'alert' }, { id: 'apariencia', label: 'Apariencia', icon: 'eye' },
 ];
@@ -21,10 +25,10 @@ export function render(main, { params }) {
   let tab = TABS.some((t) => t.id === params[0]) ? params[0] : 'conexion';
   const draw = async () => {
     const nConf = (await conflicts.all()).length;
-    main.innerHTML = `${pageHeader({ title: 'Ajustes' })}${tabs(TABS.map((t) => ({ ...t, count: t.id === 'conflictos' ? nConf || null : t.id === 'papelera' ? store.trash().length || null : null })), tab)}<div class="settings-body"></div>`;
+    main.innerHTML = `${pageHeader({ title: 'Ajustes', sub: `Content Studio ${APP_VERSION}` })}${tabs(TABS.map((t) => ({ ...t, count: t.id === 'conflictos' ? nConf || null : t.id === 'papelera' ? store.trash().length || null : null })), tab)}<div class="settings-body"></div>`;
     main.querySelectorAll('[data-tab]').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; history.replaceState(null, '', `#/ajustes/${tab}`); draw(); }));
     const host = main.querySelector('.settings-body');
-    await ({ conexion, ia, datos, papelera, conflictos: conflictsTab, apariencia })[tab](host, draw);
+    await ({ conexion, ia, carpeta, datos, papelera, conflictos: conflictsTab, apariencia })[tab](host, draw);
   };
   draw();
   return on('sync', () => { if (tab === 'conexion') { const el = main.querySelector('[data-syncstate]'); if (el) el.innerHTML = syncInfo(); } });
@@ -56,7 +60,7 @@ function conexion(host) {
   };
   host.querySelector('[data-test]').onclick = (e) => withBusy(e.currentTarget, async () => {
     persist();
-    try { const r = await call('ping'); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>Conectado como ${esc(r.user?.name || 'usuario')} (${esc(r.user?.role || '')}).</b><p>Hoja: ${esc(r.spreadsheet || '')} · Gemini: ${r.gemini ? 'clave configurada' : 'sin clave'} · Claude: ${r.claude ? 'clave configurada' : 'sin clave'} · versión ${esc(r.version || '')}</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div><b>No se pudo conectar.</b><p>${esc(err.message)}</p></div></div>`; }
+    try { const r = await call('ping'); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>Conectado como ${esc(r.user?.name || 'usuario')} (${esc(r.user?.role || '')}).</b><p>Hoja: ${esc(r.spreadsheet || '')} · IA: ${r.providers ? (Object.entries(r.providers).filter(([, v]) => v).map(([k]) => esc(providerInfo(k).name)).join(', ') || 'sin claves') : `Gemini ${r.gemini ? 'sí' : 'no'}`} · versión ${esc(r.version || '')}</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div><b>No se pudo conectar.</b><p>${esc(err.message)}</p></div></div>`; }
   }, 'Probando…');
   host.querySelector('[data-sync]').onclick = (e) => withBusy(e.currentTarget, async () => { try { const r = await syncNow(); toast(`Enviados ${r.pushed}, recibidos ${r.pulled}${r.conflicts ? `, ${r.conflicts} conflictos` : ''}`, 'success'); } catch (err) { toast(err.message, 'error'); } }, 'Sincronizando…');
   host.querySelector('[data-pull]').onclick = async (e) => { if (!(await confirmDialog({ title: 'Descarga completa', message: 'Se descargarán todos los registros de Sheets. Los cambios locales pendientes se envían primero y no se sobrescriben.', confirm: 'Descargar' }))) return; withBusy(e.target.closest('button'), async () => { try { const r = await fullPull(); toast(`Recibidos ${r.pulled} registros`, 'success'); } catch (err) { toast(err.message, 'error'); } }, 'Descargando…'); };
@@ -64,50 +68,96 @@ function conexion(host) {
 }
 
 function ia(host) {
-  const mode = settings.get('aiMode'); const prov = settings.get('aiProvider') || 'gemini'; const u = usageToday();
+  const mode = settings.get('aiMode'); const u = usageToday();
+  let chain = aiChain();
+  let configured = null; // proveedores con clave en Apps Script (se pregunta al servidor)
+  const models = { ...(settings.get('aiModels') || {}) };
+  AI_PROVIDERS.forEach((p) => { if (!models[p.id]) models[p.id] = modelFor(p.id); });
+
+  const rowsHtml = () => {
+    const order = [...chain, ...AI_PROVIDERS.map((p) => p.id).filter((id) => !chain.includes(id))];
+    return order.map((id) => {
+      const p = providerInfo(id); const on = chain.includes(id); const i = chain.indexOf(id);
+      const st = configured == null ? '' : configured[id] ? `<span class="badge ok">${icon('check', 'ic-sm')}clave configurada</span>` : '<span class="badge">sin clave</span>';
+      return `<div class="prov-row ${on ? '' : 'off'}" data-p="${id}">
+        <div class="row-between" style="gap:8px;flex-wrap:wrap">
+          <label class="check"><input type="checkbox" data-on ${on ? 'checked' : ''}><span><b>${on ? `${i + 1}. ` : ''}${esc(p.name)}</b>${p.paid ? ' <span class="badge warn">de pago</span>' : ' <span class="badge ok">gratis</span>'}${p.search ? ' <span class="badge">búsqueda web</span>' : ''} ${st}</span></label>
+          <div class="row" style="gap:4px">${on ? `<button class="icon-btn sm" data-up title="Subir" ${i === 0 ? 'disabled' : ''}>${icon('down', 'ic-sm rot180')}</button>` : ''}</div>
+        </div>
+        <p class="xs muted" style="margin:4px 0">${esc(p.note)}</p>
+        ${on ? `<div class="row" style="gap:6px"><input class="input input-sm mono" data-model value="${esc(models[id] || '')}" list="models-${id}" style="flex:1" aria-label="Modelo de ${esc(p.name)}"><button class="btn btn-sm" data-models>${icon('list', 'ic-sm')}Modelos</button><datalist id="models-${id}"></datalist></div>
+          <small class="hint">${id === 'gemini' || id === 'claude' ? 'Modelo concreto.' : '<code>auto</code> = el mejor disponible en tu cuenta.'}</small>` : ''}
+      </div>`;
+    }).join('');
+  };
+
   host.innerHTML = `<div class="split"><section class="card"><div class="card-h"><h3>Inteligencia artificial</h3></div><div class="card-b stack">
-    <div class="field"><span>Proveedor</span>
-      <label class="check"><input type="radio" name="prov" value="gemini" ${prov === 'gemini' ? 'checked' : ''}><span><b>Gemini (Google AI Studio)</b>: tiene nivel gratuito con límites diarios; puede saturarse en horas de mucho uso.</span></label>
-      <label class="check"><input type="radio" name="prov" value="claude" ${prov === 'claude' ? 'checked' : ''}><span><b>Claude (API de Anthropic)</b>: de pago por uso, con crédito propio en platform.claude.com. <b>La suscripción Claude Pro no incluye la API.</b></span></label></div>
     <div class="field"><span>Modo de conexión</span>
-      <label class="check"><input type="radio" name="mode" value="proxy" ${mode === 'proxy' ? 'checked' : ''}><span><b>Seguro (recomendado):</b> a través de Apps Script. La clave se guarda en las propiedades del script y nunca llega al navegador.</span></label>
+      <label class="check"><input type="radio" name="mode" value="proxy" ${mode === 'proxy' ? 'checked' : ''}><span><b>Seguro (recomendado):</b> a través de Apps Script. Las claves se guardan en las propiedades del script y nunca llegan al navegador.</span></label>
       <label class="check"><input type="radio" name="mode" value="direct" ${mode === 'direct' ? 'checked' : ''}><span><b>Directo (solo pruebas locales, solo Gemini):</b> la clave se guarda en esta pestaña y se envía desde el navegador.</span></label>
       <label class="check"><input type="radio" name="mode" value="off" ${mode === 'off' ? 'checked' : ''}><span><b>Desactivada:</b> la app funciona sin IA.</span></label></div>
     <label class="field" ${mode === 'direct' ? '' : 'hidden'} data-keyf><span>API Key de Gemini (se borra al cerrar el navegador)</span><input class="input mono" type="password" data-key value="${esc(settings.getDirectKey())}" autocomplete="off"></label>
-    <div class="form-grid">
-      <label class="field" data-gem ${prov === 'gemini' ? '' : 'hidden'}><span>Modelo de Gemini</span><input class="input mono" data-model value="${esc(settings.get('model'))}" list="models"><small class="hint">Por defecto <code>gemini-flash-latest</code>. Si aparece "no disponible temporalmente", pulsa "Cargar modelos" y prueba otro (por ejemplo, uno Flash-Lite).</small></label>
-      <label class="field" data-cla ${prov === 'claude' ? '' : 'hidden'}><span>Modelo de Claude</span>
-        <select class="input" data-modelc>${[['claude-opus-5-5', 'Claude Opus 5.5: la mejor calidad (≈ 4 $ / 20 $ por millón de tokens)'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5: más rápido y económico (≈ 2 $ / 10 $)'], ['claude-haiku-5-5', 'Claude Haiku 5.5: el más barato (≈ 0,10 $ / 0,50 $)']].map(([v, l]) => `<option value="${v}" ${settings.get('modelClaude') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <small class="hint">Precio por millón de tokens de entrada / salida. Generar un guion completo suele costar unos céntimos.</small></label>
-      <label class="field"><span>Límite local de solicitudes al día</span><input class="input" type="number" min="0" data-limit value="${settings.get('aiDailyLimit')}"><small class="hint">Protección adicional de cuota. 0 = sin límite local.</small></label>
-    </div><datalist id="models"></datalist>
-    <div class="row"><button class="btn btn-primary" data-save>${icon('check')}Guardar</button><button class="btn" data-models>${icon('list')}Cargar modelos</button><button class="btn btn-ai" data-test>${icon('sparkle')}Probar IA</button></div><div data-out></div>
+    <div class="field" data-chainf ${mode === 'proxy' ? '' : 'hidden'}><span>Proveedores, en orden</span>
+      <small class="hint">Se prueba el primero; si falla (cuota, saturación, sin clave), responde el siguiente. Para investigar se usan primero los que tienen búsqueda web.</small>
+      <div class="stack" data-rows style="gap:8px;margin-top:6px">${rowsHtml()}</div></div>
+    <label class="field"><span>Límite local de solicitudes al día</span><input class="input" type="number" min="0" data-limit value="${settings.get('aiDailyLimit')}"><small class="hint">Protección adicional de cuota. 0 = sin límite local.</small></label>
+    <div class="row"><button class="btn btn-primary" data-save>${icon('check')}Guardar</button><button class="btn btn-ai" data-test>${icon('sparkle')}Probar cada proveedor</button></div><div data-out></div>
   </div></section>
-  <aside class="stack-lg"><section class="card"><div class="card-h"><h3>Uso hoy (este dispositivo)</h3></div><div class="card-b stack small"><div class="row-between"><span>Solicitudes</span><b>${u.requests}</b></div><div class="row-between"><span>Tokens</span><b>${fmtNum(u.tokens)}</b></div></div></section>
-  <section class="card"><div class="card-b small stack"><b>Dónde va cada clave (en Apps Script → Configuración del proyecto → Propiedades del script)</b>
-    <div><code>GEMINI_API_KEY</code>: clave de aistudio.google.com</div><div><code>ANTHROPIC_API_KEY</code>: clave de platform.claude.com</div>
-    <p class="xs muted" style="margin:0">Puedes tener las dos y cambiar de proveedor cuando quieras.</p></div></section></aside></div>`;
-  const sync = () => {
-    const p = host.querySelector('[name="prov"]:checked').value; const m = host.querySelector('[name="mode"]:checked').value;
-    host.querySelector('[data-gem]').hidden = p !== 'gemini'; host.querySelector('[data-cla]').hidden = p !== 'claude';
-    host.querySelector('[data-keyf]').hidden = !(m === 'direct' && p === 'gemini');
-  };
-  host.querySelectorAll('[name="mode"], [name="prov"]').forEach((r) => r.addEventListener('change', sync));
+  <aside class="stack-lg"><section class="card"><div class="card-h"><h3>Uso hoy (este dispositivo)</h3></div><div class="card-b stack small"><div class="row-between"><span>Solicitudes</span><b>${u.requests}</b></div><div class="row-between"><span>Tokens</span><b>${fmtNum(u.tokens)}</b></div>
+    ${Object.entries(u.byProvider || {}).map(([p, n]) => `<div class="row-between xs muted"><span>${esc(providerInfo(p).name)}</span><span>${n}</span></div>`).join('')}</div></section>
+  <section class="card"><div class="card-b small stack"><b>Dónde va cada clave</b>
+    <p class="xs muted" style="margin:0">En Apps Script → Configuración del proyecto → Propiedades del script. Nunca en la app ni en el repositorio.</p>
+    ${AI_PROVIDERS.map((p) => `<div><code>${p.key}</code>: ${esc(p.where)}</div>`).join('')}
+    <p class="xs muted" style="margin:0">Después de añadir una clave no hace falta volver a implementar el Web App.</p></div></section></aside></div>`;
+
+  const rows = host.querySelector('[data-rows]');
+  const redrawRows = () => { readModels(); rows.innerHTML = rowsHtml(); };
+  const readModels = () => rows.querySelectorAll('[data-p]').forEach((r) => { const inp = r.querySelector('[data-model]'); if (inp) models[r.dataset.p] = inp.value.trim(); });
+  rows.addEventListener('change', (e) => {
+    const r = e.target.closest('[data-p]'); if (!r || e.target.dataset.on == null) return;
+    const id = r.dataset.p;
+    if (e.target.checked) chain = [...chain, id]; else if (chain.length > 1) chain = chain.filter((x) => x !== id); else { e.target.checked = true; toast('Deja al menos un proveedor activo.', 'error'); return; }
+    redrawRows();
+  });
+  rows.addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); const r = e.target.closest('[data-p]'); if (!b || !r) return;
+    const id = r.dataset.p;
+    if (b.dataset.up != null) { const i = chain.indexOf(id); if (i > 0) { chain = [...chain]; [chain[i - 1], chain[i]] = [chain[i], chain[i - 1]]; redrawRows(); } }
+    if (b.dataset.models != null) withBusy(b, async () => {
+      persist();
+      try { const ms = await listModels(id); r.querySelector('datalist').innerHTML = (id === 'gemini' || id === 'claude' ? '' : '<option value="auto">auto</option>') + ms.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join(''); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>${esc(providerInfo(id).name)}: ${ms.length} modelos.</b><p class="xs">${ms.slice(0, 30).map((m) => esc(m.id)).join(', ')}</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div>${esc(err.message)}</div></div>`; }
+    }, '…');
+  });
+  const sync = () => { const m = host.querySelector('[name="mode"]:checked').value; host.querySelector('[data-keyf]').hidden = m !== 'direct'; host.querySelector('[data-chainf]').hidden = m !== 'proxy'; };
+  host.querySelectorAll('[name="mode"]').forEach((r) => r.addEventListener('change', sync));
   const persist = () => {
-    const m = host.querySelector('[name="mode"]:checked').value; const p = host.querySelector('[name="prov"]:checked').value;
-    settings.set({ aiMode: m, aiProvider: p, model: host.querySelector('[data-model]').value.trim() || 'gemini-flash-latest', modelClaude: host.querySelector('[data-modelc]').value, aiDailyLimit: Number(host.querySelector('[data-limit]').value) || 0 });
+    readModels();
+    const m = host.querySelector('[name="mode"]:checked').value;
+    settings.set({ aiMode: m, aiChain: chain, aiModels: { ...models }, aiDailyLimit: Number(host.querySelector('[data-limit]').value) || 0 });
     settings.setDirectKey(m === 'direct' ? host.querySelector('[data-key]').value.trim() : '');
   };
   const out = host.querySelector('[data-out]');
   host.querySelector('[data-save]').onclick = () => { persist(); toast('Ajustes de IA guardados', 'success'); };
-  host.querySelector('[data-models]').onclick = (e) => withBusy(e.currentTarget, async () => {
-    persist();
-    try { const ms = await listModels(); host.querySelector('#models').innerHTML = ms.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join(''); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>${ms.length} modelos disponibles.</b><p class="xs">${ms.slice(0, 40).map((m) => esc(m.id)).join(', ')}</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div>${esc(err.message)}</div></div>`; }
-  }, 'Cargando…');
   host.querySelector('[data-test]').onclick = (e) => withBusy(e.currentTarget, async () => {
     persist();
-    try { const r = await generate({ prompt: 'Responde solo con JSON {"ok": true, "saludo": "<saludo breve en español>"}', json: true, temperature: 0, maxTokens: 300 }); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>${esc(providerName())} responde correctamente.</b><p>${esc(r.json?.saludo || '')} · ${r.usage?.totalTokenCount || 0} tokens</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div>${esc(err.message)}</div></div>`; }
+    const list = settings.get('aiMode') === 'direct' ? ['gemini'] : chain;
+    out.innerHTML = '';
+    const lines = [];
+    for (const id of list) {
+      const t0 = performance.now();
+      try {
+        const r = await generate({ prompt: 'Responde solo con JSON {"ok": true, "saludo": "<saludo breve en español>"}', json: true, temperature: 0, maxTokens: 300, only: id });
+        lines.push(`<tr><td>${icon('check', 'ic-sm')} <b>${esc(providerInfo(id).name)}</b></td><td class="mono xs">${esc(r.model || '')}</td><td class="num">${((performance.now() - t0) / 1000).toFixed(1)} s</td><td class="small">${esc(r.json?.saludo || 'ok')}</td></tr>`);
+      } catch (err) {
+        lines.push(`<tr><td>${icon('x', 'ic-sm')} <b>${esc(providerInfo(id).name)}</b></td><td colspan="3" class="small" style="color:var(--danger)">${esc(err.message)}</td></tr>`);
+      }
+      out.innerHTML = `<div class="table-wrap"><table class="tbl"><thead><tr><th>Proveedor</th><th>Modelo</th><th class="num">Tiempo</th><th>Respuesta</th></tr></thead><tbody>${lines.join('')}</tbody></table></div>`;
+    }
   }, 'Probando…');
+
+  // Qué proveedores tienen clave en Apps Script.
+  if (mode === 'proxy' && isConfigured()) call('ping').then((r) => { if (r.providers) { configured = r.providers; redrawRows(); } }).catch(() => {});
+  claudeCodeCard(host);
 }
 
 async function datos(host, redraw) {
@@ -170,3 +220,69 @@ function apariencia(host) {
 }
 
 export { modal };
+
+// ---------- Carpeta de reels (skill editar-reels-claude) ----------
+async function carpeta(host, redraw) {
+  const fs = await F.folderState();
+  const chk = fs.connected && fs.granted ? await F.checkStructure().catch(() => null) : null;
+  const row = (ok, label) => `<div class="row-between"><span>${label}</span><b style="color:var(${ok ? '--ok' : '--warn'})">${ok ? 'sí' : 'no'}</b></div>`;
+  host.innerHTML = `<div class="split"><section class="card"><div class="card-h"><h3>${icon('film')}Carpeta «Reels con Claude»</h3></div><div class="card-b stack">
+    <p class="small">Es la carpeta de tu skill <code>editar-reels-claude</code> (normalmente <code>Escritorio/Claude Code/Videos Claude/Reels con Claude</code>). Conectada, la app:</p>
+    <ul class="small" style="margin:0">
+      <li>guarda el estilo de cada marca en <code>Mi estilo/marcas/</code> sin descargar archivos;</li>
+      <li>crea el encargo de cada video en <code>Reels/</code> y copia la toma a <code>Tomas/</code>;</li>
+      <li>marca sola «Grabado» y «Editado» al encontrar la toma y el <code>FINAL - ….mp4</code>, y te enseña el video.</li>
+    </ul>
+    ${!fs.supported ? `<div class="notice warn">${icon('alert')}<div><p><b>Este navegador no deja conectar carpetas.</b></p><ol class="small" style="margin:6px 0 0 18px;padding:0">
+        <li>En Brave, abre una pestaña nueva y escribe <code>brave://flags/#file-system-access-api</code>.</li><li>Cambia <b>File System Access API</b> a <b>Enabled</b>.</li><li>Pulsa <b>Relaunch</b> (se reinicia Brave) y vuelve aquí.</li></ol>
+        <p class="xs muted">También funciona en Chrome y Edge sin tocar nada. En el celular no está disponible: allí la app funciona igual, sin la carpeta.</p></div></div>`
+      : !fs.connected ? `<button class="btn btn-primary" data-connect>${icon('link')}Conectar carpeta</button><p class="xs muted" style="margin:0">Elige la carpeta «Reels con Claude» (la que contiene Mi estilo, Tomas y Reels) y acepta «Ver y editar».</p>`
+      : `<div class="row-between"><span>Carpeta</span><b>${esc(fs.name)}</b></div>
+        ${fs.granted ? '' : `<div class="notice">${icon('lock')}<div><p>El navegador pide permiso en cada sesión.</p><button class="btn btn-sm btn-primary" data-grant style="margin-top:6px">${icon('check', 'ic-sm')}Dar permiso</button></div></div>`}
+        ${chk ? `<div class="stack small">${row(chk.misEstilo, 'Mi estilo/')}${row(chk.marcas, 'Mi estilo/marcas/')}${row(chk.tomas, 'Tomas/')}${row(chk.reels, 'Reels/')}</div>
+          ${chk.nested ? `<div class="notice warn">${icon('alert')}<div><p>Dentro hay otra carpeta «Reels con Claude»: conecta esa.</p></div></div>` : !chk.tomas && !chk.reels ? `<div class="notice warn">${icon('alert')}<div><p>No parece la carpeta de la skill (no tiene Tomas/ ni Reels/). Las que faltan se crearán al usarlas.</p></div></div>` : ''}` : ''}
+        <div class="row"><button class="btn" data-connect>${icon('refresh', 'ic-sm')}Cambiar carpeta</button><button class="btn btn-ghost" data-disconnect>${icon('x', 'ic-sm')}Desconectar</button></div>`}
+  </div></section>
+  <aside class="stack-lg">${fs.connected && fs.granted ? `<section class="card"><div class="card-h"><h3>${icon('check')}Estados</h3></div><div class="card-b stack small">
+    <p class="xs muted" style="margin:0">Revisa todos los contenidos con guion aprobado: los que tengan toma pasan a «Grabado» y los que tengan video final, a «Editado».</p>
+    <button class="btn" data-sync>${icon('refresh', 'ic-sm')}Comprobar todos</button><div data-out class="small"></div></div></section>` : ''}</aside></div>`;
+  host.querySelectorAll('[data-connect]').forEach((b) => b.addEventListener('click', async () => { try { await F.connectFolder(); toast('Carpeta conectada', 'success'); redraw(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, 'error'); } }));
+  host.querySelector('[data-grant]')?.addEventListener('click', async () => { await F.getRoot({ ask: true }); redraw(); });
+  host.querySelector('[data-disconnect]')?.addEventListener('click', async () => { await F.disconnectFolder(); toast('Carpeta desconectada', 'success'); redraw(); });
+  host.querySelector('[data-sync]')?.addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
+    const r = await syncAll();
+    host.querySelector('[data-out]').innerHTML = r.length ? r.map((x) => `<div>${icon('check', 'ic-sm')} <a href="#/contenido/${x.idea.id}/edicion">${esc(x.idea.title)}</a> <span class="muted">→ ${esc(x.changed.join(', '))}</span></div>`).join('') : '<span class="muted">Sin cambios.</span>';
+  }, 'Comprobando…'));
+}
+
+// ---------- Vía Claude: tareas que resuelve Claude Code con tu plan ----------
+async function claudeCodeCard(host) {
+  const sec = document.createElement('section'); sec.className = 'card'; sec.style.marginTop = '16px';
+  host.append(sec);
+  const draw = async () => {
+    const fs = await F.folderState();
+    const on = settings.get('claudeCodeTasks') || [];
+    const reqs = fs.connected && fs.granted ? await listRequests().catch(() => []) : [];
+    sec.innerHTML = `<div class="card-h"><h3>${icon('sparkle')}Claude Code (tu plan de Claude)</h3><span class="xs muted">Sin pagar API</span></div><div class="card-b stack">
+      <p class="small" style="margin:0">Las tareas marcadas no van a los proveedores de arriba: la app deja el pedido en <code>Reels con Claude/Content Studio/pedidos/</code>, Claude Code lo resuelve en tu computadora con la skill <code>content-studio-claude</code> y la app carga la respuesta sola. Más calidad (y búsqueda web para investigar); necesita Claude Code abierto y comparte el límite de tu plan con la edición.</p>
+      ${!fs.supported || !fs.connected ? `<div class="notice warn">${icon('alert')}<div><p>Necesita la carpeta «Reels con Claude» conectada (pestaña <a href="#/ajustes/carpeta">Carpeta de reels</a>). Sin ella, todas las tareas van a los proveedores de arriba.</p></div></div>` : !fs.granted ? `<div class="notice">${icon('lock')}<div><p>Falta el permiso de la carpeta en esta sesión.</p><button class="btn btn-sm btn-primary" data-ccgrant style="margin-top:6px">Dar permiso</button></div></div>` : ''}
+      <div class="field"><span>Tareas que hace Claude Code</span><div class="chips">${CC_TASKS.map((t) => `<label class="chip-opt"><input type="checkbox" data-cctask="${t.id}" ${on.includes(t.id) ? 'checked' : ''}><span>${esc(t.name)}</span></label>`).join('')}</div>
+        <small class="hint">Recomendado: Ideas, Guiones y Documentos de marca. Lo rápido (hooks, copies) va mejor con los proveedores gratuitos.</small></div>
+      <div class="divider-label">Instalar la skill (una vez)</div>
+      <ol class="small" style="margin:0 0 0 18px;padding:0"><li>Descarga <b>SKILL.md</b>.</li><li>En la Terminal de tu Mac:<pre class="xs" style="white-space:pre-wrap;margin:4px 0">mkdir -p ~/.claude/skills/content-studio-claude && mv ~/Downloads/SKILL.md ~/.claude/skills/content-studio-claude/</pre></li><li>Abre una sesión nueva de Claude Code en «Reels con Claude».</li></ol>
+      <div class="row"><button class="btn btn-sm" data-ccskill>${icon('download', 'ic-sm')}Descargar SKILL.md</button><button class="btn btn-sm btn-ai" data-ccmsg>${icon('copy', 'ic-sm')}Copiar «atiende los pedidos»</button></div>
+      ${reqs.length ? `<div class="divider-label">Pedidos en la carpeta (${reqs.length})</div>${reqs.map((r) => `<div class="row-between small"><span>${esc(CC_TASKS.find((t) => t.id === r.task)?.name || r.task || 'Pedido')} <span class="xs muted">· ${esc(r.id)}${r.answered ? ' · respondido' : ' · esperando a Claude Code'}</span></span><button class="btn btn-sm btn-ghost" data-ccdrop="${esc(r.id)}">${icon('x', 'ic-sm')}Descartar</button></div>`).join('')}<p class="xs muted" style="margin:0">Mientras la pantalla que lo pidió siga abierta, la respuesta se carga sola. Descarta los que ya no necesites.</p>` : ''}
+    </div>`;
+    sec.querySelectorAll('[data-cctask]').forEach((cb) => cb.addEventListener('change', () => {
+      settings.set({ claudeCodeTasks: [...sec.querySelectorAll('[data-cctask]:checked')].map((x) => x.dataset.cctask) });
+      toast('Guardado', 'success', { timeout: 1200 });
+    }));
+    sec.querySelector('[data-ccgrant]')?.addEventListener('click', async () => { await F.getRoot({ ask: true }); draw(); });
+    sec.querySelector('[data-ccmsg]').addEventListener('click', async () => { await navigator.clipboard?.writeText(CC_MESSAGE); toast('Copiado: pégalo en Claude Code', 'success'); });
+    sec.querySelector('[data-ccskill]').addEventListener('click', async () => {
+      try { const r = await fetch('./claude-skills/content-studio-claude/SKILL.md', { cache: 'no-store' }); if (!r.ok) throw new Error(); download('SKILL.md', await r.text(), 'text/markdown'); } catch { toast('No se pudo descargar: está en claude-skills/content-studio-claude/SKILL.md del repositorio.', 'error'); }
+    });
+    sec.querySelectorAll('[data-ccdrop]').forEach((b) => b.addEventListener('click', async () => { await discardRequest(b.dataset.ccdrop); draw(); }));
+  };
+  draw();
+}

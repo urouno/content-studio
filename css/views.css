@@ -199,3 +199,47 @@ input[type="color"] { width: 38px; height: 32px; border: 1px solid var(--border-
   .docs-side { position: static; }
   .doc-edit.mode-split { grid-template-columns: 1fr; }
 }
+
+/* Ajustes → IA: proveedores en orden */
+.prov-row { border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3); background: var(--surface); }
+.prov-row.off { opacity: .65; }
+.ic.rot180 { transform: rotate(180deg); }
+.badge.ok { --bc: var(--ok); } .badge.warn { --bc: var(--warn); }
+/* Ideas: el primer cuadro propuesto, como una mini portada */
+.first-frame { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--text) 5%, transparent); border-radius: var(--r-sm); }
+/* Guion: recurso visual de cada sección */
+.sec-res { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.sec-res > label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.sec-res select { width: auto; max-width: 240px; }
+.sec-res.on { border-top-color: var(--accent); }
+/* Contenido → Edición: pasos en la carpeta */
+.row > .sev { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
+
+/* ---------- Modo grabación ---------- */
+.rec-tbl tr.hook td { background: var(--accent-soft); }
+.rec-tbl tr.cta td { background: color-mix(in srgb, var(--ok) 8%, transparent); }
+.frame916 { position: relative; aspect-ratio: 9 / 16; max-width: 260px; width: 100%; margin: 0 auto; border-radius: 14px; overflow: hidden; background: linear-gradient(160deg, #2a2f3a, #11141a); border: 1px solid var(--border-strong); }
+.frame916 .fz { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: rgba(255,255,255,.75); text-transform: uppercase; letter-spacing: .06em; }
+.frame916 .fz.top { top: 0; background: repeating-linear-gradient(45deg, rgba(239,68,68,.32) 0 6px, rgba(239,68,68,.18) 6px 12px); }
+.frame916 .fz.bottom { bottom: 0; background: repeating-linear-gradient(45deg, rgba(239,68,68,.32) 0 6px, rgba(239,68,68,.18) 6px 12px); }
+.frame916 .fz.right { left: auto; right: 0; background: rgba(239,68,68,.22); }
+.frame916 .fz.face { left: 18%; right: 18%; border: 1.5px dashed rgba(255,255,255,.55); border-radius: 50% 50% 45% 45%; }
+.frame916 .fz.subs { left: 10%; right: 13%; background: rgba(250,204,21,.18); border: 1px dashed rgba(250,204,21,.7); }
+.frame916 .ff-text { position: absolute; left: 8%; right: 16%; top: 13%; text-align: center; color: #fff; font-weight: 800; font-size: 17px; line-height: 1.1; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+
+/* Teleprompter a pantalla completa */
+body.prompter-on .topbar, body.prompter-on .bottomnav { display: none !important; }
+.prompter { position: fixed; inset: 0; z-index: 900; background: #000; color: #fff; display: flex; flex-direction: column; outline: none; }
+.prompter .pr-scroll { flex: 1; overflow-y: auto; scrollbar-width: none; cursor: pointer; }
+.prompter .pr-scroll::-webkit-scrollbar { display: none; }
+.prompter .pr-text { max-width: 900px; margin: 0 auto; padding: 0 24px; line-height: 1.35; font-weight: 600; }
+.prompter.mirror .pr-text { transform: scaleX(-1); }
+.prompter .pr-pad { height: 35vh; } .prompter .pr-pad:last-child { height: 70vh; }
+.prompter p { margin: 0 0 1.1em; }
+.prompter .pr-label { display: block; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #fbbf24; margin-bottom: 4px; }
+.prompter .pr-guide { position: absolute; left: 0; right: 0; top: 35vh; height: 0; border-top: 2px solid rgba(251,191,36,.55); pointer-events: none; }
+.prompter .pr-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: rgba(20,20,20,.92); border-top: 1px solid #333; }
+.prompter.playing .pr-bar { opacity: .25; transition: opacity .3s; } .prompter.playing .pr-bar:hover { opacity: 1; }
+.prompter .pr-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 40px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #444; background: #1c1c1c; color: #fff; font-size: 15px; text-decoration: none; }
+.prompter .pr-btn.main { background: #dc2626; border-color: #dc2626; font-weight: 700; }
+.prompter .pr-group { display: inline-flex; align-items: center; gap: 6px; color: #ddd; font-size: 13px; }

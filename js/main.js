@@ -13,6 +13,7 @@ import * as dashboard from './views/dashboard.js';
 import * as ideas from './views/ideas.js';
 import * as contents from './views/contents.js';
 import * as content from './views/content.js';
+import * as recording from './views/recording.js';
 import * as calendar from './views/calendar.js';
 import * as results from './views/results.js';
 import * as brands from './views/brands.js';
@@ -37,6 +38,7 @@ const ROUTES = [
   ...NAV,
   { path: '/metodo', view: method },
   { path: '/contenido', view: content },
+  { path: '/grabar', view: recording },
   { path: '/ajustes', view: settingsView },
 ];
 
@@ -192,7 +194,7 @@ async function boot() {
     try { const r = await syncNow(); if (!r.skipped) toast(`Sincronizado: ${r.pushed} enviados, ${r.pulled} recibidos${r.conflicts ? `, ${r.conflicts} conflictos` : ''}`, r.conflicts ? 'info' : 'success'); } catch (e) { toast(e.message, 'error'); }
   });
   on('sync', renderSyncPill); on('outbox', renderSyncPill);
-  on('toast', ({ msg, type }) => toast(msg, type));
+  on('toast', ({ msg, type, action, timeout }) => toast(msg, type, { action, ...(timeout ? { timeout } : {}) }));
   on('settings', () => applyTheme());
   window.addEventListener('online', updateOnline); window.addEventListener('offline', updateOnline);
   window.addEventListener('hashchange', route);

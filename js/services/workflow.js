@@ -32,7 +32,9 @@ export async function duplicateBrand(brandId) {
   const nb = await store.create('brands', { status: 'activa', ...rest, name: `${src.name} (copia)` });
   const cfg = brandConfig(brandId);
   const nc = await ensureBrandConfig(nb.id);
-  await store.update('brandConfigs', nc.id, { voice: clone(cfg.voice), visual: clone(cfg.visual), strategy: clone(cfg.strategy) }, { silent: true });
+  // El archivo de la skill es de cada marca: la copia empieza sin nombre de archivo propio.
+  const visual = clone(cfg.visual); if (visual.edit) visual.edit = { ...visual.edit, file: '' };
+  await store.update('brandConfigs', nc.id, { voice: clone(cfg.voice), visual, strategy: clone(cfg.strategy) }, { silent: true });
   const pillarMap = {};
   for (const t of ['brandDocs', 'platforms', 'pillars', 'hooks', 'ctas', 'assets']) {
     for (const r of store.all(t, { brandId })) {

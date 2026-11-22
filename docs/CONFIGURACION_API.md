@@ -1,4 +1,4 @@
-# Configuración de Google Sheets, Apps Script y Gemini
+# Configuración de Google Sheets, Apps Script y la IA
 
 Tiempo estimado: 15–20 minutos. Necesitas una cuenta de Google.
 
@@ -98,7 +98,36 @@ Si sospechas que una clave se ha filtrado, revócala en AI Studio y crea otra.
 
 ---
 
-## 3. Claude (API de Anthropic) como alternativa a Gemini
+## 3. Proveedores gratuitos de respaldo (Groq, OpenRouter, Cerebras) y DeepSeek
+
+El plan gratuito de Gemini se satura a menudo. La app puede usar **varios proveedores en orden**: si el primero falla
+(cuota, saturación o falta de clave), el servidor pasa solo al siguiente y la app te dice quién respondió.
+
+| Proveedor | Coste | Dónde se saca la clave | Propiedad del script |
+|---|---|---|---|
+| Groq | Gratis con límites | console.groq.com → API Keys → *Create API Key*. Empieza por `gsk_` (el `org_…` de la cuenta **no** es la clave) | `GROQ_API_KEY` |
+| OpenRouter | Gratis con límite diario (la app solo usa sus modelos gratuitos) | openrouter.ai → Keys → *Create Key*. Empieza por `sk-or-` | `OPENROUTER_API_KEY` |
+| Cerebras | Gratis con límites | cloud.cerebras.ai → API Keys | `CEREBRAS_API_KEY` |
+| DeepSeek | **De pago** con saldo prepagado (muy barato). El chat de deepseek.com es gratis; su API no | platform.deepseek.com → API Keys | `DEEPSEEK_API_KEY` |
+
+1. Crea la clave en la web del proveedor.
+2. En Apps Script: **Configuración del proyecto → Propiedades del script → Añadir propiedad**, con el nombre de la tabla
+   y la clave como valor. Guarda.
+3. Si actualizaste `Code.gs`, vuelve a implementar el Web App (**Implementar → Gestionar implementaciones → editar →
+   Nueva versión**). Para añadir solo una clave no hace falta.
+4. En la app: **Ajustes → IA**. Marca los proveedores, ordénalos con la flecha y pulsa **Probar cada proveedor**.
+   Con el modelo en `auto`, el servidor elige el mejor que tenga tu cuenta (lista guardada 6 horas).
+5. En el editor de Apps Script puedes ejecutar `diagnosticarIA` (o el menú *Content Studio → Probar todos los
+   proveedores de IA*) para ver cuál responde y en cuánto tiempo.
+
+**No compartas las claves** por chat ni las pegues en la app o en el repositorio: solo en las propiedades del script.
+Si una clave se ha visto en algún sitio, bórrala en la web del proveedor y crea otra.
+
+Orden recomendado: **Gemini** (el único gratuito con búsqueda de Google, para investigar) → **Groq** → **OpenRouter** →
+**Cerebras**. Para investigar, la app pone primero a los que tienen búsqueda web; los demás responden sin ella y la app
+lo avisa.
+
+## 4. Claude (API de Anthropic) como alternativa a Gemini
 
 > La suscripción **Claude Pro** (claude.ai) **no incluye acceso a la API**. La API se factura aparte, por uso, en la consola de desarrolladores.
 

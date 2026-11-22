@@ -145,6 +145,67 @@ export const CTA_FOR_OBJECTIVE = {
   conversion: ['venta', 'dm', 'info', 'web'],
 };
 
+// ---------- Producción y edición (skills editar-reels-claude y animar-reels-claude) ----------
+
+/** Cómo se produce el video. Decide qué skill lo edita y qué recursos visuales tienen sentido. */
+export const PRODUCTION_TYPES = [
+  { id: 'cabeza', name: 'Cabeza parlante', desc: 'Una persona habla a cámara. Se corta y se enriquece con gráficos, escenas y cámara.', skill: 'editar-reels-claude', record: true },
+  { id: 'producto', name: 'Producto con voz en off', desc: 'Tomas del producto sobre una voz grabada aparte.', skill: 'editar-reels-claude', record: true },
+  { id: 'animado', name: 'Video animado completo', desc: 'Sin grabación a cámara: escenas animadas cada 3-5 s sobre una voz (grabada, clonada o genérica).', skill: 'animar-reels-claude', record: false },
+];
+
+/** Cuántos gráficos lleva un video (los mismos presets que ofrece la skill de edición). Varía por video. */
+export const GRAPHICS_PRESETS = [
+  { id: 'sin', name: 'Sin gráficos', flotantes: 0, pantalla: 0 },
+  { id: 'pocos', name: 'Pocos (3 + 1)', flotantes: 3, pantalla: 1 },
+  { id: 'equilibrado', name: 'Equilibrado (5 + 2)', flotantes: 5, pantalla: 2 },
+  { id: 'muchos', name: 'Muchos (8 + 3)', flotantes: 8, pantalla: 3 },
+];
+
+/**
+ * Recursos visuales que la skill sabe hacer, con sus nombres reales. `kind`: flotante (sobre el video),
+ * pantalla (cubre el video 2-4 s), escena (animación de animar-reels-claude), camara, broll.
+ * `only`: tipos de producción donde tiene sentido. Gratis: todos salen de HyperFrames, three.js, mapas o tomas propias.
+ */
+export const RESOURCE_TYPES = [
+  { id: 'gancho', name: 'Gancho (titular 0-3 s)', kind: 'flotante', when: 'Primeros segundos: el texto del primer cuadro.' },
+  { id: 'tarjeta', name: 'Tarjeta', kind: 'flotante', when: 'Una idea o dato corto.' },
+  { id: 'lista', name: 'Lista', kind: 'flotante', when: 'La voz enumera (3 razones, 4 errores): un renglón al decir cada uno.' },
+  { id: 'contador', name: 'Contador', kind: 'flotante', when: 'Un número que la voz dice (precio, %, cantidad).' },
+  { id: 'subrayado', name: 'Subrayado', kind: 'flotante', when: 'Resaltar 1-4 palabras clave.' },
+  { id: 'cinetico', name: 'Texto cinético', kind: 'flotante', when: 'Frase central o remate, palabra a palabra.' },
+  { id: 'detras', name: 'Palabra detrás de la cabeza', kind: 'flotante', when: 'La palabra fuerte del video, gigante detrás de quien habla.', only: ['cabeza'] },
+  { id: 'chat', name: 'Chat', kind: 'flotante', when: 'Pregunta de un cliente y su respuesta.' },
+  { id: 'precio', name: 'Precio', kind: 'flotante', when: 'Precio u oferta que dice la voz.' },
+  { id: 'barras', name: 'Barras', kind: 'flotante', when: 'Comparar 2-4 cosas con barras que crecen.' },
+  { id: 'etiqueta', name: 'Etiqueta sobre el producto', kind: 'flotante', when: 'Nombrar una pieza que se ve.', only: ['producto', 'cabeza'] },
+  { id: 'pantalla', name: 'Pantalla de sección', kind: 'pantalla', when: 'Cambio de sección o idea fuerte.' },
+  { id: 'dato', name: 'Cifra gigante', kind: 'pantalla', when: 'La cifra del video, contando en grande.' },
+  { id: 'comparativa', name: 'Comparativa', kind: 'pantalla', when: 'La voz compara dos opciones y una gana.' },
+  { id: 'pasos', name: 'Pasos', kind: 'pantalla', when: 'Proceso de 2-6 pasos que se encienden al nombrarlos.' },
+  { id: 'escena-mapa', name: 'Escena: mapa con zoom', kind: 'escena', when: 'Se nombra un lugar. Hoy solo México y sus estados.' },
+  { id: 'escena-iconos', name: 'Escena: lista con íconos', kind: 'escena', when: 'Enumeración con íconos animados.' },
+  { id: 'escena-cifra', name: 'Escena: cifra animada', kind: 'escena', when: 'Número dicho por la voz.' },
+  { id: 'escena-comparar', name: 'Escena: comparar', kind: 'escena', when: 'Dos cosas frente a frente.' },
+  { id: 'escena-mecanismo', name: 'Escena: mecanismo', kind: 'escena', when: 'Cómo funciona algo: engranes o capas.' },
+  { id: 'escena-palabras', name: 'Escena: texto grande con palabra clave', kind: 'escena', when: 'Una frase fuerte o pregunta de gancho, a pantalla.' },
+  { id: 'escena-fondo', name: 'Escena: fondo animado con texto', kind: 'escena', when: 'Un texto corto sobre el fondo animado de la marca.' },
+  { id: 'escena-objeto', name: 'Escena: ícono que se transforma', kind: 'escena', when: 'Un objeto o concepto.' },
+  { id: 'escena-3d', name: 'Escena: pieza 3D', kind: 'escena', when: 'Idea física (un kit, una caja, un disco). Estilizada, no el producto real.' },
+  { id: 'escena-foto', name: 'Escena: foto en capas', kind: 'escena', when: 'Una foto propia con texto entre fondo y sujeto.' },
+  { id: 'broll', name: 'Toma de apoyo (B-roll)', kind: 'broll', when: 'Una toma propia o de un banco libre de lo que se nombra.' },
+  { id: 'camara', name: 'Movimiento de cámara', kind: 'camara', when: 'Acercamiento o corte a primer plano en una frase fuerte.', only: ['cabeza', 'producto'] },
+];
+export const resourcesFor = (production) => RESOURCE_TYPES.filter((r) => !r.only || !production || r.only.includes(production));
+
+/** El gancho de las 4 P (método de Sloth), en los primeros 3 segundos. */
+export const HOOK_4P = [
+  { id: 'promesa', name: 'Promesa', desc: 'Qué gana quien lo ve. Va de inmediato.' },
+  { id: 'prueba', name: 'Prueba', desc: 'Enseñar el resultado primero: algo real que la marca tiene.' },
+  { id: 'plan', name: 'Plan', desc: 'Cómo se va a conseguir (apenas un adelanto).' },
+  { id: 'persona', name: 'Persona', desc: 'A quién le habla, que se reconozca de inmediato.' },
+];
+
 export const EVAL_CRITERIA = [
   { id: 'hook', name: 'Claridad del hook' },
   { id: 'promesa', name: 'Fuerza de la promesa inicial' },
@@ -156,6 +217,9 @@ export const EVAL_CRITERIA = [
   { id: 'hook-contenido', name: 'Relación hook ↔ contenido' },
   { id: 'cta', name: 'Naturalidad del CTA' },
   { id: 'duracion', name: 'Duración' },
+  { id: 'empaque', name: 'Primer cuadro y gancho (4 P)' },
+  { id: 'recursos', name: 'Recursos visuales' },
+  { id: 'bucle', name: 'Final que empalma con el principio' },
 ];
 
 export const PUBLISH_FILTER = [
@@ -199,6 +263,15 @@ export const EVIDENCE_LEGEND = {
 export const byId = (list, id) => list.find((x) => x.id === id);
 
 // Bloque compacto que se inyecta en los prompts.
+/** Versión corta para tareas que no escriben un guion completo (hooks, CTA, copies, investigación, análisis). */
+export function methodologyShort() {
+  return [
+    'PRINCIPIOS:', ...PRINCIPLES.map((p) => '- ' + p),
+    'CAPAS DEL HOOK: narrado, visual, textual, auditivo. Deben decir lo mismo por canales distintos.',
+    'CTA: un solo CTA principal, conectado con el contenido y adecuado al objetivo.',
+  ].join('\n');
+}
+
 export function methodologyBrief() {
   return [
     'PRINCIPIOS:', ...PRINCIPLES.map((p) => '- ' + p),

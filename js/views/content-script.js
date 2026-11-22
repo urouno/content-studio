@@ -2,7 +2,7 @@
 import { store } from '../core/store.js';
 import { icon, toast, modal, renderFields, readFields, withBusy, confirmDialog, emptyState, setSaving } from '../core/ui.js';
 import { esc, clone, deepSet, debounce, copyText, download, fmtDateTime } from '../core/utils.js';
-import { STRUCTURES, HOOK_PATTERNS, CTA_TYPES, KNOWLEDGE_LEVELS, PLATFORMS, OBJECTIVES, CONTENT_TYPES, EVAL_CRITERIA, byId } from '../services/methodology.js';
+import { STRUCTURES, HOOK_PATTERNS, CTA_TYPES, KNOWLEDGE_LEVELS, PLATFORMS, OBJECTIVES, CONTENT_TYPES, EVAL_CRITERIA, PRODUCTION_TYPES, GRAPHICS_PRESETS, RESOURCE_TYPES, HOOK_4P, resourcesFor, byId } from '../services/methodology.js';
 import { scriptStats, localEvaluate, normalizeScript, scriptToText, spokenText } from '../services/scriptkit.js';
 import { addVersion, newBlankVersion, saveVersionData, approveVersion, unlockScript, scriptFor, versionsFor, brandConfig } from '../services/workflow.js';
 import { aiScripts, aiRewrite, aiEvaluate, aiHooks, aiCtas } from '../services/assistant.js';
@@ -56,6 +56,7 @@ export function render(host, b, ctx) {
           <div class="row">
             <select class="input input-sm" data-ver aria-label="Versión" style="width:auto">${versions.map((v) => `<option value="${v.id}" ${v.id === current.id ? 'selected' : ''}>v${v.versionNo} · ${esc(v.label)}${v.id === approved ? ' ✓ aprobada' : ''}</option>`).join('')}</select>
             <span class="tag">${st.words} palabras</span><span class="tag ${Math.abs(st.seconds - durationTarget) / durationTarget > 0.25 ? 'warn-tag' : ''}">≈ ${st.seconds} s / objetivo ${durationTarget} s</span>
+            <span class="tag" data-rescount title="Recursos visuales propuestos frente al tope del video">${resourceCount(draft)}</span>
             ${lk ? `<span class="badge" style="--bc:var(--ok)">${icon('lock', 'ic-sm')}Aprobada y bloqueada</span>` : ''}
           </div>
           <div class="row">
@@ -64,7 +65,7 @@ export function render(host, b, ctx) {
             <button class="btn btn-sm" data-compare ${versions.length < 2 ? 'disabled' : ''}>${icon('compare', 'ic-sm')}Comparar</button>
             <button class="btn btn-sm" data-export>${icon('download', 'ic-sm')}Texto</button>
             <a class="btn btn-sm btn-ghost" href="#/metodo" title="Guía de estructuras, hooks y CTA">${icon('book', 'ic-sm')}Método</a>
-            ${lk ? `<button class="btn btn-sm" data-unlock>${icon('unlock', 'ic-sm')}Desbloquear</button>` : `<button class="btn btn-sm btn-primary" data-approve>${icon('lock', 'ic-sm')}Aprobar versión</button>`}
+            ${lk ? `<a class="btn btn-sm btn-primary" href="#/grabar/${idea.id}">${icon('camera', 'ic-sm')}Modo grabación</a><button class="btn btn-sm" data-unlock>${icon('unlock', 'ic-sm')}Desbloquear</button>` : `<button class="btn btn-sm btn-primary" data-approve>${icon('lock', 'ic-sm')}Aprobar versión</button>`}
           </div></div></div>
 
         <section class="card"><div class="card-h"><h3>Planteamiento</h3></div><div class="card-b"><div class="form-grid cols-3" data-meta>
@@ -77,6 +78,8 @@ export function render(host, b, ctx) {
             { name: 'problem', label: 'Problema del espectador', type: 'textarea', rows: 2, span: 3 },
             { name: 'promise', label: 'Promesa de valor (qué obtiene al terminar)', type: 'textarea', rows: 2, span: 2 },
             { name: 'structureId', label: 'Estructura narrativa', type: 'select', options: STRUCTURES.map((o) => ({ value: o.id, label: o.name })) },
+            { name: 'productionType', label: 'Tipo de producción', type: 'select', options: PRODUCTION_TYPES.map((o) => ({ value: o.id, label: o.name })), empty: false },
+            { name: 'graphics', label: 'Cantidad de gráficos de este video', type: 'select', options: GRAPHICS_PRESETS.map((o) => ({ value: o.id, label: o.name })), empty: false },
           ], draft)}</div></div></section>
 
         <section class="card hook-card"><div class="card-h"><h3>${icon('target')}Hook principal</h3>
@@ -88,12 +91,15 @@ export function render(host, b, ctx) {
             <div class="field"><label>Auditivo</label><input class="input" data-p="hook.auditivo" value="${esc(draft.hook.auditivo)}" ${dis}></div>
             <div class="field"><label>Patrón</label><select class="input" data-p="hook.patternId" ${dis}><option value="">—</option>${HOOK_PATTERNS.map((h) => `<option value="${h.id}" ${h.id === draft.hook.patternId ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select></div>
           </div>
+          <details class="more-fields" ${Object.values(draft.hook.p4 || {}).some(Boolean) ? 'open' : ''}><summary>${icon('down', 'ic-sm')}Las 4 P del gancho (primeros 3 s)</summary><div class="form-grid">
+            ${HOOK_4P.map((p) => `<div class="field"><label>${esc(p.name)} <span class="xs muted">· ${esc(p.desc)}</span></label><input class="input input-sm" data-p="hook.p4.${p.id}" value="${esc(draft.hook.p4?.[p.id] || '')}" ${dis}></div>`).join('')}
+          </div></details>
           ${draft.hookAlternatives.length ? `<div class="divider-label">Hooks alternativos</div><div class="alts">${draft.hookAlternatives.map((h, i) => `<div class="alt"><div><b>${esc(h.narrado)}</b><div class="xs muted">${esc(byId(HOOK_PATTERNS, h.patternId)?.name || h.patternId || '')}${h.visual ? ` · Visual: ${esc(h.visual)}` : ''}${h.textual ? ` · Texto: ${esc(h.textual)}` : ''}</div></div>${lk ? '' : `<div class="row"><button class="btn btn-sm" data-swap="${i}" title="Usar como principal">Usar</button><button class="icon-btn sm" data-delalt="${i}" title="Quitar">${icon('x', 'ic-sm')}</button></div>`}</div>`).join('')}</div>` : ''}
           ${lk ? '' : `<button class="btn btn-sm btn-ghost" data-save-hook>${icon('plus', 'ic-sm')}Guardar hook en la biblioteca de la marca</button>`}
           </div></section>
 
         <section class="card"><div class="card-h"><h3>${icon('list')}Desarrollo</h3><span class="xs muted">Cada frase con una función. Marca los picos de interés (0–3): deben crecer hacia el final.</span></div>
-          <div class="card-b sections">${draft.sections.map((s, i) => sectionCard(s, i, draft.sections.length, lk)).join('')}
+          <div class="card-b sections">${draft.sections.map((s, i) => sectionCard(s, i, draft.sections.length, lk, draft.productionType)).join('')}
           ${lk ? '' : `<button class="btn btn-sm" data-addsec>${icon('plus', 'ic-sm')}Añadir sección</button>`}</div></section>
 
         <section class="card"><div class="card-h"><h3>${icon('send')}CTA</h3>${lk ? '' : `<button class="btn btn-sm" data-ai="ctas">${icon('sparkle', 'ic-sm')}Proponer CTA</button>`}</div><div class="card-b"><div class="form-grid cols-3">
@@ -173,7 +179,7 @@ export function render(host, b, ctx) {
     });
 
     // Edición de campos con data-p (rutas dentro del borrador)
-    const metaFields = ['title', 'objective', 'audience', 'knowledgeLevel', 'contentType', 'problem', 'promise', 'structureId'];
+    const metaFields = ['title', 'objective', 'audience', 'knowledgeLevel', 'contentType', 'problem', 'promise', 'structureId', 'productionType', 'graphics'];
     host.querySelector('[data-meta]').querySelectorAll('input,select,textarea').forEach((el) => { if (locked()) el.disabled = true; });
     if (host._bound) return;
     host._bound = true;
@@ -182,18 +188,23 @@ export function render(host, b, ctx) {
     function onInput(e) {
       const el = e.target;
       if (locked()) return;
-      if (el.closest('[data-meta]') && metaFields.includes(el.name)) { draft[el.name] = el.name === 'knowledgeLevel' ? Number(el.value) : el.value; }
+      if (el.closest('[data-meta]') && metaFields.includes(el.name)) {
+        draft[el.name] = el.name === 'knowledgeLevel' ? Number(el.value) : el.value;
+        // Cambia el catálogo de recursos de cada sección.
+        if (el.name === 'productionType' && e.type === 'change') { setSaving('dirty'); markSave(); draw(); return; }
+      }
       else if (el.dataset.p) { deepSet(draft, el.dataset.p, el.type === 'range' ? Number(el.value) : el.value); if (el.type === 'range') { const o = el.parentElement.querySelector('output'); if (o) o.textContent = el.value; } }
       else if (el.dataset.dur) { durationTarget = Number(el.value) || durationTarget; }
       else return;
       setSaving('dirty'); markSave(); drawLocal();
+      const rc = host.querySelector('[data-rescount]'); if (rc) rc.textContent = resourceCount(draft);
       const st = scriptStats(draft, wpm); const tags = host.querySelectorAll('.script-toolbar .tag');
       if (tags[0]) tags[0].textContent = `${st.words} palabras`; if (tags[1]) tags[1].textContent = `≈ ${st.seconds} s / objetivo ${durationTarget} s`;
     }
     host.addEventListener('click', async (e) => {
       const t = e.target.closest('button'); if (!t || locked()) return;
       const ds = t.dataset;
-      if (ds.addsec != null) { draft.sections.push({ act: 'nudo', beat: '', function: 'explicacion', voice: '', onScreenText: '', visual: '', edit: '', peak: 0 }); markSave(); draw(); }
+      if (ds.addsec != null) { draft.sections.push({ act: 'nudo', beat: '', function: 'explicacion', voice: '', onScreenText: '', visual: '', edit: '', peak: 0, resource: { type: '', what: '', anchor: '' } }); markSave(); draw(); }
       if (ds.delsec != null) { if (await confirmDialog({ title: 'Quitar sección', message: 'Puedes recuperarla desde el historial.', confirm: 'Quitar' })) { draft.sections.splice(Number(ds.delsec), 1); markSave(); draw(); } }
       if (ds.up != null) { const i = Number(ds.up); if (i > 0) { [draft.sections[i - 1], draft.sections[i]] = [draft.sections[i], draft.sections[i - 1]]; markSave(); draw(); } }
       if (ds.down != null) { const i = Number(ds.down); if (i < draft.sections.length - 1) { [draft.sections[i + 1], draft.sections[i]] = [draft.sections[i], draft.sections[i + 1]]; markSave(); draw(); } }
@@ -265,8 +276,24 @@ export function render(host, b, ctx) {
   return () => save.flush();
 }
 
-function sectionCard(s, i, n, lk) {
+/** «4 flotantes / 5 · 1 pantalla / 2 · 2 escenas»: lo propuesto frente al tope elegido para el video. */
+function resourceCount(d) {
+  const pr = byId(GRAPHICS_PRESETS, d.graphics) || GRAPHICS_PRESETS[2];
+  const kinds = d.sections.map((s) => byId(RESOURCE_TYPES, s.resource?.type)?.kind).filter(Boolean);
+  const n = (k) => kinds.filter((x) => x === k).length;
+  const parts = [`${n('flotante')}/${pr.flotantes} flotantes`, `${n('pantalla')}/${pr.pantalla} pantalla`];
+  if (n('escena')) parts.push(`${n('escena')} escenas`);
+  if (n('broll')) parts.push(`${n('broll')} B-roll`);
+  if (n('camara')) parts.push(`${n('camara')} cámara`);
+  return `Recursos: ${parts.join(' · ')}`;
+}
+
+function sectionCard(s, i, n, lk, production) {
   const dis = lk ? 'disabled' : '';
+  const r = s.resource || {};
+  const cat = resourcesFor(production);
+  if (r.type && !cat.some((c) => c.id === r.type)) cat.push(byId(RESOURCE_TYPES, r.type) || { id: r.type, name: r.type, kind: '' });
+  const kinds = [['flotante', 'Gráficos sobre el video'], ['pantalla', 'A pantalla completa'], ['escena', 'Escenas animadas'], ['broll', 'Tomas'], ['camara', 'Cámara'], ['', 'Otros']];
   return `<div class="sec" data-sec="${i}">
     <div class="sec-h"><span class="sec-n">${i + 1}</span>
       <select class="input input-sm" data-p="sections.${i}.act" ${dis} style="width:auto">${ACTS.map((a) => `<option value="${a.value}" ${a.value === s.act ? 'selected' : ''}>${a.label}</option>`).join('')}</select>
@@ -280,6 +307,12 @@ function sectionCard(s, i, n, lk) {
       <div class="field"><label>Texto en pantalla</label><input class="input input-sm" data-p="sections.${i}.onScreenText" value="${esc(s.onScreenText)}" ${dis}></div>
       <div class="field"><label>Visual / B-roll</label><input class="input input-sm" data-p="sections.${i}.visual" value="${esc(s.visual)}" ${dis}></div>
       <div class="field span-2"><label>Edición</label><input class="input input-sm" data-p="sections.${i}.edit" value="${esc(s.edit)}" ${dis}></div>
+    </div>
+    <div class="sec-res ${r.type ? 'on' : ''}">
+      <label class="xs muted">${icon('layers', 'ic-sm')}Recurso visual</label>
+      <select class="input input-sm" data-p="sections.${i}.resource.type" ${dis} title="${esc(byId(RESOURCE_TYPES, r.type)?.when || 'Lo que monta la skill de edición en esta sección')}"><option value="">Ninguno</option>${kinds.map(([k, label]) => { const opts = cat.filter((c) => (c.kind || '') === k); return opts.length ? `<optgroup label="${label}">${opts.map((c) => `<option value="${c.id}" ${c.id === r.type ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>
+      <input class="input input-sm" data-p="sections.${i}.resource.what" value="${esc(r.what)}" placeholder="Qué aparece (con las palabras de la voz)" ${dis} style="flex:2">
+      <input class="input input-sm" data-p="sections.${i}.resource.anchor" value="${esc(r.anchor)}" placeholder="Entra en la frase…" ${dis} style="flex:1">
     </div></div>`;
 }
 
@@ -298,13 +331,15 @@ function openGenerate(idea, ctx) {
     { name: 'platform', label: 'Plataforma', type: 'select', options: PLATFORMS.map((p) => ({ value: p.id, label: p.name })), empty: false },
     { name: 'durationSec', label: 'Duración objetivo (s)', type: 'number', min: 5, max: 600 },
     { name: 'versions', label: 'Versiones', type: 'select', cast: 'number', options: [1, 2, 3].map((n) => ({ value: n, label: String(n) })), empty: false },
+    { name: 'production', label: 'Tipo de producción', type: 'select', options: PRODUCTION_TYPES.map((p) => ({ value: p.id, label: p.name })), empty: false },
+    { name: 'graphics', label: 'Cantidad de gráficos', type: 'select', options: GRAPHICS_PRESETS.map((p) => ({ value: p.id, label: p.name })), empty: false, hint: 'Varía en cada video. La IA propone recursos sin pasarse del tope.' },
     { name: 'structureId', label: 'Estructura', type: 'select', options: STRUCTURES.map((s) => ({ value: s.id, label: s.name })), empty: 'Que la IA elija según el objetivo' },
     { name: 'knowledgeLevel', label: 'Nivel de conocimiento', type: 'select', cast: 'number', options: KNOWLEDGE_LEVELS.map((l) => ({ value: l.id, label: `${l.id} · ${l.name} — ${l.desc}` })), empty: false },
     { name: 'extra', label: 'Indicaciones adicionales (opcional)', type: 'textarea', rows: 2, span: 2 },
   ];
   const body = document.createElement('div');
   body.innerHTML = `<div class="notice" style="margin-bottom:12px">${icon('info')}<div><p>Se usa la metodología, la identidad de <b>${esc(store.get('brands', idea.brandId)?.name)}</b> (solo esta marca), la idea, las referencias registradas y los hooks recientes para evitar repeticiones.</p></div></div>
-    <form class="form-grid">${renderFields(fields, { platform: mainPlatform, durationSec: targetDuration(idea, mainPlatform), versions: 2, structureId: idea.format || '', knowledgeLevel: idea.knowledgeLevel ?? brandConfig(idea.brandId).voice.knowledgeLevel ?? 1 })}</form>`;
+    <form class="form-grid">${renderFields(fields, { platform: mainPlatform, durationSec: targetDuration(idea, mainPlatform), versions: 1, structureId: idea.format || '', knowledgeLevel: idea.knowledgeLevel ?? brandConfig(idea.brandId).voice.knowledgeLevel ?? 1, production: idea.productionType || 'cabeza', graphics: presetForDuration(targetDuration(idea, mainPlatform)) })}</form>`;
   const form = body.querySelector('form');
   form.querySelector('[name="platform"]').addEventListener('change', (e) => { form.querySelector('[name="durationSec"]').value = targetDuration(idea, e.target.value); });
   modal({ title: 'Generar guion con IA', body, size: 'md', actions: [
@@ -315,6 +350,8 @@ function openGenerate(idea, ctx) {
       await withBusy(w.querySelector('.btn-ai'), async () => {
         try {
           const list = await aiScripts(idea, o);
+          // El tipo de producción elegido queda en la idea si aún no tenía uno.
+          if (!idea.productionType && o.production) await store.update('ideas', idea.id, { productionType: o.production }, { silent: true });
           for (const [i, s] of list.entries()) await addVersion(store.get('ideas', idea.id), s, { origin: 'ai', label: `IA ${i + 1}/${list.length} · ${byId(STRUCTURES, s.structureId)?.name || 'estructura libre'}` });
           toast(`${list.length} versión(es) generadas`, 'success'); ok = true;
         } catch (e) { toast(e.message, 'error'); }
@@ -323,6 +360,9 @@ function openGenerate(idea, ctx) {
       return false;
     } }] });
 }
+
+/** Cantidad de gráficos sugerida según la duración (se puede cambiar en cada video). */
+export const presetForDuration = (sec) => (sec <= 25 ? 'pocos' : sec <= 60 ? 'equilibrado' : 'muchos');
 
 function openCompare(versions, aId, bId) {
   let a = aId; let b = bId || versions.find((v) => v.id !== aId)?.id;

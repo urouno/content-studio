@@ -11,10 +11,12 @@ import { aiResearch } from '../services/assistant.js';
 import { brandTag, statusBadge, ideaFields, aiGuard, renderIdeaForm } from './shared.js';
 import * as scriptTab from './content-script.js';
 import * as pubTab from './content-publish.js';
+import * as editTab from './content-edit.js';
 
 const TABS = [
   { id: 'estrategia', label: 'Estrategia', icon: 'target' },
   { id: 'guion', label: 'Guion', icon: 'edit' },
+  { id: 'edicion', label: 'Edición', icon: 'film' },
   { id: 'copies', label: 'Copies', icon: 'text' },
   { id: 'publicacion', label: 'Publicación', icon: 'send' },
   { id: 'resultados', label: 'Resultados', icon: 'chart' },
@@ -87,6 +89,7 @@ export function render(main, { params }) {
     switch (tab) {
       case 'estrategia': cleanupTab = strategyTab(host, b, ctx); break;
       case 'guion': cleanupTab = scriptTab.render(host, b, ctx); break;
+      case 'edicion': cleanupTab = editTab.render(host, b, ctx); break;
       case 'copies': cleanupTab = pubTab.renderCopies(host, b, ctx); break;
       case 'publicacion': cleanupTab = pubTab.renderPublishing(host, b, ctx); break;
       case 'resultados': cleanupTab = pubTab.renderResults(host, b, ctx); break;

@@ -57,3 +57,56 @@ La agencia de referencia recomienda trabajar **por rondas**: preparar unos 8 vid
 - `Enter` sobre una tarjeta del tablero la abre.
 - `Esc` cierra ventanas.
 - Doble clic en un día del calendario programa un contenido en esa fecha.
+
+
+## Edición con la skill de reels (Claude Code)
+
+Content Studio prepara el trabajo de las skills `editar-reels-claude` y `animar-reels-claude`, que corren en tu
+computadora con Claude Code. Plan completo en [PLAN_INTEGRACION_EDICION.md](PLAN_INTEGRACION_EDICION.md).
+
+1. **Conecta la carpeta** «Reels con Claude» en *Ajustes → Carpeta de reels* (Chrome, Edge o Brave con
+   `brave://flags/#file-system-access-api` activado). El navegador vuelve a pedir permiso en cada sesión.
+2. **Marca → Estilo de edición**: *Traer de Mi estilo/* la primera vez; después, *Guardar en Mi estilo/* cuando cambies
+   algo. Se conserva lo que la skill afinó (medidas, notas, «Aprendido en los reels»).
+3. **Contenido → Edición** (con el guion aprobado): elige las opciones del video y pulsa *Enviar a edición*. Crea
+   `Reels/<fecha · tema>/` con `proyecto.json`, `trabajo/guion-aprobado.md`, `trabajo/propuesta-graficos.md` y
+   `trabajo/vocab.txt`.
+4. **Añadir toma** copia tu grabación a `Tomas/` con el id del contenido delante: el contenido pasa a *Grabado*.
+5. **Copiar mensaje para Claude Code** y pégalo en Claude Code abierto en «Reels con Claude».
+6. Cuando la skill deje `FINAL - ….mp4`, la app lo encuentra (al abrir el contenido, con *Comprobar* o en *Ajustes →
+   Carpeta de reels → Comprobar todos*): pasa a *Editado*, enseña el video y los copies usan lo que se dijo de verdad.
+
+Sin carpeta conectada (por ejemplo, en el celular), *Descargar el encargo* baja los cuatro archivos para ponerlos a mano.
+
+## Modo grabación
+
+Con el guion aprobado, **Guion → Modo grabación** (o *Edición → Modo grabación*) abre `#/grabar/<id>`:
+
+- **Segundo a segundo:** el guion en tramos, con su segundo según las palabras por minuto de la marca (*Pilares y
+  estrategia*), lo que se dice, el texto en pantalla, lo que se ve y su recurso visual.
+- **Primer cuadro:** un encuadre 9:16 con las zonas que tapa la interfaz de la red (220 px arriba, 380 abajo y 140 a la
+  derecha, las de la skill), la franja de la cara y la de los subtítulos (la del archivo de la marca, si la tiene).
+- **Gancho:** con sus 4 P y las variantes del primer cuadro para grabarlas también.
+- **Qué preparar:** las tomas y objetos que pide el guion, los datos por comprobar y lo básico para grabar bien. Las
+  casillas se recuerdan en ese dispositivo.
+- **Teleprompter** (`#/grabar/<id>/teleprompter`): a pantalla completa, a la velocidad de la marca. Tocar el texto o la
+  barra espaciadora lo pausa; − y + cambian la velocidad, A− y A+ la letra; ⇋ lo pone en espejo para teleprompters con
+  cristal; la pantalla no se apaga mientras corre. Ábrelo en otro dispositivo (tableta, computadora) si grabas con el
+  celular.
+
+## Ideas y guiones con tu plan de Claude (Claude Code)
+
+En **Ajustes → IA → Claude Code** eliges qué tareas resuelve Claude Code en tu computadora en vez de los proveedores
+de la API (recomendado: ideas, guiones y documentos de marca). Necesita la carpeta «Reels con Claude» conectada.
+
+1. Instala una vez la skill: *Descargar SKILL.md* y en la Terminal
+   `mkdir -p ~/.claude/skills/content-studio-claude && mv ~/Downloads/SKILL.md ~/.claude/skills/content-studio-claude/`.
+   (Está en `claude-skills/content-studio-claude/SKILL.md` de este repositorio.)
+2. Usa la app como siempre (por ejemplo, *Generar ideas con IA*). La app deja el pedido en
+   `Content Studio/pedidos/` y te avisa.
+3. En Claude Code, abierto en «Reels con Claude», escribe **«Usa la skill content-studio-claude: atiende los pedidos de
+   Content Studio»** (o `/loop 1m usa la skill content-studio-claude` para que revise cada minuto).
+4. La respuesta aparece en la app en unos segundos, como si viniera de cualquier otra IA, y los archivos se borran.
+
+La app espera hasta 20 minutos con la pantalla abierta. Los pedidos que se queden en la carpeta se ven (y se descartan)
+en *Ajustes → IA*.

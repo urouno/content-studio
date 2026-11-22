@@ -99,3 +99,23 @@ export function tableForPrompt(rows) {
   });
   return lines.join('\n');
 }
+
+/**
+ * Los contenidos que mejor funcionaron en la marca, en una línea cada uno, para que la IA proponga variantes
+ * («conserva lo que funcionó y cambia una sola cosa»). Ordena por % visto y guardados frente a la mediana de la marca.
+ */
+export function topContents(brandId, n = 5) {
+  const rows = buildRows(brandId).filter((r) => r.m.views || r.m.avgPct != null);
+  if (rows.length < 3) return [];
+  const med = (k) => median(rows.map((r) => r.m[k]));
+  const mPct = med('avgPct'); const mSave = med('saveRate'); const mViews = med('views');
+  const rel = (v, m) => (v != null && m ? v / m : 1);
+  const score = (r) => rel(r.m.avgPct, mPct) + rel(r.m.saveRate, mSave) + 0.5 * rel(r.m.views, mViews);
+  const seen = new Set();
+  return rows.sort((a, b) => score(b) - score(a)).filter((r) => (seen.has(r.ideaId) ? false : seen.add(r.ideaId))).slice(0, n).map((r) => {
+    const script = store.find('scripts', (s) => s.ideaId === r.ideaId);
+    const hook = script && store.get('scriptVersions', script.approvedVersionId || script.currentVersionId)?.data?.hook?.narrado;
+    const parts = [r.m.views != null && `${Math.round(r.m.views).toLocaleString('es')} vistas`, r.m.avgPct != null && `${Math.round(r.m.avgPct * (r.m.avgPct <= 1 ? 100 : 1))} % visto`, r.m.saveRate != null && `${(r.m.saveRate * 100).toFixed(1)} % guardados`].filter(Boolean);
+    return `«${r.title}»${hook ? ` · gancho: «${hook}»` : ''} · ${r.dims.structure} · ${r.platform} · ${parts.join(', ')}`;
+  });
+}
