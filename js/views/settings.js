@@ -13,6 +13,7 @@ import * as F from '../services/folder.js';
 import { syncAll } from '../services/production.js';
 import { CC_TASKS, CC_MESSAGE, listRequests, discardRequest } from '../services/claudecode.js';
 import { pageHeader } from './shared.js';
+import { APP_VERSION } from '../version.js';
 
 const TABS = [
   { id: 'conexion', label: 'Conexión y sync', icon: 'cloud' }, { id: 'ia', label: 'IA (proveedores)', icon: 'sparkle' }, { id: 'carpeta', label: 'Carpeta de reels', icon: 'film' },
@@ -24,7 +25,7 @@ export function render(main, { params }) {
   let tab = TABS.some((t) => t.id === params[0]) ? params[0] : 'conexion';
   const draw = async () => {
     const nConf = (await conflicts.all()).length;
-    main.innerHTML = `${pageHeader({ title: 'Ajustes' })}${tabs(TABS.map((t) => ({ ...t, count: t.id === 'conflictos' ? nConf || null : t.id === 'papelera' ? store.trash().length || null : null })), tab)}<div class="settings-body"></div>`;
+    main.innerHTML = `${pageHeader({ title: 'Ajustes', sub: `Content Studio ${APP_VERSION}` })}${tabs(TABS.map((t) => ({ ...t, count: t.id === 'conflictos' ? nConf || null : t.id === 'papelera' ? store.trash().length || null : null })), tab)}<div class="settings-body"></div>`;
     main.querySelectorAll('[data-tab]').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; history.replaceState(null, '', `#/ajustes/${tab}`); draw(); }));
     const host = main.querySelector('.settings-body');
     await ({ conexion, ia, carpeta, datos, papelera, conflictos: conflictsTab, apariencia })[tab](host, draw);
