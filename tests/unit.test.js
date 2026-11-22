@@ -400,10 +400,10 @@ test('biblioteca de escenas: resumen para la IA y marca «de la biblioteca» en 
   const R = await import('../js/services/reels.js'); const P = await import('../js/services/prompts.js');
   const lib = R.librarySummary([
     { id: 'engranes-presion', json: { escena: { tipo: 'mecanismo', titulo: 'Soporta la presión' }, para: 'Explicar que algo aguanta', reel: '2026-11-18 · Kit' } },
-    { id: 'gancho-fugas', json: { tipo: 'palabras', texto: '¿Fugas de presión?', descripcion: 'Gancho con pregunta' } },
+    { id: 'gancho-fugas', json: { id: 'gancho-fugas', marca: 'marca-x', sirve: 'pregunta de gancho sobre un problema', reel: '2026-11-18 · Kit', origen_id: 'e2', escena: { tipo: 'palabras', texto: '¿Fugas de *presión*?', variante: 'golpe' } } },
     { id: 'roto', json: null },
   ]);
-  assert.equal(lib.length, 2); assert.equal(lib[0].resource, 'escena-mecanismo'); assert.equal(lib[0].para, 'Explicar que algo aguanta'); assert.equal(lib[1].texto, '¿Fugas de presión?');
+  assert.equal(lib.length, 2); assert.equal(lib[0].resource, 'escena-mecanismo'); assert.equal(lib[0].para, 'Explicar que algo aguanta'); assert.equal(lib[1].texto, '¿Fugas de presión?'); assert.equal(lib[1].para, 'pregunta de gancho sobre un problema'); assert.equal(lib[1].resource, 'escena-palabras'); assert.equal(lib[1].reel, '2026-11-18 · Kit');
   assert.deepEqual(R.libraryDirs({ name: 'Afinazone' }, { visual: { edit: { file: 'afinazone', raw: { nombre: 'Afinazone' } } } }), ['afinazone', 'Afinazone']);
   const brief = P.resourcesBrief('producto', 'pocos', lib);
   assert.match(brief, /BIBLIOTECA DE LA MARCA/); assert.match(brief, /engranes-presion \[escena-mecanismo\]: Explicar que algo aguanta/);

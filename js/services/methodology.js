@@ -188,6 +188,8 @@ export const RESOURCE_TYPES = [
   { id: 'escena-cifra', name: 'Escena: cifra animada', kind: 'escena', when: 'Número dicho por la voz.' },
   { id: 'escena-comparar', name: 'Escena: comparar', kind: 'escena', when: 'Dos cosas frente a frente.' },
   { id: 'escena-mecanismo', name: 'Escena: mecanismo', kind: 'escena', when: 'Cómo funciona algo: engranes o capas.' },
+  { id: 'escena-palabras', name: 'Escena: texto grande con palabra clave', kind: 'escena', when: 'Una frase fuerte o pregunta de gancho, a pantalla.' },
+  { id: 'escena-fondo', name: 'Escena: fondo animado con texto', kind: 'escena', when: 'Un texto corto sobre el fondo animado de la marca.' },
   { id: 'escena-objeto', name: 'Escena: ícono que se transforma', kind: 'escena', when: 'Un objeto o concepto.' },
   { id: 'escena-3d', name: 'Escena: pieza 3D', kind: 'escena', when: 'Idea física (un kit, una caja, un disco). Estilizada, no el producto real.' },
   { id: 'escena-foto', name: 'Escena: foto en capas', kind: 'escena', when: 'Una foto propia con texto entre fondo y sujeto.' },

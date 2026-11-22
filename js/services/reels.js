@@ -312,7 +312,7 @@ export const PRESETS = { sin: [0, 0], pocos: [3, 1], equilibrado: [5, 2], muchos
 /** De los tipos de recurso de Content Studio a los nombres de la skill (gráfico o escena de animar-reels-claude). */
 export const SKILL_NAME = {
   'escena-mapa': 'escena · mapa', 'escena-iconos': 'escena · lista_iconos', 'escena-cifra': 'escena · cifra', 'escena-comparar': 'escena · comparar',
-  'escena-mecanismo': 'escena · mecanismo', 'escena-objeto': 'escena · objeto', 'escena-3d': 'escena · pieza3d', 'escena-foto': 'escena · foto',
+  'escena-mecanismo': 'escena · mecanismo', 'escena-objeto': 'escena · objeto', 'escena-palabras': 'escena · palabras', 'escena-fondo': 'escena · fondo_vivo', 'escena-3d': 'escena · pieza3d', 'escena-foto': 'escena · foto',
   camara: 'cámara (plan.py camara)', broll: 'toma de apoyo (marco o toma)',
 };
 // Los valores que escribe la propia skill en proyecto.json (comprobado con sus reels).
@@ -457,7 +457,7 @@ export function creditsFromSources(md) {
 // ---------- Biblioteca de escenas de la marca (animar-reels-claude, Mi estilo/escenas/<marca>/) ----------
 
 /** De los tipos de escena de la skill a los recursos de Content Studio. */
-export const SCENE_TO_RESOURCE = { mapa: 'escena-mapa', lista_iconos: 'escena-iconos', cifra: 'escena-cifra', comparar: 'escena-comparar', mecanismo: 'escena-mecanismo', objeto: 'escena-objeto', pieza3d: 'escena-3d', foto: 'escena-foto', palabras: 'escena-objeto', fondo_vivo: 'escena-objeto', pasos: 'pasos' };
+export const SCENE_TO_RESOURCE = { mapa: 'escena-mapa', lista_iconos: 'escena-iconos', cifra: 'escena-cifra', comparar: 'escena-comparar', mecanismo: 'escena-mecanismo', objeto: 'escena-objeto', pieza3d: 'escena-3d', foto: 'escena-foto', palabras: 'escena-palabras', fondo_vivo: 'escena-fondo', pasos: 'pasos' };
 
 /** Carpetas donde puede estar la biblioteca de una marca (la skill usa el nombre de la marca o el de su archivo). */
 export function libraryDirs(brand, config) {
@@ -471,8 +471,9 @@ export function librarySummary(entries) {
     const j = isObj(json) ? json : {};
     const sc = isObj(j.escena) ? j.escena : j;
     const tipo = sc.tipo || j.tipo || '';
-    const para = j.para || j.para_que || j.para_que_sirve || j.uso_descripcion || j.descripcion || j.nota || '';
-    const texto = sc.texto || sc.titulo || sc.clave || '';
+    // biblioteca.py guarda «sirve» (para qué sirve) y «reel» (en qué reel salió).
+    const para = j.sirve || j.para || j.para_que || j.para_que_sirve || j.uso_descripcion || j.descripcion || j.nota || '';
+    const texto = String(sc.texto || sc.titulo || sc.clave || '').replace(/\*/g, '');
     const reel = j.reel || j.en_reel || j.origen || '';
     return { id, tipo, resource: SCENE_TO_RESOURCE[tipo] || '', para: String(para).slice(0, 140), texto: String(texto).slice(0, 80), reel: String(reel).slice(0, 80) };
   }).filter((x) => x.tipo);
