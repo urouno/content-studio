@@ -199,3 +199,9 @@ input[type="color"] { width: 38px; height: 32px; border: 1px solid var(--border-
   .docs-side { position: static; }
   .doc-edit.mode-split { grid-template-columns: 1fr; }
 }
+
+/* Ajustes → IA: proveedores en orden */
+.prov-row { border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3); background: var(--surface); }
+.prov-row.off { opacity: .65; }
+.ic.rot180 { transform: rotate(180deg); }
+.badge.ok { --bc: var(--ok); } .badge.warn { --bc: var(--warn); }

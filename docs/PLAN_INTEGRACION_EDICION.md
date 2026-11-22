@@ -222,7 +222,7 @@ descargas .zip, pero sin estado automático.
 
 | # | Fase | Qué incluye | Dónde se hace | Qué te resuelve |
 |---|---|---|---|---|
-| **1** | **IA rápida y fiable** | Adaptador de varios proveedores (Gemini, Groq, OpenRouter, Cerebras; DeepSeek opcional), respaldo automático entre proveedores, prompts a dieta, una versión de guion por defecto | Content Studio + Apps Script | Lo lento y los fallos de hoy |
+| **1** ✅ | **IA rápida y fiable** (hecha) | Adaptador de varios proveedores (Gemini, Groq, OpenRouter, Cerebras; DeepSeek opcional), respaldo automático entre proveedores, prompts a dieta, una versión de guion por defecto | Content Studio + Apps Script | Lo lento y los fallos de hoy |
 | **2** | **Método de ideas y guiones** | Primer cuadro y variantes, gancho de las 4 P, por qué y riesgo, variantes de lo que funcionó, empalme final; tipo de producción y propuesta de gráficos por frase | Content Studio | Mejores ideas y guiones listos para editar |
 | **3** | **Marca estable para edición** | Pestaña «Estilo de edición»; exportar e importar `marcas/<marca>.json` y `Reglas-de-estilo-<Marca>.md` | Content Studio | Que las skills editen con tu marca, ya en paralelo |
 | **4** | **Carpeta conectada y envío a edición** | Conectar `Reels con Claude/`, «Enviar a edición» con ajustes del video, «Añadir toma», «Editar con Claude», estado automático, vista previa | Content Studio | El modo integrado de punta a punta |

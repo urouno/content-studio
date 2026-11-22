@@ -199,6 +199,15 @@ export const EVIDENCE_LEGEND = {
 export const byId = (list, id) => list.find((x) => x.id === id);
 
 // Bloque compacto que se inyecta en los prompts.
+/** Versión corta para tareas que no escriben un guion completo (hooks, CTA, copies, investigación, análisis). */
+export function methodologyShort() {
+  return [
+    'PRINCIPIOS:', ...PRINCIPLES.map((p) => '- ' + p),
+    'CAPAS DEL HOOK: narrado, visual, textual, auditivo. Deben decir lo mismo por canales distintos.',
+    'CTA: un solo CTA principal, conectado con el contenido y adecuado al objetivo.',
+  ].join('\n');
+}
+
 export function methodologyBrief() {
   return [
     'PRINCIPIOS:', ...PRINCIPLES.map((p) => '- ' + p),

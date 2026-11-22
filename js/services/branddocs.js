@@ -250,12 +250,22 @@ export function docCompleteness(md) {
 // ---------- Contexto para la IA ----------
 
 export const DOC_LIMITS = { perDoc: 8000, total: 30000 };
+// Presupuesto de documentos por tarea: las tareas cortas no necesitan todo el contexto, y un prompt más
+// pequeño responde antes y cabe en los planes gratuitos (que limitan los tokens por minuto).
+export const TASK_LIMITS = {
+  ideas: DOC_LIMITS, guion: DOC_LIMITS,
+  evaluacion: { perDoc: 5000, total: 16000 },
+  investigacion: { perDoc: 4000, total: 12000 },
+  hooks: { perDoc: 3000, total: 10000 },
+  copies: { perDoc: 3000, total: 10000 },
+  analisis: { perDoc: 3000, total: 8000 },
+};
 
 /**
  * Documentos activos de la marca para una tarea, limpios y dentro del presupuesto de caracteres.
  * @returns {{ text: string, used: Array<{id,title,chars,truncated}>, skipped: Array<{id,title,reason}>, chars: number }}
  */
-export function docsContext(brandId, task, { docs = null, limits = DOC_LIMITS } = {}) {
+export function docsContext(brandId, task, { docs = null, limits = TASK_LIMITS[task] || DOC_LIMITS } = {}) {
   const list = docs || docsFor(brandId);
   const used = []; const skipped = []; const blocks = [];
   let total = 0;

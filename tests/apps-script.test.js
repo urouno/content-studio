@@ -213,3 +213,75 @@ test('crea al vuelo la hoja de una tabla nueva si falta (actualización sin rein
   const got = r.changes.find((c) => c.table === 'brandDocs').record;
   assert.deepEqual(got.tasks, ['ideas', 'guion']); assert.equal(got.active, true); assert.equal(got.order, 3);
 });
+
+// ---------- Cadena de proveedores (Groq, OpenRouter, Cerebras, DeepSeek) ----------
+
+const chatOk = (text, model = 'm') => ({ code: 200, body: { model, choices: [{ message: { content: text }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } } });
+const aiBody = (extra = {}) => ({ contents: [{ role: 'user', parts: [{ text: 'x' }] }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 999999 }, ...extra });
+
+test('cadena: si Groq agota su cuota responde OpenRouter, con un modelo gratuito', () => {
+  const { post, token, props, fetchCalls } = ready({ geminiResponder: (url) => {
+    if (url === 'https://api.groq.com/openai/v1/models') return { code: 200, body: { data: [{ id: 'whisper-large-v3' }, { id: 'llama-3.3-70b-versatile' }, { id: 'openai/gpt-oss-120b' }] } };
+    if (url.startsWith('https://api.groq.com')) return { code: 429, body: { error: { message: 'Rate limit reached' } } };
+    if (url === 'https://openrouter.ai/api/v1/models') return { code: 200, body: { data: [
+      { id: 'anthropic/claude-x', pricing: { prompt: '0.000003', completion: '0.000015' } },
+      { id: 'meta-llama/llama-3.3-70b-instruct:free', pricing: { prompt: '0', completion: '0' }, context_length: 65000 },
+    ] } };
+    if (url.startsWith('https://openrouter.ai')) return chatOk('<think>razono…</think>{"ok":true}', 'meta-llama/llama-3.3-70b-instruct:free');
+    return { code: 500, body: {} };
+  } });
+  props.set('GROQ_API_KEY', 'gsk_test'); props.set('OPENROUTER_API_KEY', 'sk-or-test');
+  const r = post({ action: 'ai.generate', token, chain: [{ provider: 'gemini' }, { provider: 'groq', model: 'auto' }, { provider: 'openrouter', model: 'auto' }], body: aiBody() });
+  assert.equal(r.ok, true, JSON.stringify(r.error));
+  assert.equal(r.data.usedProvider, 'openrouter');
+  assert.equal(r.data.usedModel, 'meta-llama/llama-3.3-70b-instruct:free');
+  assert.equal(r.data.candidates[0].content.parts[0].text, '{"ok":true}'); // sin el razonamiento <think>
+  assert.deepEqual(r.data.triedProviders.map((t) => [t.provider, t.status]), [['gemini', 0], ['groq', 429]]);
+  // Groq: primero el modelo preferido, nunca whisper; el modo JSON y el tope de tokens del proveedor.
+  const groqChat = fetchCalls.filter((c) => c.url === 'https://api.groq.com/openai/v1/chat/completions').map((c) => JSON.parse(c.opts.payload));
+  assert.equal(groqChat[0].model, 'openai/gpt-oss-120b');
+  assert.ok(groqChat.every((p) => p.model !== 'whisper-large-v3'));
+  assert.deepEqual(groqChat[0].response_format, { type: 'json_object' });
+  assert.equal(groqChat[0].max_tokens, 8192);
+  assert.equal(groqChat[0].messages[0].role, 'system');
+  // OpenRouter: nunca un modelo de pago.
+  const orChat = fetchCalls.filter((c) => c.url === 'https://openrouter.ai/api/v1/chat/completions').map((c) => JSON.parse(c.opts.payload).model);
+  assert.deepEqual(orChat, ['meta-llama/llama-3.3-70b-instruct:free']);
+  assert.match(fetchCalls.find((c) => c.url.includes('openrouter')).opts.headers.Authorization, /^Bearer sk-or-test$/);
+});
+
+test('cadena: sin ninguna clave dice cuáles faltan; un proveedor desconocido no se acepta', () => {
+  const { post, token } = ready();
+  const r = post({ action: 'ai.generate', token, chain: [{ provider: 'groq' }, { provider: 'cerebras' }], body: aiBody() });
+  assert.equal(r.error.code, 'AI_NOT_CONFIGURED'); assert.match(r.error.message, /GROQ_API_KEY/); assert.match(r.error.message, /CEREBRAS_API_KEY/);
+  assert.equal(post({ action: 'ai.generate', token, chain: [{ provider: 'openai' }], body: aiBody() }).error.code, 'VALIDATION');
+  assert.equal(post({ action: 'ai.generate', token, chain: [{ provider: 'groq', model: '../x y' }], body: aiBody() }).error.code, 'VALIDATION');
+});
+
+test('cadena: si todos fallan, el error resume cada proveedor', () => {
+  const { post, token, props } = ready({ geminiResponder: (url) => (url.endsWith('/models') ? { code: 200, body: { data: [{ id: 'llama-3.3-70b' }] } } : { code: 503, body: { error: { message: 'overloaded' } } }) });
+  props.set('CEREBRAS_API_KEY', 'c'); props.set('DEEPSEEK_API_KEY', 'd');
+  const r = post({ action: 'ai.generate', token, chain: [{ provider: 'cerebras' }, { provider: 'deepseek' }], body: aiBody() });
+  assert.equal(r.error.code, 'AI_ERROR'); assert.equal(r.error.status, 503);
+  assert.match(r.error.message, /cerebras → 503/); assert.match(r.error.message, /deepseek → 503/);
+});
+
+test('compatible con OpenAI: repite sin modo JSON si el modelo no lo admite y avisa de que no hubo búsqueda', () => {
+  let n = 0;
+  const { post, token, props, fetchCalls } = ready({ geminiResponder: (url, opts) => {
+    if (url.endsWith('/models')) return { code: 200, body: { data: [{ id: 'deepseek-chat' }] } };
+    n++;
+    return JSON.parse(opts.payload).response_format ? { code: 400, body: { error: { message: 'response_format json_object is not supported' } } } : chatOk('{"a":1}', 'deepseek-chat');
+  } });
+  props.set('DEEPSEEK_API_KEY', 'd');
+  const r = post({ action: 'ai.generate', token, chain: [{ provider: 'deepseek' }], body: aiBody({ tools: [{ google_search: {} }] }) });
+  assert.equal(r.ok, true); assert.equal(n, 2); assert.equal(r.data.noSearch, true);
+  assert.equal(fetchCalls.filter((c) => c.url.includes('/chat/completions')).length, 2);
+});
+
+test('ping dice qué proveedores tienen clave', () => {
+  const { post, token, props } = ready();
+  props.set('GROQ_API_KEY', 'g');
+  const r = post({ action: 'ping', token });
+  assert.equal(r.providers.groq, true); assert.equal(r.providers.openrouter, false); assert.equal(r.providers.gemini, false);
+});

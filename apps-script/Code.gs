@@ -3,7 +3,8 @@
  * ------------------------------------------------
  * - Base de datos: hojas de Google Sheets (una por tabla).
  * - Sincronización offline-first con control optimista de concurrencia (versiones).
- * - Proxy seguro para Gemini: la API Key vive en Script Properties, nunca en el navegador.
+ * - Proxy seguro de IA (Gemini, Groq, OpenRouter, Cerebras, DeepSeek, Claude) con relevo entre proveedores:
+ *   las claves viven en Script Properties, nunca en el navegador.
  * - Autenticación por token (Script Property ACCESS_TOKENS) con roles: admin, editor, viewer.
  *
  * Propiedades del script (Configuración del proyecto → Propiedades del script):
@@ -11,6 +12,10 @@
  *   GEMINI_API_KEY     Clave de Google AI Studio (opcional)
  *   ANTHROPIC_API_KEY  Clave de la API de Claude (opcional; platform.claude.com)
  *   AI_EFFORT          Esfuerzo de Claude: low | medium | high (por defecto low)
+ *   GROQ_API_KEY       Clave de console.groq.com (gratis con límites; empieza por gsk_)
+ *   OPENROUTER_API_KEY Clave de openrouter.ai (solo se usan sus modelos gratuitos; empieza por sk-or-)
+ *   CEREBRAS_API_KEY   Clave de cloud.cerebras.ai (gratis con límites)
+ *   DEEPSEEK_API_KEY   Clave de platform.deepseek.com (de pago con saldo prepagado, muy barato)
  *   GEMINI_MODELS      Opcional: modelos de reserva de Gemini separados por comas
  *   SPREADSHEET_ID  Solo si el script NO está vinculado a la hoja
  *   AI_DAILY_LIMIT  Solicitudes de IA por token y día (por defecto 300)
@@ -46,7 +51,7 @@ function instalar() {
   return token;
 }
 
-var VERSION = '1.4.0';
+var VERSION = '1.5.0';
 var BASE = ['id', 'brandId', 'createdAt', 'updatedAt', 'deletedAt', 'version', 'updatedBy'];
 var SERVER_COLS = ['syncedAt'];
 var MAX_CELL = 49000;
@@ -349,7 +354,9 @@ function ping_(user) {
   var props = PropertiesService.getScriptProperties();
   var name = '';
   try { name = ss_().getName(); } catch (x) { name = '(sin hoja: ' + x.message + ')'; }
-  return { user: { name: user.name, role: user.role }, spreadsheet: name, gemini: !!props.getProperty('GEMINI_API_KEY'), claude: !!props.getProperty('ANTHROPIC_API_KEY'), version: VERSION };
+  var providers = {};
+  AI_PROVIDERS.forEach(function (p) { providers[p] = aiConfigured_(p); });
+  return { user: { name: user.name, role: user.role }, spreadsheet: name, gemini: providers.gemini, claude: providers.claude, providers: providers, version: VERSION };
 }
 
 // ================== Gemini (proxy) ==================
@@ -380,30 +387,98 @@ function cleanupCounters_(props, day) {
   Object.keys(all).forEach(function (k) { if (k.indexOf('ai_') === 0 && k.slice(-10) !== day) props.deleteProperty(k); });
 }
 
-// Proveedor de IA: "gemini" (Google AI Studio) o "claude" (API de Anthropic).
-// El navegador siempre envía el formato de Gemini; para Claude se traduce aquí y la
-// respuesta se devuelve con la misma forma, así la app no necesita saber qué proveedor se usó.
+// Proveedores de IA. El navegador siempre envía el formato de Gemini; para los demás se traduce aquí
+// y la respuesta se devuelve con la misma forma, así la app no necesita saber quién respondió.
+//   gemini      Google AI Studio (gratis con límites; el único con búsqueda de Google)
+//   claude      API de Anthropic (de pago)
+//   groq, openrouter, cerebras, deepseek   API compatible con OpenAI (ver OAI_PROVIDERS)
+//
+// `req.chain` = [{provider, model}, …]: se prueban en orden y, si uno falla (sin clave, cuota, saturación,
+// modelo inexistente…), se pasa al siguiente. Sin `chain`, se usa solo `req.provider` / `req.model`.
+var AI_PROVIDERS = ['gemini', 'claude', 'groq', 'openrouter', 'cerebras', 'deepseek'];
+
 function aiGenerate_(user, req) {
-  var provider = String(req.provider || 'gemini');
   var b = req.body || {};
   if (!Array.isArray(b.contents) || !b.contents.length) throw err_('VALIDATION', 'Faltan "contents".');
   if (JSON.stringify(b).length > 900000) throw err_('TOO_LARGE', 'La solicitud es demasiado grande.');
   var maxTokens = Number(PropertiesService.getScriptProperties().getProperty('AI_MAX_TOKENS') || 16384);
-  if (provider === 'claude') { claudeKey_(); countAi_(user); return { data: claudeGenerate_(req, b, maxTokens) }; }
-  if (provider !== 'gemini') throw err_('VALIDATION', 'Proveedor de IA no permitido: ' + provider);
-  var model = String(req.model || 'gemini-flash-latest');
-  if (!/^gemini-[a-z0-9.\-]+$/i.test(model)) throw err_('VALIDATION', 'Modelo no permitido: ' + model);
-  var gc = b.generationConfig || {};
+  var chain = aiChain_(req);
+  var ready = chain.filter(function (c) { return aiConfigured_(c.provider); });
+  if (!ready.length) {
+    if (chain.length === 1) aiKey_(chain[0].provider); // lanza el error concreto ("Falta GEMINI_API_KEY…")
+    throw err_('AI_NOT_CONFIGURED', 'Ningún proveedor de IA tiene clave: añade al menos una en las propiedades del script (' +
+      chain.map(function (c) { return aiKeyName_(c.provider); }).join(', ') + ').');
+  }
+  countAi_(user);
+  var tries = [];
+  chain.forEach(function (c) { if (!aiConfigured_(c.provider)) tries.push({ provider: c.provider, status: 0, message: 'sin clave' }); });
+  var lastErr = null;
+  for (var i = 0; i < ready.length; i++) {
+    var c = ready[i];
+    try {
+      var data = aiGenerateWith_(c.provider, c.model, b, maxTokens, ready.length > 1);
+      data.usedProvider = c.provider;
+      data.triedProviders = tries;
+      return { data: data };
+    } catch (x) {
+      if (x.code === 'VALIDATION' || x.code === 'TOO_LARGE') throw x;
+      lastErr = x;
+      tries.push({ provider: c.provider, status: x.status || 0, message: String(x.message || x).slice(0, 300) });
+    }
+  }
+  if (ready.length === 1 && lastErr) throw lastErr; // un solo proveedor: su error tal cual
+  var summary = tries.map(function (t) { return t.provider + ' → ' + (t.status || '—') + ' (' + t.message + ')'; }).join(' | ');
+  var last = tries[tries.length - 1] || {};
+  throw err_('AI_ERROR', 'Ningún proveedor de IA respondió. ' + summary, { status: last.status || 503, details: summary });
+}
+
+/** Normaliza y valida la cadena de proveedores pedida. */
+function aiChain_(req) {
+  var raw = Array.isArray(req.chain) && req.chain.length ? req.chain : [{ provider: req.provider || 'gemini', model: req.model }];
+  if (raw.length > 6) throw err_('VALIDATION', 'Demasiados proveedores en la cadena.');
+  var seen = {};
+  return raw.map(function (c) {
+    var p = String((c && c.provider) || '');
+    if (AI_PROVIDERS.indexOf(p) === -1) throw err_('VALIDATION', 'Proveedor de IA no permitido: ' + p);
+    var m = c && c.model ? String(c.model) : '';
+    if (p === 'gemini') { m = m || 'gemini-flash-latest'; if (!/^gemini-[a-z0-9.\-]+$/i.test(m)) throw err_('VALIDATION', 'Modelo no permitido: ' + m); }
+    else if (p === 'claude') { m = m || 'claude-opus-5-5'; if (!/^claude-[a-z0-9.\-]+$/i.test(m)) throw err_('VALIDATION', 'Modelo no permitido: ' + m); }
+    else { m = m || 'auto'; if (!/^[a-z0-9][a-z0-9.\/:_\-]{0,119}$/i.test(m)) throw err_('VALIDATION', 'Modelo no permitido: ' + m); }
+    return { provider: p, model: m };
+  }).filter(function (c) { var k = c.provider + '|' + c.model; if (seen[k]) return false; seen[k] = true; return true; });
+}
+
+function aiKeyName_(p) {
+  if (p === 'gemini') return 'GEMINI_API_KEY';
+  if (p === 'claude') return 'ANTHROPIC_API_KEY';
+  return OAI_PROVIDERS[p].prop;
+}
+function aiConfigured_(p) { return !!PropertiesService.getScriptProperties().getProperty(aiKeyName_(p)); }
+function aiKey_(p) {
+  var k = PropertiesService.getScriptProperties().getProperty(aiKeyName_(p));
+  if (!k) throw err_('AI_NOT_CONFIGURED', 'Falta ' + aiKeyName_(p) + ' en las propiedades del script.');
+  return k;
+}
+
+/** Genera con un proveedor concreto. `quick`: hay más proveedores detrás, así que no se insiste tanto con este. */
+function aiGenerateWith_(provider, model, b, maxTokens, quick) {
+  if (provider === 'claude') return claudeGenerate_({ model: model }, b, maxTokens);
+  if (provider !== 'gemini') return oaiGenerate_(provider, model, b, maxTokens, quick);
+  return geminiGenerate_(model, b, maxTokens, quick);
+}
+
+function geminiGenerate_(model, b, maxTokens, quick) {
+  var gc = JSON.parse(JSON.stringify(b.generationConfig || {}));
   gc.maxOutputTokens = Math.min(Number(gc.maxOutputTokens) || 8192, maxTokens);
   var payload = { contents: b.contents, generationConfig: gc };
   if (b.systemInstruction) payload.systemInstruction = b.systemInstruction;
   // Solo se permite la herramienta de búsqueda de Google.
   if (Array.isArray(b.tools)) payload.tools = b.tools.filter(function (t) { return t && t.google_search; }).map(function () { return { google_search: {} }; });
   var key = geminiKey_();
-  countAi_(user);
   // En el plan gratuito cada modelo tiene su propio límite y puede saturarse:
   // si uno falla por saturación, cuota o porque ya no existe, se prueba el siguiente.
-  var candidates = geminiCandidates_(model, key);
+  // Con otros proveedores detrás, solo dos modelos: suelen estar todos igual de saturados.
+  var candidates = geminiCandidates_(model, key).slice(0, quick ? 2 : 4);
   var errors = [];
   for (var i = 0; i < candidates.length; i++) {
     var m = candidates[i];
@@ -413,7 +488,7 @@ function aiGenerate_(user, req) {
     });
     var code = res.getResponseCode();
     var data; try { data = JSON.parse(res.getContentText()); } catch (x) { data = null; }
-    if (code === 200) { data.usedModel = m; data.triedModels = errors; return { data: data }; }
+    if (code === 200) { data.usedModel = m; data.triedModels = errors; return data; }
     var gmsg = (data && data.error && data.error.message) || ('respondió ' + code);
     errors.push({ model: m, status: code, message: String(gmsg).slice(0, 300) });
     // Clave inválida, permisos o solicitud mal formada: probar otro modelo no ayuda.
@@ -477,8 +552,143 @@ function diagnosticarGemini() {
   });
 }
 
+// ================== Proveedores compatibles con la API de OpenAI ==================
+// Groq, OpenRouter y Cerebras tienen plan gratuito con límites; DeepSeek es de pago (muy barato).
+// `prefer`: orden de preferencia cuando el modelo es "auto" (se elige entre los que la cuenta tiene).
+var OAI_PROVIDERS = {
+  groq: { name: 'Groq', base: 'https://api.groq.com/openai/v1', prop: 'GROQ_API_KEY', cap: 8192,
+    prefer: [/gpt-oss-120b/, /llama-4-maverick/, /llama-3\.3-70b/, /kimi-k2/, /qwen3?-32b/, /llama-4-scout/], fallback: 'llama-3.3-70b-versatile' },
+  openrouter: { name: 'OpenRouter', base: 'https://openrouter.ai/api/v1', prop: 'OPENROUTER_API_KEY', cap: 16384, freeOnly: true,
+    prefer: [/deepseek-chat|deepseek-v3/, /gpt-oss-120b/, /llama-4-maverick/, /llama-3\.3-70b/, /qwen3?-2\d\db|qwen3?-coder/, /gemma-3-27b/, /mistral-small/], fallback: '' },
+  cerebras: { name: 'Cerebras', base: 'https://api.cerebras.ai/v1', prop: 'CEREBRAS_API_KEY', cap: 8192,
+    prefer: [/gpt-oss-120b/, /llama-4-maverick/, /llama-3\.3-70b/, /qwen-3-235b/, /llama-4-scout/], fallback: 'llama-3.3-70b' },
+  deepseek: { name: 'DeepSeek', base: 'https://api.deepseek.com', prop: 'DEEPSEEK_API_KEY', cap: 8192,
+    prefer: [/^deepseek-chat$/], fallback: 'deepseek-chat' },
+};
+// Modelos que no sirven para redactar texto.
+var OAI_SKIP = /whisper|tts|guard|embed|moderation|audio|image|vision-preview|distil|compound|playai|orpheus|transcribe/i;
+
+function oaiHeaders_(p) {
+  var h = { Authorization: 'Bearer ' + aiKey_(p) };
+  if (p === 'openrouter') h['X-Title'] = 'Content Studio';
+  return h;
+}
+
+/** Modelos de texto de la cuenta, del preferido al menos preferido (6 h en caché). */
+function oaiModelList_(p) {
+  var conf = OAI_PROVIDERS[p];
+  var cache = CacheService.getScriptCache();
+  var ck = 'oai_models_' + p;
+  var hit = cache && cache.get(ck);
+  if (hit) return JSON.parse(hit);
+  var list = [];
+  try {
+    var res = UrlFetchApp.fetch(conf.base + '/models', { muteHttpExceptions: true, headers: oaiHeaders_(p) });
+    if (res.getResponseCode() === 200) {
+      list = (JSON.parse(res.getContentText()).data || [])
+        .filter(function (m) { return m && m.id && !OAI_SKIP.test(m.id); })
+        .filter(function (m) {
+          if (!conf.freeOnly) return true;
+          var pr = m.pricing || {};
+          return /:free$/.test(m.id) || (Number(pr.prompt) === 0 && Number(pr.completion) === 0);
+        })
+        .map(function (m) { return { id: m.id, ctx: Number(m.context_length || m.context_window || 0), free: !!conf.freeOnly }; });
+    }
+  } catch (x) { list = []; }
+  var rank = function (id) { for (var i = 0; i < conf.prefer.length; i++) if (conf.prefer[i].test(id)) return i; return conf.prefer.length; };
+  list.sort(function (a, b) { return rank(a.id) - rank(b.id) || b.ctx - a.ctx; });
+  if (cache && list.length) cache.put(ck, JSON.stringify(list), 21600);
+  return list;
+}
+
+/** Modelos a probar: el elegido (si no es "auto") y después los mejores de la cuenta. */
+function oaiCandidates_(p, model, quick) {
+  var conf = OAI_PROVIDERS[p];
+  var ids = oaiModelList_(p).map(function (m) { return m.id; });
+  var list = model && model !== 'auto' ? [model].concat(ids) : ids;
+  if (!list.length && conf.fallback) list = [conf.fallback];
+  var seen = {};
+  return list.filter(function (n) { if (!n || seen[n]) return false; seen[n] = true; return true; }).slice(0, quick ? 2 : 3);
+}
+
+function oaiGenerate_(p, model, b, maxTokens, quick) {
+  var conf = OAI_PROVIDERS[p];
+  aiKey_(p);
+  var gc = b.generationConfig || {};
+  var textOf = function (c) { return ((c && c.parts) || []).map(function (x) { return x.text || ''; }).join('\n'); };
+  var json = gc.responseMimeType === 'application/json';
+  var system = textOf(b.systemInstruction);
+  if (json) system += '\n\nFORMATO DE SALIDA: responde únicamente con un objeto JSON válido. Sin texto antes ni después y sin bloques de código.';
+  var messages = [];
+  if (system.trim()) messages.push({ role: 'system', content: system });
+  b.contents.forEach(function (c) { messages.push({ role: c.role === 'model' ? 'assistant' : 'user', content: textOf(c) }); });
+  var candidates = oaiCandidates_(p, model, quick);
+  if (!candidates.length) throw err_('AI_ERROR', conf.name + ': la cuenta no tiene modelos de texto disponibles' + (conf.freeOnly ? ' gratuitos' : '') + '.', { status: 404 });
+  var errors = [];
+  for (var i = 0; i < candidates.length; i++) {
+    var m = candidates[i];
+    var payload = { model: m, messages: messages, max_tokens: Math.min(Number(gc.maxOutputTokens) || 4096, conf.cap, maxTokens) };
+    if (gc.temperature != null) payload.temperature = Number(gc.temperature);
+    if (json) payload.response_format = { type: 'json_object' };
+    var r = oaiPost_(p, payload);
+    // Algunos modelos no aceptan el modo JSON forzado: se repite sin él (el prompt ya pide JSON).
+    if (r.code === 400 && json && /response_format|json/i.test(r.message)) { delete payload.response_format; r = oaiPost_(p, payload); }
+    if (r.code === 200 && r.data && r.data.choices && r.data.choices.length) {
+      var ch = r.data.choices[0];
+      var text = String((ch.message && ch.message.content) || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+      var u = r.data.usage || {};
+      return {
+        candidates: [{ content: { parts: [{ text: text }] }, finishReason: ch.finish_reason === 'length' ? 'MAX_TOKENS' : 'STOP' }],
+        usageMetadata: { promptTokenCount: u.prompt_tokens || 0, candidatesTokenCount: u.completion_tokens || 0, totalTokenCount: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) },
+        usedModel: m, triedModels: errors, noSearch: Array.isArray(b.tools) && b.tools.length > 0,
+      };
+    }
+    errors.push({ model: m, status: r.code, message: r.message.slice(0, 300) });
+    if (r.code === 401 || r.code === 403) break; // clave inválida: otro modelo no ayuda
+  }
+  var last = errors[errors.length - 1] || { status: 500, message: 'sin respuesta' };
+  var friendly = { 401: 'la clave no es válida', 402: 'la cuenta no tiene saldo', 413: 'la solicitud es demasiado larga para su plan', 429: 'límite de uso alcanzado' }[last.status];
+  throw err_('AI_ERROR', conf.name + ': ' + (friendly || last.message) + ' (' + errors.map(function (e) { return e.model + ' → ' + e.status; }).join(', ') + ')', { status: last.status, details: last.message });
+}
+
+function oaiPost_(p, payload) {
+  try {
+    var res = UrlFetchApp.fetch(OAI_PROVIDERS[p].base + '/chat/completions', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: oaiHeaders_(p), payload: JSON.stringify(payload),
+    });
+    var code = res.getResponseCode();
+    var data; try { data = JSON.parse(res.getContentText()); } catch (x) { data = null; }
+    var err = data && data.error;
+    var msg = err ? (typeof err === 'string' ? err : err.message || JSON.stringify(err)) : (code === 200 ? '' : 'respondió ' + code);
+    // OpenRouter puede responder 200 con un error dentro.
+    if (code === 200 && err) code = Number(err.code) || 502;
+    return { code: code, data: data, message: String(msg || '') };
+  } catch (x) {
+    return { code: 0, data: null, message: 'sin conexión: ' + (x && x.message || x) };
+  }
+}
+
+/** Ejecuta en el editor: prueba cada proveedor de IA que tenga clave y dice cuál responde. */
+function diagnosticarIA() {
+  var body = { contents: [{ role: 'user', parts: [{ text: 'Responde solo: ok' }] }], generationConfig: { maxOutputTokens: 50, temperature: 0 } };
+  AI_PROVIDERS.forEach(function (p) {
+    if (!aiConfigured_(p)) { console.log('· ' + p + ': sin clave (' + aiKeyName_(p) + ')'); return; }
+    var t = Date.now();
+    try {
+      var d = aiGenerateWith_(p, p === 'gemini' ? 'gemini-flash-latest' : p === 'claude' ? 'claude-haiku-5-5' : 'auto', body, 50, true);
+      console.log('✔ ' + p + ' (' + d.usedModel + ') en ' + (Date.now() - t) + ' ms: ' + d.candidates[0].content.parts[0].text.slice(0, 40));
+    } catch (x) { console.log('✘ ' + p + ': ' + x.message); }
+  });
+}
+
 function aiModels_(req) {
-  if ((req && req.provider) === 'claude') return claudeModels_();
+  var p = (req && req.provider) || 'gemini';
+  if (p === 'claude') return claudeModels_();
+  if (OAI_PROVIDERS[p]) {
+    aiKey_(p);
+    CacheService.getScriptCache().remove && CacheService.getScriptCache().remove('oai_models_' + p);
+    return { models: oaiModelList_(p).map(function (m) { return { name: m.id, displayName: m.id + (m.free ? ' (gratis)' : ''), description: m.ctx ? 'Contexto: ' + m.ctx + ' tokens' : '', supportedGenerationMethods: ['generateContent'] }; }) };
+  }
   var res = UrlFetchApp.fetch(GEMINI_BASE + '/models?pageSize=200', { muteHttpExceptions: true, headers: { 'x-goog-api-key': geminiKey_() } });
   var code = res.getResponseCode(); var data = JSON.parse(res.getContentText() || '{}');
   if (code !== 200) throw err_('AI_ERROR', (data.error && data.error.message) || ('Gemini respondió ' + code), { status: code });
@@ -588,6 +798,7 @@ function onOpen() {
       .addItem('Crear / verificar hojas', 'menuSetup')
       .addItem('Generar token de administrador', 'menuToken')
       .addItem('Probar Gemini', 'testGemini')
+      .addItem('Probar todos los proveedores de IA', 'diagnosticarIA')
       .addToUi();
   } catch (x) { /* sin interfaz (ejecución como web app) */ }
 }

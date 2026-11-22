@@ -304,7 +304,7 @@ function openGenerate(idea, ctx) {
   ];
   const body = document.createElement('div');
   body.innerHTML = `<div class="notice" style="margin-bottom:12px">${icon('info')}<div><p>Se usa la metodología, la identidad de <b>${esc(store.get('brands', idea.brandId)?.name)}</b> (solo esta marca), la idea, las referencias registradas y los hooks recientes para evitar repeticiones.</p></div></div>
-    <form class="form-grid">${renderFields(fields, { platform: mainPlatform, durationSec: targetDuration(idea, mainPlatform), versions: 2, structureId: idea.format || '', knowledgeLevel: idea.knowledgeLevel ?? brandConfig(idea.brandId).voice.knowledgeLevel ?? 1 })}</form>`;
+    <form class="form-grid">${renderFields(fields, { platform: mainPlatform, durationSec: targetDuration(idea, mainPlatform), versions: 1, structureId: idea.format || '', knowledgeLevel: idea.knowledgeLevel ?? brandConfig(idea.brandId).voice.knowledgeLevel ?? 1 })}</form>`;
   const form = body.querySelector('form');
   form.querySelector('[name="platform"]').addEventListener('change', (e) => { form.querySelector('[name="durationSec"]').value = targetDuration(idea, e.target.value); });
   modal({ title: 'Generar guion con IA', body, size: 'md', actions: [

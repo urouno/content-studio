@@ -7,12 +7,12 @@ import { estimateStorage } from '../core/db.js';
 import { TABLES } from '../core/schema.js';
 import { call, isConfigured } from '../services/api.js';
 import { syncNow, fullPull, syncState, resolveConflict } from '../services/sync.js';
-import { listModels, usageToday, generate, providerName } from '../services/ai.js';
+import { listModels, usageToday, generate, AI_PROVIDERS, aiChain, modelFor, providerInfo } from '../services/ai.js';
 import { loadDemo } from '../services/demo.js';
 import { pageHeader } from './shared.js';
 
 const TABS = [
-  { id: 'conexion', label: 'Conexión y sync', icon: 'cloud' }, { id: 'ia', label: 'IA (Gemini / Claude)', icon: 'sparkle' },
+  { id: 'conexion', label: 'Conexión y sync', icon: 'cloud' }, { id: 'ia', label: 'IA (proveedores)', icon: 'sparkle' },
   { id: 'datos', label: 'Datos y copias', icon: 'download' }, { id: 'papelera', label: 'Papelera', icon: 'trash' },
   { id: 'conflictos', label: 'Conflictos', icon: 'alert' }, { id: 'apariencia', label: 'Apariencia', icon: 'eye' },
 ];
@@ -56,7 +56,7 @@ function conexion(host) {
   };
   host.querySelector('[data-test]').onclick = (e) => withBusy(e.currentTarget, async () => {
     persist();
-    try { const r = await call('ping'); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>Conectado como ${esc(r.user?.name || 'usuario')} (${esc(r.user?.role || '')}).</b><p>Hoja: ${esc(r.spreadsheet || '')} · Gemini: ${r.gemini ? 'clave configurada' : 'sin clave'} · Claude: ${r.claude ? 'clave configurada' : 'sin clave'} · versión ${esc(r.version || '')}</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div><b>No se pudo conectar.</b><p>${esc(err.message)}</p></div></div>`; }
+    try { const r = await call('ping'); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>Conectado como ${esc(r.user?.name || 'usuario')} (${esc(r.user?.role || '')}).</b><p>Hoja: ${esc(r.spreadsheet || '')} · IA: ${r.providers ? (Object.entries(r.providers).filter(([, v]) => v).map(([k]) => esc(providerInfo(k).name)).join(', ') || 'sin claves') : `Gemini ${r.gemini ? 'sí' : 'no'}`} · versión ${esc(r.version || '')}</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div><b>No se pudo conectar.</b><p>${esc(err.message)}</p></div></div>`; }
   }, 'Probando…');
   host.querySelector('[data-sync]').onclick = (e) => withBusy(e.currentTarget, async () => { try { const r = await syncNow(); toast(`Enviados ${r.pushed}, recibidos ${r.pulled}${r.conflicts ? `, ${r.conflicts} conflictos` : ''}`, 'success'); } catch (err) { toast(err.message, 'error'); } }, 'Sincronizando…');
   host.querySelector('[data-pull]').onclick = async (e) => { if (!(await confirmDialog({ title: 'Descarga completa', message: 'Se descargarán todos los registros de Sheets. Los cambios locales pendientes se envían primero y no se sobrescriben.', confirm: 'Descargar' }))) return; withBusy(e.target.closest('button'), async () => { try { const r = await fullPull(); toast(`Recibidos ${r.pulled} registros`, 'success'); } catch (err) { toast(err.message, 'error'); } }, 'Descargando…'); };
@@ -64,50 +64,95 @@ function conexion(host) {
 }
 
 function ia(host) {
-  const mode = settings.get('aiMode'); const prov = settings.get('aiProvider') || 'gemini'; const u = usageToday();
+  const mode = settings.get('aiMode'); const u = usageToday();
+  let chain = aiChain();
+  let configured = null; // proveedores con clave en Apps Script (se pregunta al servidor)
+  const models = { ...(settings.get('aiModels') || {}) };
+  AI_PROVIDERS.forEach((p) => { if (!models[p.id]) models[p.id] = modelFor(p.id); });
+
+  const rowsHtml = () => {
+    const order = [...chain, ...AI_PROVIDERS.map((p) => p.id).filter((id) => !chain.includes(id))];
+    return order.map((id) => {
+      const p = providerInfo(id); const on = chain.includes(id); const i = chain.indexOf(id);
+      const st = configured == null ? '' : configured[id] ? `<span class="badge ok">${icon('check', 'ic-sm')}clave configurada</span>` : '<span class="badge">sin clave</span>';
+      return `<div class="prov-row ${on ? '' : 'off'}" data-p="${id}">
+        <div class="row-between" style="gap:8px;flex-wrap:wrap">
+          <label class="check"><input type="checkbox" data-on ${on ? 'checked' : ''}><span><b>${on ? `${i + 1}. ` : ''}${esc(p.name)}</b>${p.paid ? ' <span class="badge warn">de pago</span>' : ' <span class="badge ok">gratis</span>'}${p.search ? ' <span class="badge">búsqueda web</span>' : ''} ${st}</span></label>
+          <div class="row" style="gap:4px">${on ? `<button class="icon-btn sm" data-up title="Subir" ${i === 0 ? 'disabled' : ''}>${icon('down', 'ic-sm rot180')}</button>` : ''}</div>
+        </div>
+        <p class="xs muted" style="margin:4px 0">${esc(p.note)}</p>
+        ${on ? `<div class="row" style="gap:6px"><input class="input input-sm mono" data-model value="${esc(models[id] || '')}" list="models-${id}" style="flex:1" aria-label="Modelo de ${esc(p.name)}"><button class="btn btn-sm" data-models>${icon('list', 'ic-sm')}Modelos</button><datalist id="models-${id}"></datalist></div>
+          <small class="hint">${id === 'gemini' || id === 'claude' ? 'Modelo concreto.' : '<code>auto</code> = el mejor disponible en tu cuenta.'}</small>` : ''}
+      </div>`;
+    }).join('');
+  };
+
   host.innerHTML = `<div class="split"><section class="card"><div class="card-h"><h3>Inteligencia artificial</h3></div><div class="card-b stack">
-    <div class="field"><span>Proveedor</span>
-      <label class="check"><input type="radio" name="prov" value="gemini" ${prov === 'gemini' ? 'checked' : ''}><span><b>Gemini (Google AI Studio)</b>: tiene nivel gratuito con límites diarios; puede saturarse en horas de mucho uso.</span></label>
-      <label class="check"><input type="radio" name="prov" value="claude" ${prov === 'claude' ? 'checked' : ''}><span><b>Claude (API de Anthropic)</b>: de pago por uso, con crédito propio en platform.claude.com. <b>La suscripción Claude Pro no incluye la API.</b></span></label></div>
     <div class="field"><span>Modo de conexión</span>
-      <label class="check"><input type="radio" name="mode" value="proxy" ${mode === 'proxy' ? 'checked' : ''}><span><b>Seguro (recomendado):</b> a través de Apps Script. La clave se guarda en las propiedades del script y nunca llega al navegador.</span></label>
+      <label class="check"><input type="radio" name="mode" value="proxy" ${mode === 'proxy' ? 'checked' : ''}><span><b>Seguro (recomendado):</b> a través de Apps Script. Las claves se guardan en las propiedades del script y nunca llegan al navegador.</span></label>
       <label class="check"><input type="radio" name="mode" value="direct" ${mode === 'direct' ? 'checked' : ''}><span><b>Directo (solo pruebas locales, solo Gemini):</b> la clave se guarda en esta pestaña y se envía desde el navegador.</span></label>
       <label class="check"><input type="radio" name="mode" value="off" ${mode === 'off' ? 'checked' : ''}><span><b>Desactivada:</b> la app funciona sin IA.</span></label></div>
     <label class="field" ${mode === 'direct' ? '' : 'hidden'} data-keyf><span>API Key de Gemini (se borra al cerrar el navegador)</span><input class="input mono" type="password" data-key value="${esc(settings.getDirectKey())}" autocomplete="off"></label>
-    <div class="form-grid">
-      <label class="field" data-gem ${prov === 'gemini' ? '' : 'hidden'}><span>Modelo de Gemini</span><input class="input mono" data-model value="${esc(settings.get('model'))}" list="models"><small class="hint">Por defecto <code>gemini-flash-latest</code>. Si aparece "no disponible temporalmente", pulsa "Cargar modelos" y prueba otro (por ejemplo, uno Flash-Lite).</small></label>
-      <label class="field" data-cla ${prov === 'claude' ? '' : 'hidden'}><span>Modelo de Claude</span>
-        <select class="input" data-modelc>${[['claude-opus-5-5', 'Claude Opus 5.5: la mejor calidad (≈ 4 $ / 20 $ por millón de tokens)'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5: más rápido y económico (≈ 2 $ / 10 $)'], ['claude-haiku-5-5', 'Claude Haiku 5.5: el más barato (≈ 0,10 $ / 0,50 $)']].map(([v, l]) => `<option value="${v}" ${settings.get('modelClaude') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <small class="hint">Precio por millón de tokens de entrada / salida. Generar un guion completo suele costar unos céntimos.</small></label>
-      <label class="field"><span>Límite local de solicitudes al día</span><input class="input" type="number" min="0" data-limit value="${settings.get('aiDailyLimit')}"><small class="hint">Protección adicional de cuota. 0 = sin límite local.</small></label>
-    </div><datalist id="models"></datalist>
-    <div class="row"><button class="btn btn-primary" data-save>${icon('check')}Guardar</button><button class="btn" data-models>${icon('list')}Cargar modelos</button><button class="btn btn-ai" data-test>${icon('sparkle')}Probar IA</button></div><div data-out></div>
+    <div class="field" data-chainf ${mode === 'proxy' ? '' : 'hidden'}><span>Proveedores, en orden</span>
+      <small class="hint">Se prueba el primero; si falla (cuota, saturación, sin clave), responde el siguiente. Para investigar se usan primero los que tienen búsqueda web.</small>
+      <div class="stack" data-rows style="gap:8px;margin-top:6px">${rowsHtml()}</div></div>
+    <label class="field"><span>Límite local de solicitudes al día</span><input class="input" type="number" min="0" data-limit value="${settings.get('aiDailyLimit')}"><small class="hint">Protección adicional de cuota. 0 = sin límite local.</small></label>
+    <div class="row"><button class="btn btn-primary" data-save>${icon('check')}Guardar</button><button class="btn btn-ai" data-test>${icon('sparkle')}Probar cada proveedor</button></div><div data-out></div>
   </div></section>
-  <aside class="stack-lg"><section class="card"><div class="card-h"><h3>Uso hoy (este dispositivo)</h3></div><div class="card-b stack small"><div class="row-between"><span>Solicitudes</span><b>${u.requests}</b></div><div class="row-between"><span>Tokens</span><b>${fmtNum(u.tokens)}</b></div></div></section>
-  <section class="card"><div class="card-b small stack"><b>Dónde va cada clave (en Apps Script → Configuración del proyecto → Propiedades del script)</b>
-    <div><code>GEMINI_API_KEY</code>: clave de aistudio.google.com</div><div><code>ANTHROPIC_API_KEY</code>: clave de platform.claude.com</div>
-    <p class="xs muted" style="margin:0">Puedes tener las dos y cambiar de proveedor cuando quieras.</p></div></section></aside></div>`;
-  const sync = () => {
-    const p = host.querySelector('[name="prov"]:checked').value; const m = host.querySelector('[name="mode"]:checked').value;
-    host.querySelector('[data-gem]').hidden = p !== 'gemini'; host.querySelector('[data-cla]').hidden = p !== 'claude';
-    host.querySelector('[data-keyf]').hidden = !(m === 'direct' && p === 'gemini');
-  };
-  host.querySelectorAll('[name="mode"], [name="prov"]').forEach((r) => r.addEventListener('change', sync));
+  <aside class="stack-lg"><section class="card"><div class="card-h"><h3>Uso hoy (este dispositivo)</h3></div><div class="card-b stack small"><div class="row-between"><span>Solicitudes</span><b>${u.requests}</b></div><div class="row-between"><span>Tokens</span><b>${fmtNum(u.tokens)}</b></div>
+    ${Object.entries(u.byProvider || {}).map(([p, n]) => `<div class="row-between xs muted"><span>${esc(providerInfo(p).name)}</span><span>${n}</span></div>`).join('')}</div></section>
+  <section class="card"><div class="card-b small stack"><b>Dónde va cada clave</b>
+    <p class="xs muted" style="margin:0">En Apps Script → Configuración del proyecto → Propiedades del script. Nunca en la app ni en el repositorio.</p>
+    ${AI_PROVIDERS.map((p) => `<div><code>${p.key}</code>: ${esc(p.where)}</div>`).join('')}
+    <p class="xs muted" style="margin:0">Después de añadir una clave no hace falta volver a implementar el Web App.</p></div></section></aside></div>`;
+
+  const rows = host.querySelector('[data-rows]');
+  const redrawRows = () => { readModels(); rows.innerHTML = rowsHtml(); };
+  const readModels = () => rows.querySelectorAll('[data-p]').forEach((r) => { const inp = r.querySelector('[data-model]'); if (inp) models[r.dataset.p] = inp.value.trim(); });
+  rows.addEventListener('change', (e) => {
+    const r = e.target.closest('[data-p]'); if (!r || e.target.dataset.on == null) return;
+    const id = r.dataset.p;
+    if (e.target.checked) chain = [...chain, id]; else if (chain.length > 1) chain = chain.filter((x) => x !== id); else { e.target.checked = true; toast('Deja al menos un proveedor activo.', 'error'); return; }
+    redrawRows();
+  });
+  rows.addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); const r = e.target.closest('[data-p]'); if (!b || !r) return;
+    const id = r.dataset.p;
+    if (b.dataset.up != null) { const i = chain.indexOf(id); if (i > 0) { chain = [...chain]; [chain[i - 1], chain[i]] = [chain[i], chain[i - 1]]; redrawRows(); } }
+    if (b.dataset.models != null) withBusy(b, async () => {
+      persist();
+      try { const ms = await listModels(id); r.querySelector('datalist').innerHTML = (id === 'gemini' || id === 'claude' ? '' : '<option value="auto">auto</option>') + ms.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join(''); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>${esc(providerInfo(id).name)}: ${ms.length} modelos.</b><p class="xs">${ms.slice(0, 30).map((m) => esc(m.id)).join(', ')}</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div>${esc(err.message)}</div></div>`; }
+    }, '…');
+  });
+  const sync = () => { const m = host.querySelector('[name="mode"]:checked').value; host.querySelector('[data-keyf]').hidden = m !== 'direct'; host.querySelector('[data-chainf]').hidden = m !== 'proxy'; };
+  host.querySelectorAll('[name="mode"]').forEach((r) => r.addEventListener('change', sync));
   const persist = () => {
-    const m = host.querySelector('[name="mode"]:checked').value; const p = host.querySelector('[name="prov"]:checked').value;
-    settings.set({ aiMode: m, aiProvider: p, model: host.querySelector('[data-model]').value.trim() || 'gemini-flash-latest', modelClaude: host.querySelector('[data-modelc]').value, aiDailyLimit: Number(host.querySelector('[data-limit]').value) || 0 });
+    readModels();
+    const m = host.querySelector('[name="mode"]:checked').value;
+    settings.set({ aiMode: m, aiChain: chain, aiModels: { ...models }, aiDailyLimit: Number(host.querySelector('[data-limit]').value) || 0 });
     settings.setDirectKey(m === 'direct' ? host.querySelector('[data-key]').value.trim() : '');
   };
   const out = host.querySelector('[data-out]');
   host.querySelector('[data-save]').onclick = () => { persist(); toast('Ajustes de IA guardados', 'success'); };
-  host.querySelector('[data-models]').onclick = (e) => withBusy(e.currentTarget, async () => {
-    persist();
-    try { const ms = await listModels(); host.querySelector('#models').innerHTML = ms.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join(''); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>${ms.length} modelos disponibles.</b><p class="xs">${ms.slice(0, 40).map((m) => esc(m.id)).join(', ')}</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div>${esc(err.message)}</div></div>`; }
-  }, 'Cargando…');
   host.querySelector('[data-test]').onclick = (e) => withBusy(e.currentTarget, async () => {
     persist();
-    try { const r = await generate({ prompt: 'Responde solo con JSON {"ok": true, "saludo": "<saludo breve en español>"}', json: true, temperature: 0, maxTokens: 300 }); out.innerHTML = `<div class="notice ok">${icon('check')}<div><b>${esc(providerName())} responde correctamente.</b><p>${esc(r.json?.saludo || '')} · ${r.usage?.totalTokenCount || 0} tokens</p></div></div>`; } catch (err) { out.innerHTML = `<div class="notice danger">${icon('alert')}<div>${esc(err.message)}</div></div>`; }
+    const list = settings.get('aiMode') === 'direct' ? ['gemini'] : chain;
+    out.innerHTML = '';
+    const lines = [];
+    for (const id of list) {
+      const t0 = performance.now();
+      try {
+        const r = await generate({ prompt: 'Responde solo con JSON {"ok": true, "saludo": "<saludo breve en español>"}', json: true, temperature: 0, maxTokens: 300, only: id });
+        lines.push(`<tr><td>${icon('check', 'ic-sm')} <b>${esc(providerInfo(id).name)}</b></td><td class="mono xs">${esc(r.model || '')}</td><td class="num">${((performance.now() - t0) / 1000).toFixed(1)} s</td><td class="small">${esc(r.json?.saludo || 'ok')}</td></tr>`);
+      } catch (err) {
+        lines.push(`<tr><td>${icon('x', 'ic-sm')} <b>${esc(providerInfo(id).name)}</b></td><td colspan="3" class="small" style="color:var(--danger)">${esc(err.message)}</td></tr>`);
+      }
+      out.innerHTML = `<div class="table-wrap"><table class="tbl"><thead><tr><th>Proveedor</th><th>Modelo</th><th class="num">Tiempo</th><th>Respuesta</th></tr></thead><tbody>${lines.join('')}</tbody></table></div>`;
+    }
   }, 'Probando…');
+
+  // Qué proveedores tienen clave en Apps Script.
+  if (mode === 'proxy' && isConfigured()) call('ping').then((r) => { if (r.providers) { configured = r.providers; redrawRows(); } }).catch(() => {});
 }
 
 async function datos(host, redraw) {

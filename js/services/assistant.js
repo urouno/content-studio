@@ -49,7 +49,7 @@ export async function aiAngles(idea, similar) {
 }
 
 export async function aiResearch(brandId, topic, idea) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(brandId, 'investigacion'), 'investigador de contenido'), prompt: P.researchPrompt({ topic, idea }), json: false, grounding: true, temperature: 0.4 });
+  const r = await generate({ system: P.systemPrompt(brandCtx(brandId, 'investigacion'), 'investigador de contenido', { compact: true }), prompt: P.researchPrompt({ topic, idea }), json: false, grounding: true, temperature: 0.4 });
   return { text: r.text, sources: r.sources };
 }
 
@@ -57,7 +57,8 @@ export async function aiScripts(idea, opts) {
   const ctx = brandCtx(idea.brandId, 'guion');
   const pillar = idea.pillarId ? store.get('pillars', idea.pillarId) : null;
   const r = await generate({
-    system: P.systemPrompt(ctx), maxTokens: 12000,
+    // Una versión cabe de sobra en 7.000 tokens; varias necesitan más.
+    system: P.systemPrompt(ctx), maxTokens: (opts.versions || 1) > 1 ? 12000 : 7000,
     prompt: P.scriptPrompt({ idea, pillar, ...opts, recentHooks: recentHooks(idea.brandId, idea.id) }),
   });
   const arr = r.json?.versions || (Array.isArray(r.json) ? r.json : [r.json]);
@@ -65,7 +66,7 @@ export async function aiScripts(idea, opts) {
 }
 
 export async function aiRewrite(idea, script, opts) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: P.rewritePrompt({ script, ...opts }), temperature: 0.8, maxTokens: 10000 });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: P.rewritePrompt({ script, ...opts }), temperature: 0.8, maxTokens: 7000 });
   return normalizeScript(r.json?.versions?.[0] || r.json);
 }
 
@@ -75,18 +76,18 @@ export async function aiEvaluate(idea, script, { durationTarget, localFindings }
 }
 
 export async function aiHooks(idea, script, opts = {}) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'hooks')), prompt: P.hooksPrompt({ idea, script, ...opts }) });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'hooks'), 'guionista', { compact: true }), prompt: P.hooksPrompt({ idea, script, ...opts }) });
   return r.json?.hooks || [];
 }
 export async function aiCtas(idea, script) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'hooks')), prompt: P.ctaPrompt({ idea, script, objective: idea.objective }) });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'hooks'), 'guionista', { compact: true }), prompt: P.ctaPrompt({ idea, script, objective: idea.objective }) });
   return r.json?.ctas || [];
 }
 
 export async function aiCopies(idea, platforms) {
   const ver = approvedVersion(idea.id);
   if (!ver) throw new Error('Aprueba un guion antes de generar copies.');
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'copies'), 'copywriter de redes sociales'), prompt: P.copiesPrompt({ script: ver.data, idea, platforms }), temperature: 0.85 });
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'copies'), 'copywriter de redes sociales', { compact: true }), prompt: P.copiesPrompt({ script: ver.data, idea, platforms }), temperature: 0.85 });
   return r.json?.copies || [];
 }
 
@@ -104,6 +105,6 @@ export async function aiBrandDoc(doc) {
 }
 export async function aiInsights(brandId, table) {
   const ctx = brandCtx(brandId, 'analisis');
-  const r = await generate({ system: P.systemPrompt(ctx, 'analista de contenido'), prompt: P.insightsPrompt({ table, brandName: ctx.brand.name }), temperature: 0.3 });
+  const r = await generate({ system: P.systemPrompt(ctx, 'analista de contenido', { compact: true }), prompt: P.insightsPrompt({ table, brandName: ctx.brand.name }), temperature: 0.3 });
   return r.json;
 }

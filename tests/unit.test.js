@@ -164,3 +164,17 @@ test('hasRealChanges: vacío = vacío, y solo cuenta cambios de contenido', () =
   assert.equal(hasRealChanges(base, { ...base, title: 'Hola 2' }), true);
   assert.equal(hasRealChanges({ platforms: ['ig'] }, { platforms: ['ig', 'tt'] }), true);
 });
+
+test('IA: con búsqueda web van primero los proveedores que la admiten', async () => {
+  const { chainFor, DEFAULT_CHAIN } = await import('../js/services/ai.js');
+  assert.deepEqual(chainFor().map((c) => c.provider), DEFAULT_CHAIN);
+  const g = chainFor({ grounding: true }).map((c) => c.provider);
+  assert.equal(g[0], 'gemini'); assert.equal(g.length, DEFAULT_CHAIN.length);
+  assert.deepEqual(chainFor({ only: 'groq' }), [{ provider: 'groq', model: 'auto' }]);
+});
+
+test('IA: el presupuesto de documentos es menor en las tareas cortas', async () => {
+  const { TASK_LIMITS, DOC_LIMITS } = await import('../js/services/branddocs.js');
+  assert.equal(TASK_LIMITS.guion, DOC_LIMITS);
+  assert.ok(TASK_LIMITS.copies.total < DOC_LIMITS.total && TASK_LIMITS.hooks.total < DOC_LIMITS.total);
+});

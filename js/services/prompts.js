@@ -1,5 +1,5 @@
 // Constructores de prompts (funciones puras; reciben el contexto ya filtrado por marca).
-import { methodologyBrief, KNOWLEDGE_LEVELS, STRUCTURES, HOOK_PATTERNS, CTA_TYPES, CTA_FOR_OBJECTIVE, PLATFORMS, EVAL_CRITERIA, byId } from './methodology.js';
+import { methodologyBrief, methodologyShort, KNOWLEDGE_LEVELS, STRUCTURES, HOOK_PATTERNS, CTA_TYPES, CTA_FOR_OBJECTIVE, PLATFORMS, EVAL_CRITERIA, byId } from './methodology.js';
 
 const TRUTH_RULES = `REGLAS DE VERACIDAD (obligatorias):
 - No inventes datos técnicos, cifras, especificaciones, precios, resultados de clientes, estudios ni beneficios de productos.
@@ -9,10 +9,12 @@ const TRUTH_RULES = `REGLAS DE VERACIDAD (obligatorias):
 - Si falta información para una afirmación, escribe un marcador entre corchetes, p. ej. [DATO A CONFIRMAR: tiempo de curación].
 - Distingue recomendaciones de hechos. No prometas viralidad ni resultados garantizados.`;
 
-export function brandContext(ctx) {
+export function brandContext(ctx, { compact = false } = {}) {
   const { brand, config = {}, platforms = [], pillars = [], hooks = [], ctas = [], examples = [], learnings = [], docs = '', filled = new Set(), references = [] } = ctx;
   const v = config.voice || {}; const vis = config.visual || {};
   const lvl = byId(KNOWLEDGE_LEVELS, Number(v.knowledgeLevel)) || KNOWLEDGE_LEVELS[1];
+  // En modo compacto (tareas cortas) se envían menos ejemplos y referencias.
+  const n = compact ? { ex: 1200, refNotes: 600, hk: 6, hkAvoid: 5, ct: 6, ctAvoid: 4, refs: 5 } : { ex: 2500, refNotes: 1500, hk: 12, hkAvoid: 10, ct: 10, ctAvoid: 8, refs: 10 };
   const lines = [
     `MARCA: ${brand.name}`,
     brand.description && `Descripción: ${brand.description}`,
@@ -31,7 +33,7 @@ export function brandContext(ctx) {
     v.avoid && `- PROHIBIDO usar: ${v.avoid}`,
     `- Nivel de conocimiento habitual de la audiencia: ${lvl.name} (${lvl.rules})`,
     v.narrationStyle && `- Estilo de narración: ${v.narrationStyle}`,
-    v.approvedExamples && `- Ejemplos de guiones aprobados (imita el estilo, no copies):\n${String(v.approvedExamples).slice(0, 2500)}`,
+    v.approvedExamples && `- Ejemplos de guiones aprobados (imita el estilo, no copies):\n${String(v.approvedExamples).slice(0, n.ex)}`,
     'IDENTIDAD VISUAL:',
     vis.colors?.length && `- Colores: ${vis.colors.map((c) => `${c.name} ${c.hex}`).join(', ')}`,
     vis.fonts?.length && `- Tipografías: ${vis.fonts.filter((f) => f.family).map((f) => `${f.role}: ${f.family}`).join(', ')}`,
@@ -41,14 +43,14 @@ export function brandContext(ctx) {
     platforms.length && 'REDES:',
     ...platforms.filter((p) => p.active !== false).map((p) => `- ${platformName(p.platform)}: objetivo ${p.goal || '—'}, duración ${p.durationTarget || '—'} s, ${p.frequencyPerWeek || '—'}/semana, formatos ${(p.formats || []).join(', ') || '—'}, CTA preferidos ${(p.ctas || []).join(', ') || '—'}`),
     pillars.length && `PILARES: ${pillars.map((p) => `${p.name}${p.objective ? ` (${p.objective})` : ''}`).join('; ')}`,
-    hooks.filter((h) => h.status === 'aprobado').length && `HOOKS APROBADOS (referencia de estilo): ${hooks.filter((h) => h.status === 'aprobado').slice(0, 12).map((h) => `"${h.text}"`).join(' | ')}`,
-    hooks.filter((h) => h.status === 'evitar').length && `HOOKS A EVITAR: ${hooks.filter((h) => h.status === 'evitar').slice(0, 10).map((h) => `"${h.text}"`).join(' | ')}`,
-    ctas.filter((c) => c.status === 'aprobado').length && `CTA APROBADOS: ${ctas.filter((c) => c.status === 'aprobado').slice(0, 10).map((c) => `[${c.type}] "${c.text}"`).join(' | ')}`,
-    ctas.filter((c) => c.status === 'evitar').length && `CTA A EVITAR: ${ctas.filter((c) => c.status === 'evitar').slice(0, 8).map((c) => `"${c.text}"`).join(' | ')}`,
+    hooks.filter((h) => h.status === 'aprobado').length && `HOOKS APROBADOS (referencia de estilo): ${hooks.filter((h) => h.status === 'aprobado').slice(0, n.hk).map((h) => `"${h.text}"`).join(' | ')}`,
+    hooks.filter((h) => h.status === 'evitar').length && `HOOKS A EVITAR: ${hooks.filter((h) => h.status === 'evitar').slice(0, n.hkAvoid).map((h) => `"${h.text}"`).join(' | ')}`,
+    ctas.filter((c) => c.status === 'aprobado').length && `CTA APROBADOS: ${ctas.filter((c) => c.status === 'aprobado').slice(0, n.ct).map((c) => `[${c.type}] "${c.text}"`).join(' | ')}`,
+    ctas.filter((c) => c.status === 'evitar').length && `CTA A EVITAR: ${ctas.filter((c) => c.status === 'evitar').slice(0, n.ctAvoid).map((c) => `"${c.text}"`).join(' | ')}`,
     examples.length && `GUIONES APROBADOS DE ESTA MARCA (resumen): ${examples.map((e) => `"${e.hook}" → ${e.structure}`).join(' | ')}`,
     learnings.length && `APRENDIZAJES DE RESULTADOS (hipótesis, no reglas): ${learnings.join(' | ')}`,
-    vis.references && `REFERENCIAS GENERALES DE LA MARCA: ${String(vis.references).slice(0, 1500)}`,
-    references.filter((r) => r.title || r.url).length && `REFERENCIAS GUARDADAS (inspiración de estilo, no copiar): ${references.filter((r) => r.title || r.url).slice(0, 10).map((r) => `[${r.kind}] ${r.title || r.url}${r.metrics ? ` (${r.metrics})` : ''}${r.notes ? ` — ${r.notes}` : ''}`).join(' | ')}`,
+    vis.references && `REFERENCIAS GENERALES DE LA MARCA: ${String(vis.references).slice(0, n.refNotes)}`,
+    references.filter((r) => r.title || r.url).length && `REFERENCIAS GUARDADAS (inspiración de estilo, no copiar): ${references.filter((r) => r.title || r.url).slice(0, n.refs).map((r) => `[${r.kind}] ${r.title || r.url}${r.metrics ? ` (${r.metrics})` : ''}${r.notes ? ` — ${r.notes}` : ''}`).join(' | ')}`,
     docs && `\n=== DOCUMENTOS DE REFERENCIA DE ${String(brand.name).toUpperCase()} (contexto fijo: síguelos siempre) ===\n${docs}\n=== FIN DE LOS DOCUMENTOS ===`,
   ];
   return lines.filter(Boolean).join('\n');
@@ -56,15 +58,15 @@ export function brandContext(ctx) {
 
 export function platformName(id) { return byId(PLATFORMS, id)?.name || id; }
 
-export function systemPrompt(ctx, role = 'guionista') {
+export function systemPrompt(ctx, role = 'guionista', { compact = false } = {}) {
   return `Eres un ${role} experto en contenido orgánico para video vertical (TikTok, Reels, Shorts) que trabaja para UNA sola marca.
 Escribe siempre en español, con el tono de la marca. Usa EXCLUSIVAMENTE el contexto de esta marca.
 
-${methodologyBrief()}
+${compact ? methodologyShort() : methodologyBrief()}
 
 ${TRUTH_RULES}
 
-${brandContext(ctx)}`;
+${brandContext(ctx, { compact })}`;
 }
 
 const SCRIPT_SCHEMA = `{
