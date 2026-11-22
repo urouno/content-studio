@@ -6,11 +6,11 @@ import { icon, toast, modal, renderFields, readFields, bindAutosave } from '../c
 import { esc, download, copyText, fmtRelative } from '../core/utils.js';
 import { brandConfig } from '../services/workflow.js';
 import {
-  COLOR_ROLES, FONT_ROLES, SUBTITLE_ANIMATIONS, CARD_STYLES, CAMERA_MOVES, SFX_TYPES, MUSIC_STYLES, SKILL_GRAPHICS,
+  COLOR_ROLES, FONT_ROLES, STATUSES, autoStatus, fontFile, SUBTITLE_ANIMATIONS, CARD_STYLES, CAMERA_MOVES, SFX_TYPES, MUSIC_STYLES, SKILL_GRAPHICS,
   editOf, buildMarcaJson, mergeStyleGuide, stripGuideBlock, GUIDE_MAX, parseMarcaJson, missingForSkill, marcaFileName, guideFileName, slugify,
 } from '../services/reels.js';
 
-const missText = (miss) => (miss.length ? `Para que la skill la use sin preguntar falta: ${esc(miss.join(', '))}.` : 'La skill la usará directamente, sin preguntas de estilo.');
+const missText = (miss, st) => (miss.length ? `Para que la skill la use sin preguntar falta: ${esc(miss.join(', '))}.` : st && st !== 'definida' ? `Marcada como «${esc(st)}»: la skill la tratará como borrador hasta que la cambies a «definida».` : 'La skill la usará directamente, sin preguntas de estilo.');
 const tri = (v) => (v === true ? 'si' : v === false ? 'no' : '');
 const untri = (v) => (v === 'si' ? true : v === 'no' ? false : null);
 
@@ -18,7 +18,7 @@ const untri = (v) => (v === 'si' ? true : v === 'no' ? false : null);
 function toForm(edit, fonts) {
   return {
     file: edit.file, roles: { ...edit.roles }, fonts: { ...edit.fonts },
-    ff: fonts.map((f) => ({ peso: edit.fontFiles?.[f.family]?.peso || '', archivo: edit.fontFiles?.[f.family]?.archivo || '' })),
+    fw: { ...edit.fontWeights }, status: edit.status || '',
     sub: { animacion: edit.subtitles?.animacion || '', mayusculas: tri(edit.subtitles?.mayusculas), contorno: edit.subtitles?.contorno ?? '', sin_puntuacion: tri(edit.subtitles?.sin_puntuacion) },
     cards: edit.cards, cameraMode: Array.isArray(edit.camera) ? 'solo' : 'todos', camera: Array.isArray(edit.camera) ? edit.camera : [],
     sfx: edit.sfx || [], music: edit.music, graphicsAllowed: edit.graphicsAllowed || [], never: edit.never, corrections: edit.corrections,
@@ -26,12 +26,11 @@ function toForm(edit, fonts) {
 }
 /** Formulario → lo que se guarda en `visual.edit`. */
 function fromForm(d, fonts, prev) {
-  const fontFiles = {};
-  fonts.forEach((f, i) => { if (f.family && (d.ff?.[i]?.peso || d.ff?.[i]?.archivo)) fontFiles[f.family] = { peso: d.ff[i].peso || '', archivo: d.ff[i].archivo || '' }; });
   return {
     ...prev, file: String(d.file || '').trim().replace(/\.json$/i, ''),
     roles: Object.fromEntries(Object.entries(d.roles || {}).filter(([, v]) => v)),
-    fonts: Object.fromEntries(Object.entries(d.fonts || {}).filter(([, v]) => v)), fontFiles,
+    fonts: Object.fromEntries(Object.entries(d.fonts || {}).filter(([, v]) => v)),
+    fontWeights: Object.fromEntries(Object.entries(d.fw || {}).filter(([, v]) => v)), status: d.status || '',
     subtitles: { animacion: d.sub?.animacion || '', mayusculas: untri(d.sub?.mayusculas), contorno: d.sub?.contorno === '' || d.sub?.contorno == null ? null : Number(d.sub.contorno), sin_puntuacion: untri(d.sub?.sin_puntuacion) },
     cards: d.cards || '', camera: d.cameraMode === 'solo' ? d.camera || [] : null,
     sfx: (d.sfx || []).slice(0, 3), music: d.music || '', graphicsAllowed: d.graphicsAllowed || [], never: d.never || '', corrections: d.corrections || '',
@@ -48,20 +47,20 @@ export function tabEdit(host, brandId) {
     const brand = store.get('brands', brandId); const cfg = brandConfig(brandId); const edit = editOf(cfg);
     const colors = (cfg.visual.colors || []).filter((c) => c.hex);
     const fonts = (cfg.visual.fonts || []).filter((f) => f.family);
-    const miss = missingForSkill(edit);
+    const miss = missingForSkill(edit); const st = edit.status || autoStatus(edit);
     const tri3 = [{ value: 'si', label: 'Sí' }, { value: 'no', label: 'No' }];
     const colorOpts = colors.map((c) => ({ value: c.hex, label: `${c.name} · ${c.hex}` }));
     const fontOpts = fonts.map((f) => ({ value: f.family, label: `${f.family}${f.role ? ` (${f.role})` : ''}` }));
     const fields = [
       { type: 'section', label: 'Archivo en la skill', hint: `Se guarda como Mi estilo/marcas/${marcaFileName(brand, cfg)}` },
       { name: 'file', label: 'Nombre del archivo (sin .json)', placeholder: slugify(brand.name), hint: 'Déjalo vacío para usar el nombre de la marca. Si la skill ya tiene un archivo de esta marca, usa el mismo nombre.' },
+      { name: 'status', label: 'Estado en la skill', type: 'select', options: STATUSES.map((x) => ({ value: x.id, label: `${x.name}: ${x.desc}` })), empty: `Automático (ahora: ${autoStatus(edit)})`, span: 2 },
       { type: 'section', label: 'Colores por uso', hint: colors.length ? 'Elige de la paleta (pestaña Identidad visual).' : 'Primero añade colores en la pestaña Identidad visual.' },
       ...COLOR_ROLES.map((r) => ({ name: `roles.${r.id}`, label: r.name, type: 'select', options: colorOpts, empty: 'Lo que traiga la skill', hint: r.desc })),
-      { type: 'section', label: 'Tipografías', hint: fonts.length ? 'Los archivos .woff2 van en Mi estilo/tipografias/ (o los que trae la skill: Anton, Rajdhani, Cascadia Mono).' : 'Primero añade tipografías en la pestaña Identidad visual.' },
-      ...FONT_ROLES.map((r) => ({ name: `fonts.${r.id}`, label: r.name, type: 'select', options: fontOpts, empty: 'Lo que traiga la skill' })),
-      ...fonts.flatMap((f, i) => [
-        { name: `ff.${i}.archivo`, label: `${f.family}: archivo`, placeholder: 'Anton-Regular.woff2' },
-        { name: `ff.${i}.peso`, label: `${f.family}: peso`, placeholder: '400, 700, 800…' },
+      { type: 'section', label: 'Tipografías', hint: fonts.length ? 'Cada familia y peso necesita su archivo en Mi estilo/tipografias/, con el nombre que se indica (p. ej. montserrat-800.woff2).' : 'Primero añade tipografías en la pestaña Identidad visual.' },
+      ...FONT_ROLES.flatMap((r) => [
+        { name: `fonts.${r.id}`, label: r.name, type: 'select', options: fontOpts, empty: 'Lo que traiga la skill' },
+        { name: `fw.${r.id}`, label: `${r.name}: peso`, type: 'select', options: [300, 400, 500, 600, 700, 800, 900].map((w) => ({ value: String(w), label: String(w) })), empty: '—', hint: edit.fonts?.[r.id] ? `Archivo: ${fontFile(edit.fonts[r.id], Number(edit.fontWeights?.[r.id]) || 400)}` : '' },
       ]),
       { type: 'section', label: 'Subtítulos' },
       { name: 'sub.animacion', label: 'Animación', type: 'select', options: SUBTITLE_ANIMATIONS.map((a) => ({ value: a.id, label: a.name })), empty: 'Lo que traiga la skill', span: 2 },
@@ -84,10 +83,10 @@ export function tabEdit(host, brandId) {
     host.innerHTML = `<div class="notice" style="margin-bottom:12px">${icon('film')}<div><p><b>Estilo de edición.</b> Lo que define cómo se ven y suenan siempre los reels de esta marca, en el formato de tu skill <code>editar-reels-claude</code>. Lo que cambia en cada video (cuántos gráficos, escenas) se elige en el guion. Deja en «Lo que traiga la skill» lo que prefieras afinar en su editor en vivo.</p></div></div>
       <div class="split"><section class="card"><div class="card-b"><form class="form-grid cols-3" data-eform>${renderFields(fields, toForm(edit, fonts))}</form></div></section>
       <aside class="stack-lg sticky">
-        <section class="card"><div class="card-h"><h3>${icon('download')}Para la skill</h3>${miss.length ? '<span class="badge warn">por confirmar</span>' : '<span class="badge ok">definida</span>'}</div><div class="card-b stack small">
-          <p class="xs muted" style="margin:0" data-miss>${missText(miss)}</p>
+        <section class="card"><div class="card-h"><h3>${icon('download')}Para la skill</h3><span class="badge ${st === 'definida' ? 'ok' : 'warn'}">${esc(st)}</span></div><div class="card-b stack small">
+          <p class="xs muted" style="margin:0" data-miss>${missText(miss, st)}</p>
           <button class="btn btn-sm btn-primary" data-dl-json>${icon('download', 'ic-sm')}${esc(marcaFileName(brand, cfg))}</button>
-          <button class="btn btn-sm" data-dl-md>${icon('download', 'ic-sm')}${esc(guideFileName(brand))}</button>
+          <button class="btn btn-sm" data-dl-md>${icon('download', 'ic-sm')}${esc(guideFileName(brand, cfg))}</button>
           <button class="btn btn-sm" data-preview>${icon('eye', 'ic-sm')}Ver los dos archivos</button>
           <p class="xs muted" style="margin:0">Guárdalos en <code>Reels con Claude/Mi estilo/marcas/</code> (el .json) y en <code>Mi estilo/</code> (la guía).</p>
         </div></section>
@@ -95,7 +94,7 @@ export function tabEdit(host, brandId) {
           <p class="xs muted" style="margin:0">Si ya tienes esta marca en la skill, impórtala primero: se rellenan los campos y se conservan sus medidas (tamaños y posiciones afinados en el editor en vivo).</p>
           <label class="btn btn-sm">${icon('upload', 'ic-sm')}Importar marcas/….json<input type="file" accept=".json,application/json" hidden data-import></label>
           ${edit.importedAt ? `<p class="xs muted" style="margin:0">Importado ${esc(fmtRelative(edit.importedAt))}${edit.raw ? ` · ${Object.keys(edit.raw).length} claves conservadas` : ''}.</p>` : ''}
-          <label class="btn btn-sm">${icon('upload', 'ic-sm')}Importar ${esc(guideFileName(brand))}<input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden data-import-guide></label>
+          <label class="btn btn-sm">${icon('upload', 'ic-sm')}Importar ${esc(guideFileName(brand, cfg))}<input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden data-import-guide></label>
           <p class="xs muted" style="margin:0">${edit.guide ? `Guía de la skill importada ${esc(fmtRelative(edit.guideImportedAt))} (${edit.guide.length.toLocaleString('es')} caracteres). Al descargarla se conserva entera y solo se añade al final el bloque de Content Studio.` : 'Si la skill ya tiene una guía de esta marca, impórtala: al descargar se conserva entera (con lo «Aprendido en los reels») y solo se añade un bloque al final. Sin importarla, la descarga sería una guía nueva que <b>sustituiría</b> la tuya.'}</p>
         </div></section>
       </aside></div>`;
@@ -112,10 +111,10 @@ export function tabEdit(host, brandId) {
 
   // Solo se redibuja el lateral (estado y nombres), para no perder el foco del formulario.
   const refreshSide = () => {
-    const brand = store.get('brands', brandId); const cfg = brandConfig(brandId); const miss = missingForSkill(editOf(cfg));
+    const brand = store.get('brands', brandId); const cfg = brandConfig(brandId); const e = editOf(cfg); const miss = missingForSkill(e); const st = e.status || autoStatus(e);
     const badge = host.querySelector('aside .card-h .badge');
-    if (badge) { badge.className = `badge ${miss.length ? 'warn' : 'ok'}`; badge.textContent = miss.length ? 'por confirmar' : 'definida'; }
-    const m = host.querySelector('[data-miss]'); if (m) m.innerHTML = missText(miss);
+    if (badge) { badge.className = `badge ${st === 'definida' ? 'ok' : 'warn'}`; badge.textContent = st; }
+    const m = host.querySelector('[data-miss]'); if (m) m.innerHTML = missText(miss, st);
     const b = host.querySelector('[data-dl-json]'); if (b) b.lastChild.textContent = marcaFileName(brand, cfg);
   };
 
@@ -129,11 +128,15 @@ export function tabEdit(host, brandId) {
     const t = e.target.closest('button'); if (!t) return;
     auto?.flush();
     if (t.dataset.dlJson != null) { const f = files(); download(marcaFileName(f.brand, f.cfg), f.json, 'application/json'); }
-    if (t.dataset.dlMd != null) { const f = files(); download(guideFileName(f.brand), f.md, 'text/markdown'); }
+    if (t.dataset.dlMd != null) {
+      const f = files(); download(guideFileName(f.brand, f.cfg), f.md, 'text/markdown');
+      // Desde ahora el .json nombra esta guía (vuelve a descargarlo también).
+      if (!editOf(f.cfg).guideLinked) { await save({ ...editOf(f.cfg), guideLinked: true }); toast('Descarga también de nuevo el .json: ahora nombra esta guía.', 'info'); }
+    }
     if (t.dataset.preview != null) {
       const f = files();
       modal({ title: 'Archivos para la skill', size: 'lg', body: `<p class="small muted">Mi estilo/marcas/<b>${esc(marcaFileName(f.brand, f.cfg))}</b></p><pre class="xs" style="max-height:30vh;overflow:auto">${esc(f.json)}</pre>
-        <p class="small muted">Mi estilo/<b>${esc(guideFileName(f.brand))}</b></p><pre class="xs" style="max-height:30vh;overflow:auto;white-space:pre-wrap">${esc(f.md)}</pre>`,
+        <p class="small muted">Mi estilo/<b>${esc(guideFileName(f.brand, f.cfg))}</b></p><pre class="xs" style="max-height:30vh;overflow:auto;white-space:pre-wrap">${esc(f.md)}</pre>`,
       actions: [{ label: `${icon('copy')}Copiar JSON`, onClick: async () => { await copyText(f.json); toast('Copiado', 'success'); return false; } }, { label: 'Cerrar', kind: 'primary' }] });
     }
   });

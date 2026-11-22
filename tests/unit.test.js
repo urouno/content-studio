@@ -224,7 +224,7 @@ test('marca para la skill: exporta lo estable y conserva lo afinado en el editor
   assert.equal(imported.file, 'cafe-lumbre'); assert.equal(imported.fonts.clave, 'Anton'); assert.deepEqual(imported.sfx, ['glitch', 'riser']);
   assert.equal(imported.never, 'Sin emojis'); assert.match(imported.corrections, /Lunbre = Lumbre/);
   // Content Studio cambia lo estable.
-  const edit = { ...imported, roles: { texto: '#FFFFFF', acento: '#F59E0B' }, fonts: { texto: 'Rajdhani', clave: 'Anton' }, subtitles: { animacion: 'karaoke', mayusculas: true, contorno: null, sin_puntuacion: null }, cards: 'cristal', camera: [], sfx: ['whoosh', 'pop'], corrections: 'Lunbre = Lumbre\nexpreso = espresso' };
+  const edit = { ...imported, status: '', guideLinked: true, roles: { texto: '#FFFFFF', acento: '#F59E0B' }, fonts: { texto: 'Rajdhani', clave: 'Anton' }, subtitles: { animacion: 'karaoke', mayusculas: true, contorno: null, sin_puntuacion: null }, cards: 'cristal', camera: [], sfx: ['whoosh', 'pop'], corrections: 'Lunbre = Lumbre\nexpreso = espresso' };
   const brand = { name: 'Café Lumbre' };
   const config = { voice: { avoid: 'barato, garantizado' }, visual: { fonts: [{ role: 'Títulos', family: 'Anton' }, { role: 'Texto', family: 'Rajdhani' }], colors: [{ name: 'Ámbar', hex: '#F59E0B' }], edit } };
   const out = R.buildMarcaJson({ brand, config });
@@ -232,17 +232,18 @@ test('marca para la skill: exporta lo estable y conserva lo afinado en el editor
   assert.equal(out.colores.acento, '#F59E0B');
   assert.equal(out.subtitulos.animacion, 'karaoke'); assert.equal(out.subtitulos.tam, 92); assert.equal(out.subtitulos.y, 1350); // medidas conservadas
   assert.deepEqual(out.fuentes.clave, { familia: 'Anton', ancho_car: 0.47 }); // objeto de la skill respetado
-  assert.equal(out.fuentes.texto, 'Rajdhani');
+  assert.deepEqual(out.fuentes.texto, { familia: 'Rajdhani' });
   assert.deepEqual(out.zoom.movimientos, []); // ninguno = solo zoom de fondo
   assert.deepEqual(Object.keys(out.sonido.efectos.tipos), ['whoosh', 'pop']); // sin los tipos viejos
   assert.equal(out.sonido.musica_db, -12); assert.equal(out.sonido.efectos.usos.camara, 'riser');
   assert.equal(out.correcciones.expreso, 'espresso');
   assert.ok(Array.isArray(out.notas) && out.notas.some((n) => /barato, garantizado/.test(n)));
   assert.equal(out.guia, 'Reglas-de-estilo-Cafe-Lumbre.md');
+  assert.equal(out.nombre, 'Café Lumbre');
   // Reimportar no duplica la línea de palabras prohibidas.
   assert.ok(!R.parseMarcaJson(out).never.includes('barato'));
   // Sin colores ni fuentes, queda por confirmar.
-  assert.equal(R.buildMarcaJson({ brand, config: { visual: {} } }).estado, 'por confirmar');
+  assert.equal(R.buildMarcaJson({ brand, config: { visual: {} } }).estado, 'pendiente');
   // La guía corta usa los campos audiovisuales de texto libre de la ficha.
   const md = R.buildStyleGuide({ brand, config: { ...config, visual: { ...config.visual, pace: 'Cambio de plano cada 2-4 s', intro: 'Logo 1 s' } } });
   assert.match(md, /^# Reglas de estilo · Café Lumbre/); assert.match(md, /Cambio de plano cada 2-4 s/); assert.match(md, /Intro: Logo 1 s/); assert.match(md, /220 px/);
@@ -266,4 +267,42 @@ test('guía de la skill: se conserva entera y solo se pone al día el bloque de 
   assert.equal(R.stripGuideBlock(once), skillGuide.trim());
   // Sin guía previa, se genera una entera.
   assert.match(R.mergeStyleGuide('', { brand, config }), /^# Reglas de estilo · Marca X/);
+});
+
+test('marca para la skill: el formato real de sus archivos (fuentes con peso, estado, nombre y guía)', async () => {
+  const R = await import('../js/services/reels.js');
+  // Forma real de un archivo de la skill (datos inventados).
+  const skillFile = { nombre: 'Marca Demo S.A.', estado: 'por confirmar', guia: 'Reglas-de-estilo.md',
+    fuentes: { archivos: [{ familia: 'Montserrat', peso: 800, archivo: 'montserrat-800.woff2' }, { familia: 'Montserrat', peso: 700, archivo: 'montserrat-700.woff2' }],
+      texto: { familia: 'Montserrat', peso: 700 }, clave: { familia: 'Montserrat', peso: 800, ancho_car: 0.72 }, tarjeta: { familia: 'Montserrat' } },
+    colores: { texto: '#FFFFFF', acento: '#3BAEEA' }, subtitulos: { tam: 70, animacion: 'resaltado' }, tarjetas: { estilo: 'blanca', y: 300 },
+    notas: ['Borrador del manual de identidad.'] };
+  const ed = R.parseMarcaJson(skillFile, { fileName: 'demo.json' });
+  assert.equal(ed.status, 'por confirmar'); assert.equal(ed.fonts.texto, 'Montserrat'); assert.equal(ed.fontWeights.texto, '700');
+  const brand = { name: 'Demo' };
+  // Sin cambios: el archivo sale igual (salvo las notas propias, que siguen siendo lista).
+  const same = R.buildMarcaJson({ brand, config: { visual: { edit: ed } } });
+  assert.equal(same.estado, 'por confirmar'); assert.equal(same.nombre, 'Marca Demo S.A.'); assert.equal(same.guia, 'Reglas-de-estilo.md');
+  assert.deepEqual(same.fuentes, skillFile.fuentes); assert.deepEqual(same.notas, skillFile.notas);
+  assert.equal(R.guideFileName(brand, { visual: { edit: ed } }), 'Reglas-de-estilo.md');
+  // Cambiar la clave a Anton: nuevo archivo anton-400.woff2 y su ancho de letra; se conservan los de Montserrat.
+  const out = R.buildMarcaJson({ brand, config: { visual: { edit: { ...ed, status: 'definida', fonts: { ...ed.fonts, clave: 'Anton' }, fontWeights: { ...ed.fontWeights, clave: '' } } } } });
+  assert.equal(out.estado, 'definida');
+  assert.deepEqual(out.fuentes.clave, { familia: 'Anton', ancho_car: 0.47 });
+  assert.deepEqual(out.fuentes.texto, { familia: 'Montserrat', peso: 700 });
+  assert.ok(out.fuentes.archivos.some((a) => a.archivo === 'anton-400.woff2' && a.peso === 400));
+  assert.equal(out.fuentes.archivos.filter((a) => a.familia === 'Montserrat').length, 2);
+  // Marca nueva: fuentes como objetos con peso y archivo con la convención de la skill.
+  const nueva = R.buildMarcaJson({ brand: { name: 'Nueva' }, config: { visual: { edit: { fonts: { texto: 'Outfit' }, fontWeights: { texto: '600' } } } } });
+  assert.deepEqual(nueva.fuentes.texto, { familia: 'Outfit', peso: 600 });
+  assert.deepEqual(nueva.fuentes.archivos, [{ familia: 'Outfit', peso: 600, archivo: 'outfit-600.woff2' }]);
+  assert.equal(nueva.estado, 'por confirmar');
+});
+
+test('marca para la skill: no nombra una guía que la skill no tiene', async () => {
+  const R = await import('../js/services/reels.js');
+  const ed = R.parseMarcaJson({ nombre: 'Sin guía', estado: 'pendiente', notas: ['No inventes colores.'] });
+  const out = R.buildMarcaJson({ brand: { name: 'Sin guía' }, config: { visual: { edit: ed } } });
+  assert.equal(out.guia, undefined); assert.equal(out.estado, 'pendiente'); assert.deepEqual(out.notas, ['No inventes colores.']);
+  assert.equal(R.buildMarcaJson({ brand: { name: 'Sin guía' }, config: { visual: { edit: { ...ed, guideLinked: true } } } }).guia, 'Reglas-de-estilo-Sin-guia.md');
 });

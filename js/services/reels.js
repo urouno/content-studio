@@ -57,9 +57,9 @@ export const SAFE_ZONE = { top: 220, bottom: 380, right: 140 };
 
 export function defaultEdit() {
   return {
-    file: '', roles: {}, fonts: {}, fontFiles: {}, subtitles: { animacion: '', mayusculas: null, contorno: null, sin_puntuacion: null },
+    file: '', status: '', roles: {}, fonts: {}, fontWeights: {}, subtitles: { animacion: '', mayusculas: null, contorno: null, sin_puntuacion: null },
     cards: '', camera: null, sfx: [], music: '', graphicsAllowed: [], never: '', corrections: '', raw: null, importedAt: '',
-    guide: '', guideImportedAt: '', // la guía que ya tenía la skill (sin el bloque de Content Studio)
+    guide: '', guideImportedAt: '', guideLinked: false, // la guía que ya tenía la skill (sin el bloque de Content Studio)
   };
 }
 export const editOf = (cfg) => ({ ...defaultEdit(), ...(cfg?.visual?.edit || {}) });
@@ -106,12 +106,13 @@ export function missingForSkill(edit) {
 export function buildMarcaJson({ brand, config }) {
   const edit = editOf(config);
   const raw = isObj(edit.raw) ? edit.raw : {};
-  const fonts = config?.visual?.fonts || [];
   const fontFor = (role) => edit.fonts?.[role] || '';
   const ours = {
-    nombre: brand.name,
-    estado: missingForSkill(edit).length ? 'por confirmar' : 'definida',
-    guia: `Reglas-de-estilo-${guideName(brand)}.md`,
+    // El nombre y la guía que ya tenga la skill se respetan (p. ej. «Reglas-de-estilo.md» de la marca personal).
+    nombre: raw.nombre || brand.name,
+    estado: edit.status || autoStatus(edit),
+    // La guía solo se nombra si existe: la tenía la skill, se importó, se descargó desde aquí o la marca es nueva.
+    guia: raw.guia || edit.guide || edit.guideLinked || !edit.raw ? guideFileName(brand, config) : '',
     colores: clean(Object.fromEntries(COLOR_ROLES.map((r) => [r.id, edit.roles?.[r.id] || '']))),
     subtitulos: clean({
       animacion: edit.subtitles?.animacion || '',
@@ -121,17 +122,28 @@ export function buildMarcaJson({ brand, config }) {
     }),
     tarjetas: clean({ estilo: edit.cards || '' }),
   };
-  // Fuentes: los archivos (.woff2 en Mi estilo/tipografias/) y qué familia va en cada uso.
-  const used = [...new Set(FONT_ROLES.map((r) => fontFor(r.id)).filter(Boolean))];
-  if (used.length) {
-    const archivos = used.map((fam) => {
-      const f = fonts.find((x) => x.family === fam) || {};
-      return clean({ familia: fam, peso: edit.fontFiles?.[fam]?.peso || f.weight || '', archivo: edit.fontFiles?.[fam]?.archivo || '' });
-    });
+  // Fuentes, como en la skill: cada uso es {familia, peso} (la clave, además, su ancho de letra) y `archivos` tiene un
+  // .woff2 por familia y peso, en Mi estilo/tipografias/.
+  if (FONT_ROLES.some((r) => fontFor(r.id))) {
     const keep = isObj(raw.fuentes) ? raw.fuentes : {};
-    // `clave` puede ser un objeto en la skill (con su ancho de letra): si ya lo es, solo se cambia la familia.
-    const roleVal = (role) => (isObj(keep[role]) ? { ...keep[role], familia: fontFor(role) } : fontFor(role));
-    ours.fuentes = clean({ archivos, ...Object.fromEntries(FONT_ROLES.map((r) => [r.id, fontFor(r.id) ? roleVal(r.id) : ''])) });
+    const role = (id) => {
+      const fam = fontFor(id); if (!fam) return null;
+      const prev = isObj(keep[id]) ? keep[id] : {};
+      const peso = Number(edit.fontWeights?.[id]) || (prev.familia === fam ? prev.peso : null) || null;
+      const o = { ...prev, familia: fam };
+      if (peso) o.peso = peso; else delete o.peso;
+      if (id === 'clave') { if (prev.familia !== fam || !prev.ancho_car) { const w = charWidth(fam, peso); if (w) o.ancho_car = w; else delete o.ancho_car; } }
+      return o;
+    };
+    const roles = Object.fromEntries(FONT_ROLES.map((r) => [r.id, role(r.id)]).filter(([, v]) => v));
+    const archivos = Array.isArray(keep.archivos) ? keep.archivos.map((a) => ({ ...a })) : [];
+    Object.values(roles).forEach((r) => {
+      // Un uso sin peso (como «tarjeta» en la skill) usa el archivo que ya tenga esa familia.
+      if (!r.peso && archivos.some((a) => a.familia === r.familia)) return;
+      const peso = r.peso || 400;
+      if (!archivos.some((a) => a.familia === r.familia && Number(a.peso || 400) === peso)) archivos.push({ familia: r.familia, peso, archivo: fontFile(r.familia, peso) });
+    });
+    ours.fuentes = { ...roles, archivos };
   }
   if (Array.isArray(edit.camera)) ours.zoom = { movimientos: edit.camera };
   if (edit.sfx?.length || edit.music) {
@@ -142,16 +154,38 @@ export function buildMarcaJson({ brand, config }) {
   const corr = { ...(isObj(raw.correcciones) ? raw.correcciones : {}), ...parseCorrections(edit.corrections) };
   if (Object.keys(corr).length) ours.correcciones = corr;
   const notas = notesFor({ brand, config, edit });
-  if (notas.length) ours.notas = Array.isArray(raw.notas) ? notas : notas.join('\n');
+  if (notas.length) ours.notas = notas; // en la skill, siempre una lista
   const out = deepMerge(raw, clean(ours));
-  // Las listas se sustituyen (no se mezclan) y los efectos se reemplazan enteros para no dejar tipos de más.
+  // `fuentes` se reescribe entera (con lo conservado ya dentro) para que no queden usos de más.
+  if (ours.fuentes) out.fuentes = { ...(isObj(raw.fuentes) ? raw.fuentes : {}), ...ours.fuentes };
+  // Los efectos se reemplazan enteros para no dejar tipos de más.
   if (ours.sonido?.efectos && isObj(out.sonido)) out.sonido.efectos = deepMerge(isObj(raw.sonido?.efectos) ? { ...raw.sonido.efectos, tipos: {} } : {}, ours.sonido.efectos);
   return out;
 }
 
+/** Estado de la marca en la skill: pendiente (nada definido), por confirmar (a medias) o definida. */
+export function autoStatus(edit) {
+  const miss = missingForSkill(edit);
+  return miss.length === 4 ? 'pendiente' : miss.length ? 'por confirmar' : 'definida';
+}
+export const STATUSES = [
+  { id: 'definida', name: 'Definida', desc: 'La skill la usa sin preguntar el estilo.' },
+  { id: 'por confirmar', name: 'Por confirmar', desc: 'Borrador: la skill lo dice y abre el editor en vivo para que la confirmes.' },
+  { id: 'pendiente', name: 'Pendiente', desc: 'Sin estilo: la skill no inventa colores ni fuentes y ofrece crearlo con referencias.' },
+];
+
+/** Nombre del .woff2 con la convención de la skill: «montserrat-800.woff2». */
+export const fontFile = (fam, peso = 400) => `${slugify(fam)}-${peso || 400}.woff2`;
+/** Ancho medio de letra de la palabra clave (de la guía de la skill): Anton 0.47, Montserrat 800 0.72. */
+const CHAR_WIDTH = { anton: { any: 0.47 }, montserrat: { 800: 0.72, 900: 0.74, 700: 0.69 } };
+function charWidth(fam, peso) { const t = CHAR_WIDTH[slugify(fam)]; return t ? t[peso] ?? t.any ?? null : null; }
+
 const guideName = (brand) => String(brand.name || 'Marca').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'Marca';
 export const marcaFileName = (brand, config) => `${editOf(config).file || slugify(brand.name)}.json`;
-export const guideFileName = (brand) => `Reglas-de-estilo-${guideName(brand)}.md`;
+export const guideFileName = (brand, config) => {
+  const g = config && editOf(config).raw?.guia;
+  return typeof g === 'string' && /\.md$/i.test(g) ? g : `Reglas-de-estilo-${guideName(brand)}.md`;
+};
 
 /** Reglas de criterio para el editor: lo que nunca sale en pantalla y las palabras prohibidas. */
 function notesFor({ config, edit }) {
@@ -202,13 +236,13 @@ export function parseMarcaJson(json, { fileName = '' } = {}) {
   if (!isObj(j)) throw new Error('El archivo no es un JSON de marca.');
   const fam = (x) => (isObj(x) ? x.familia || x.family || '' : x || '');
   const fu = isObj(j.fuentes) ? j.fuentes : {};
-  const files = Array.isArray(fu.archivos) ? fu.archivos : [];
   const efectos = j.sonido?.efectos;
   return {
     file: fileName.replace(/\.json$/i, '') || slugify(j.nombre),
     roles: Object.fromEntries(COLOR_ROLES.map((r) => [r.id, j.colores?.[r.id] || '']).filter(([, v]) => v)),
     fonts: Object.fromEntries(FONT_ROLES.map((r) => [r.id, fam(fu[r.id])]).filter(([, v]) => v)),
-    fontFiles: Object.fromEntries(files.filter((f) => f && fam(f)).map((f) => [fam(f), { peso: f.peso || '', archivo: f.archivo || '' }])),
+    fontWeights: Object.fromEntries(FONT_ROLES.map((r) => [r.id, isObj(fu[r.id]) && fu[r.id].peso ? String(fu[r.id].peso) : '']).filter(([, v]) => v)),
+    status: STATUSES.some((x) => x.id === j.estado) ? j.estado : '',
     subtitles: {
       animacion: j.subtitulos?.animacion || '', mayusculas: j.subtitulos?.mayusculas ?? null,
       contorno: j.subtitulos?.contorno ?? null, sin_puntuacion: j.subtitulos?.sin_puntuacion ?? null,
