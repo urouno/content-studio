@@ -127,8 +127,8 @@ escenas y para. Dime qué preguntó y qué no.
 
 ```text
 Añade a editar-reels-claude (compartido con animar-reels-claude) B-roll gratuito de bancos libres, para ilustrar lo que
-se nombra y no se grabó. Toma como modelo el estilo «documental» de Sloth (busca, enseña una hoja de candidatos, el
-agente elige por lo que ve y deja FUENTES.md con los derechos), sin copiar su código.
+se nombra y no se grabó. El método: buscar varias ideas a la vez, enseñar una sola hoja de candidatos, elegir por lo
+que se ve (no por el título) y dejar FUENTES.md con los derechos de cada clip.
 
 1. Script scripts/broll_banco.py:
    - Busca a la vez en Pexels (videos y fotos), Pixabay (videos) y Wikimedia Commons (fotos y videos) varias ideas en
@@ -175,8 +175,8 @@ México. Enséñame escenas-revision.jpg.
 ## Bloque 5 · Biblioteca de escenas por marca
 
 ```text
-Añade a animar-reels-claude una biblioteca de escenas por marca, para no rehacer lo que ya quedó bien (como la
-biblioteca de modelos 3D de Sloth: antes de hacer algo se busca; lo que se aprueba se guarda):
+Añade a animar-reels-claude una biblioteca de escenas por marca, para no rehacer lo que ya quedó bien (antes de
+hacer una escena se busca en la biblioteca; lo que se aprueba se guarda):
 
 1. Carpeta Mi estilo/escenas/<marca>/ con un archivo por escena aprobada: <id>.json (la escena tal como va en
    escenas.json, sin tiempos) + <id>.jpg (miniatura) + una línea de para qué sirve y en qué reel salió.
