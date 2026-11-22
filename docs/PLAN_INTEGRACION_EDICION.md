@@ -100,7 +100,7 @@ La ficha de marca de Content Studio genera (y lee) el archivo de la marca de la 
 | `graficos_permitidos` | Nuevo campo: casillas con el catálogo de gráficos |
 | `zoom.movimientos` | Nuevo campo: casillas con los movimientos de cámara (`[]` = ninguno) |
 | `sonido.efectos` | Nuevo campo: hasta 3 tipos de efecto (`whoosh`, `pop`, `impact`…) |
-| `correcciones` | **Nombres propios y productos** de la ficha (p. ej. `{"Afinazón": "Afinazone"}`): Whisper deja de escribirlos mal |
+| `correcciones` | **Nombres propios y productos** de la ficha (p. ej. `{"Kafe Rico": "KafeRico"}`): Whisper deja de escribirlos mal |
 | `notas` | Reglas de *Reglas, límites y temas sensibles* que afectan a lo que sale en pantalla |
 | `Reglas-de-estilo-<Marca>.md` | Se genera desde la pestaña «Estilo de edición» y la de comunicación, en el formato de `guia-de-estilo-ejemplo.md` (tono, lienzo, tipografía, color, subtítulos, motion graphics, ritmo, sonido, logos, prohibido) |
 
