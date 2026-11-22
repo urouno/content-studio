@@ -65,7 +65,7 @@ export function render(host, b, ctx) {
             <button class="btn btn-sm" data-compare ${versions.length < 2 ? 'disabled' : ''}>${icon('compare', 'ic-sm')}Comparar</button>
             <button class="btn btn-sm" data-export>${icon('download', 'ic-sm')}Texto</button>
             <a class="btn btn-sm btn-ghost" href="#/metodo" title="Guía de estructuras, hooks y CTA">${icon('book', 'ic-sm')}Método</a>
-            ${lk ? `<button class="btn btn-sm" data-unlock>${icon('unlock', 'ic-sm')}Desbloquear</button>` : `<button class="btn btn-sm btn-primary" data-approve>${icon('lock', 'ic-sm')}Aprobar versión</button>`}
+            ${lk ? `<a class="btn btn-sm btn-primary" href="#/grabar/${idea.id}">${icon('camera', 'ic-sm')}Modo grabación</a><button class="btn btn-sm" data-unlock>${icon('unlock', 'ic-sm')}Desbloquear</button>` : `<button class="btn btn-sm btn-primary" data-approve>${icon('lock', 'ic-sm')}Aprobar versión</button>`}
           </div></div></div>
 
         <section class="card"><div class="card-h"><h3>Planteamiento</h3></div><div class="card-b"><div class="form-grid cols-3" data-meta>

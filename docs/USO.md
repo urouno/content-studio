@@ -77,3 +77,19 @@ computadora con Claude Code. Plan completo en [PLAN_INTEGRACION_EDICION.md](PLAN
    Carpeta de reels → Comprobar todos*): pasa a *Editado*, enseña el video y los copies usan lo que se dijo de verdad.
 
 Sin carpeta conectada (por ejemplo, en el celular), *Descargar el encargo* baja los cuatro archivos para ponerlos a mano.
+
+## Modo grabación
+
+Con el guion aprobado, **Guion → Modo grabación** (o *Edición → Modo grabación*) abre `#/grabar/<id>`:
+
+- **Segundo a segundo:** el guion en tramos, con su segundo según las palabras por minuto de la marca (*Pilares y
+  estrategia*), lo que se dice, el texto en pantalla, lo que se ve y su recurso visual.
+- **Primer cuadro:** un encuadre 9:16 con las zonas que tapa la interfaz de la red (220 px arriba, 380 abajo y 140 a la
+  derecha, las de la skill), la franja de la cara y la de los subtítulos (la del archivo de la marca, si la tiene).
+- **Gancho:** con sus 4 P y las variantes del primer cuadro para grabarlas también.
+- **Qué preparar:** las tomas y objetos que pide el guion, los datos por comprobar y lo básico para grabar bien. Las
+  casillas se recuerdan en ese dispositivo.
+- **Teleprompter** (`#/grabar/<id>/teleprompter`): a pantalla completa, a la velocidad de la marca. Tocar el texto o la
+  barra espaciadora lo pausa; − y + cambian la velocidad, A− y A+ la letra; ⇋ lo pone en espejo para teleprompters con
+  cristal; la pantalla no se apaga mientras corre. Ábrelo en otro dispositivo (tableta, computadora) si grabas con el
+  celular.

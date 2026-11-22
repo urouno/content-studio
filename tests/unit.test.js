@@ -334,3 +334,19 @@ test('encargo de edición: archivos del reel, tomas y mensaje para Claude Code',
   assert.match(msg, /skill editar-reels-claude con el reel «Reels\/2026-11-23 · Café»/); assert.match(msg, /no las vuelvas a preguntar/); assert.match(msg, /propuesta-graficos\.md/);
   assert.equal(R.spokenFromPlan({ subtitulos: [{ frase: 'No tienes que | abrir *editor*' }, { palabras: [{ w: 'de' }, { w: 'vídeos' }] }] }), 'No tienes que abrir editor de vídeos');
 });
+
+test('modo grabación: guion segundo a segundo y lista de qué preparar', async () => {
+  const { timeline, prepList } = await import('../js/views/recording.js');
+  const script = { hook: { narrado: 'Si tu café sale así lo estás quemando', visual: 'Chorro oscuro' }, cta: { text: 'Guárdalo para tu próximo café', visual: 'Taza servida' },
+    sections: [{ beat: 'Error 1', voice: 'Primer error: apretar el café con la cuchara', visual: 'Cuchara aplastando', resource: { type: 'broll', what: 'café suelto' } }],
+    verify: [{ claim: '25 segundos', reason: 'medir' }] };
+  const { rows, total } = timeline(script, 120); // 2 palabras por segundo
+  assert.deepEqual(rows.map((r) => r.kind), ['hook', 'section', 'cta']);
+  assert.equal(rows[0].from, 0); assert.equal(rows[0].to, 4); assert.equal(rows[1].from, 4); assert.equal(total, rows.at(-1).to);
+  const prep = prepList(script, 'cabeza').map((p) => p.text);
+  assert.ok(prep.includes('Primer cuadro: Chorro oscuro'));
+  assert.ok(prep.some((t) => /Toma de apoyo: café suelto/.test(t)));
+  assert.ok(prep.some((t) => /Comprobar antes de grabar: 25 segundos/.test(t)));
+  assert.ok(prep.some((t) => /Luz de frente/.test(t)));
+  assert.ok(prepList(script, 'producto').some((p) => /Una toma por frase/.test(p.text)));
+});

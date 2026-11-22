@@ -57,6 +57,7 @@ export function render(host, b, ctx) {
       <aside class="stack-lg sticky">
         <section class="card"><div class="card-h"><h3>${icon('check')}En la carpeta</h3>${fs.connected && fs.granted ? `<button class="btn btn-sm" data-check>${icon('refresh', 'ic-sm')}Comprobar</button>` : ''}</div><div class="card-b stack small">
           ${step(sent, 'Encargo', sent ? `Reels/${esc(st.folder)}/` : 'Aún no se ha enviado a edición')}
+          ${opts.production !== 'animado' ? `<a class="btn btn-sm" href="#/grabar/${idea.id}">${icon('camera', 'ic-sm')}Modo grabación (teleprompter)</a>` : ''}
           ${step(!!st?.takes?.length, 'Toma', st?.takes?.length ? st.takes.map((t) => `${esc(t.name)} <span class="muted">(${fmtSize(t.size)})</span>`).join('<br>') : 'Grábala y añádela aquí (se copia a Tomas/ con el id del contenido)')}
           ${step(!!st?.final, 'Video editado', st?.final ? esc(st.final.name) : 'Lo deja la skill al exportar')}
           ${fs.connected && fs.granted ? `

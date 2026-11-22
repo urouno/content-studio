@@ -13,6 +13,7 @@ import * as dashboard from './views/dashboard.js';
 import * as ideas from './views/ideas.js';
 import * as contents from './views/contents.js';
 import * as content from './views/content.js';
+import * as recording from './views/recording.js';
 import * as calendar from './views/calendar.js';
 import * as results from './views/results.js';
 import * as brands from './views/brands.js';
@@ -37,6 +38,7 @@ const ROUTES = [
   ...NAV,
   { path: '/metodo', view: method },
   { path: '/contenido', view: content },
+  { path: '/grabar', view: recording },
   { path: '/ajustes', view: settingsView },
 ];
 
