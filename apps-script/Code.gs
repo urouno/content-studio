@@ -691,6 +691,7 @@ function diagnosticarIA() {
   // 1) Modelos de cada proveedor compatible con OpenAI, en paralelo.
   var oai = con.filter(function (p) { return OAI_PROVIDERS[p]; });
   var model = { gemini: 'gemini-flash-lite-latest', claude: 'claude-haiku-5-5' };
+  var alt = {};
   if (oai.length) {
     console.log('[' + seg() + '] Pidiendo la lista de modelos a: ' + oai.join(', ') + '…');
     var lists = UrlFetchApp.fetchAll(oai.map(function (p) { return { url: OAI_PROVIDERS[p].base + '/models', muteHttpExceptions: true, headers: oaiHeaders_(p) }; }));
@@ -706,7 +707,9 @@ function diagnosticarIA() {
       var rank = function (id) { for (var k = 0; k < conf.prefer.length; k++) if (conf.prefer[k].test(id)) return k; return conf.prefer.length; };
       ids.sort(function (a, b) { return rank(a) - rank(b); });
       model[p] = ids[0] || conf.fallback;
+      alt[p] = ids.slice(1, 4);
       console.log('[' + seg() + '] ' + p + ': ' + (code === 200 ? ids.length + ' modelos; se prueba ' + (model[p] || '—') : 'la lista respondió ' + code + ' ' + lists[i].getContentText().slice(0, 150)));
+      if (code === 200 && conf.freeOnly) console.log('    gratuitos: ' + ids.slice(0, 14).join(', '));
     });
   }
 
@@ -725,6 +728,15 @@ function diagnosticarIA() {
     var d; try { d = JSON.parse(txt); } catch (e) { d = null; }
     var err = d && d.error ? (typeof d.error === 'string' ? d.error : d.error.message || JSON.stringify(d.error)) : '';
     console.log((code === 200 && !err ? '✔ ' : '✘ ') + x.p + ' → ' + code + (err ? ': ' + String(err).slice(0, 200) : ''));
+    // Saturado: en la app se pasa al siguiente modelo; aquí también, para saber si alguno responde.
+    if ((code === 429 || code >= 500 || err) && (alt[x.p] || []).length) {
+      for (var k = 0; k < alt[x.p].length; k++) {
+        var r2 = UrlFetchApp.fetch(OAI_PROVIDERS[x.p].base + '/chat/completions', { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: oaiHeaders_(x.p), payload: JSON.stringify({ model: alt[x.p][k], max_tokens: 200, messages: [{ role: 'user', content: 'Responde solo: ok' }] }) });
+        var ok2 = r2.getResponseCode() === 200 && !/"error"/.test(r2.getContentText().slice(0, 300));
+        console.log('    ' + (ok2 ? '✔ ' : '✘ ') + x.p + ' con ' + alt[x.p][k] + ' → ' + r2.getResponseCode());
+        if (ok2) break;
+      }
+    }
   });
 }
 

@@ -7,7 +7,7 @@ const DEFAULTS = {
   syncUrl: '', token: '', autoSync: true,
   aiMode: 'proxy', // proxy | direct | off
   // Proveedores de IA en orden: si uno falla, responde el siguiente (ver js/services/ai.js).
-  aiChain: null, // null = valor por defecto (gemini, groq, openrouter, cerebras)
+  aiChain: null, // null = valor por defecto (groq, gemini, openrouter, cerebras)
   aiModels: {}, // modelo por proveedor ("auto" = el mejor disponible en la cuenta)
   aiProvider: 'gemini', // antiguo: proveedor único (se migra a aiChain)
   model: 'gemini-flash-latest', modelClaude: 'claude-opus-5-5', temperature: 0.9,
@@ -19,7 +19,7 @@ function read() {
   try { s = { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; } catch { s = { ...DEFAULTS }; }
   // Migración: antes había un solo proveedor. Quien usaba Claude lo conserva primero.
   if (!Array.isArray(s.aiChain) || !s.aiChain.length) {
-    s.aiChain = s.aiProvider === 'claude' ? ['claude', 'gemini', 'groq', 'openrouter', 'cerebras'] : ['gemini', 'groq', 'openrouter', 'cerebras'];
+    s.aiChain = s.aiProvider === 'claude' ? ['claude', 'groq', 'gemini', 'openrouter', 'cerebras'] : ['groq', 'gemini', 'openrouter', 'cerebras'];
   }
   return s;
 }

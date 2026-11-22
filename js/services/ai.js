@@ -20,7 +20,8 @@ export const AI_PROVIDERS = [
   { id: 'claude', name: 'Claude', paid: true, search: true, key: 'ANTHROPIC_API_KEY', where: 'platform.claude.com', note: 'De pago por uso. La suscripción Claude Pro no incluye la API.', defModel: 'claude-opus-5-5' },
 ];
 export const providerInfo = (id) => AI_PROVIDERS.find((p) => p.id === id) || { id, name: id };
-export const DEFAULT_CHAIN = ['gemini', 'groq', 'openrouter', 'cerebras'];
+// Groq primero: es el más rápido. Para investigar, chainFor() pone delante a Gemini (búsqueda de Google).
+export const DEFAULT_CHAIN = ['groq', 'gemini', 'openrouter', 'cerebras'];
 
 let lastProvider = null;
 
