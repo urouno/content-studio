@@ -52,7 +52,7 @@ function instalar() {
   return token;
 }
 
-var VERSION = '1.6.0';
+var VERSION = '1.7.0';
 var BASE = ['id', 'brandId', 'createdAt', 'updatedAt', 'deletedAt', 'version', 'updatedBy'];
 var SERVER_COLS = ['syncedAt'];
 var MAX_CELL = 49000;
@@ -65,7 +65,7 @@ var TABLES = {
   platforms:      { sheet: 'Plataformas',    prefix: 'PLT', cols: ['platform', 'goal', 'formats', 'durationTarget', 'frequencyPerWeek', 'ctas', 'active'], json: ['formats', 'ctas'], num: ['durationTarget', 'frequencyPerWeek'], bool: ['active'] },
   pillars:        { sheet: 'Pilares',        prefix: 'PIL', cols: ['name', 'description', 'objective', 'share'], num: ['share'] },
   ideas:          { sheet: 'Ideas',          prefix: 'CNT', cols: ['title', 'topic', 'pillarId', 'audience', 'problem', 'keyword', 'objective', 'funnel', 'contentType', 'platforms', 'format', 'priority', 'status', 'difficulty', 'experimental', 'knowledgeLevel', 'owner', 'targetDate', 'references', 'notes', 'source', 'statusHistory', 'productionType', 'pitch'], json: ['platforms', 'statusHistory', 'pitch'], num: ['priority', 'knowledgeLevel'], bool: ['experimental'], required: ['title', 'status'] },
-  scripts:        { sheet: 'Guiones',        prefix: 'GUI', cols: ['ideaId', 'currentVersionId', 'approvedVersionId', 'locked', 'publishFilter'], json: ['publishFilter'], bool: ['locked'], required: ['ideaId'] },
+  scripts:        { sheet: 'Guiones',        prefix: 'GUI', cols: ['ideaId', 'currentVersionId', 'approvedVersionId', 'locked', 'publishFilter', 'reelFolder', 'finalText', 'editOpts'], json: ['publishFilter', 'editOpts'], bool: ['locked'], required: ['ideaId'] },
   scriptVersions: { sheet: 'VersionesGuion', prefix: 'VER', cols: ['scriptId', 'ideaId', 'versionNo', 'label', 'origin', 'data', 'evaluation'], json: ['data', 'evaluation'], num: ['versionNo'], required: ['scriptId', 'ideaId'] },
   copies:         { sheet: 'Copies',         prefix: 'CPY', cols: ['ideaId', 'platform', 'title', 'caption', 'description', 'ctaText', 'hashtags', 'coverText', 'variant', 'status'], json: ['hashtags'], num: ['variant'], required: ['ideaId', 'platform'] },
   calendar:       { sheet: 'Calendario',     prefix: 'CAL', cols: ['ideaId', 'platform', 'date', 'time', 'owner', 'status', 'notes'], required: ['ideaId', 'platform', 'date'] },

@@ -242,10 +242,11 @@ ${script ? `Cierre actual: ${script.sections?.at(-1)?.voice || ''}` : ''}
 Devuelve JSON: {"ctas": [{"type": "", "text": "", "why": ""}]}`;
 }
 
-export function copiesPrompt({ script, idea, platforms }) {
+export function copiesPrompt({ script, idea, platforms, spoken = '' }) {
   const pl = platforms.map((p) => { const m = byId(PLATFORMS, p); return `${p} (${m?.name}; caption máx ${m?.maxCaption} caracteres; ${m?.hashtags?.join('–')} hashtags${m?.titleMax ? `; título ≤ ${m.titleMax}` : ''})`; }).join(', ');
   return `Escribe los textos de publicación para este video ya producido. Deben relacionarse con lo que se ve y se dice, conservar la voz de la marca y NO repetir literalmente el guion.
 GUION FINAL: ${JSON.stringify({ title: script.title, hook: script.hook, promise: script.promise, sections: (script.sections || []).map((s) => s.voice), cta: script.cta })}
+${spoken ? `LO QUE SE DIJO DE VERDAD EN EL VIDEO EDITADO (manda sobre el guion si no coinciden): ${String(spoken).slice(0, 3000)}` : ''}
 ${idea?.keyword ? `Palabra clave para SEO interno de la plataforma: ${idea.keyword}` : ''}
 Plataformas: ${pl}
 Para cada plataforma da 2 variantes. Primera línea del caption = gancho escrito (no copia del hook hablado). Hashtags relevantes y específicos, no genéricos tipo #viral.

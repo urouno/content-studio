@@ -153,7 +153,9 @@ export function buildMarcaJson({ brand, config }) {
   if (edit.graphicsAllowed?.length) ours.graficos_permitidos = edit.graphicsAllowed;
   const corr = { ...(isObj(raw.correcciones) ? raw.correcciones : {}), ...parseCorrections(edit.corrections) };
   if (Object.keys(corr).length) ours.correcciones = corr;
-  const notas = notesFor({ brand, config, edit });
+  // Las notas de la skill (ahí guarda lo aprendido en cada reel) nunca se pierden: se suman a las de Content Studio.
+  const rawNotes = (Array.isArray(raw.notas) ? raw.notas : String(raw.notas || '').split('\n')).map((x) => String(x).trim()).filter((l) => l && !AUTO_NOTE.test(l));
+  const notas = [...new Set([...rawNotes, ...notesFor({ brand, config, edit })])];
   if (notas.length) ours.notas = notas; // en la skill, siempre una lista
   const out = deepMerge(raw, clean(ours));
   // `fuentes` se reescribe entera (con lo conservado ya dentro) para que no queden usos de más.
@@ -187,6 +189,7 @@ export const guideFileName = (brand, config) => {
   return typeof g === 'string' && /\.md$/i.test(g) ? g : `Reglas-de-estilo-${guideName(brand)}.md`;
 };
 
+const AUTO_NOTE = /^Nunca en pantalla ni en subtítulos:/;
 /** Reglas de criterio para el editor: lo que nunca sale en pantalla y las palabras prohibidas. */
 function notesFor({ config, edit }) {
   const v = config?.voice || {};
@@ -296,3 +299,128 @@ export const stripGuideBlock = (md) => {
   const s = String(md || ''); const i = s.indexOf(GUIDE_START); const j = s.indexOf(GUIDE_END);
   return i !== -1 && j > i ? `${s.slice(0, i).trimEnd()}\n${s.slice(j + GUIDE_END.length)}`.trim() : s.trim();
 };
+
+// ---------- El encargo de cada video ----------
+// Al enviar un contenido a edición se crea `Reels/AAAA-MM-DD · <tema>/` con:
+//   proyecto.json                 lo que la skill pregunta en su entrevista, ya respondido (+ `contenido`: el id CNT-…)
+//   trabajo/guion-aprobado.md     el guion aprobado, sección a sección
+//   trabajo/propuesta-graficos.md la tabla «Lo que dice · Qué aparece» con los tipos reales de la skill
+//   trabajo/vocab.txt             nombres propios para la transcripción (transcribe.py --vocab)
+// La toma se copia a `Tomas/CNT-… toma1.mov`: el id en el nombre la liga a su contenido.
+
+export const PRESETS = { sin: [0, 0], pocos: [3, 1], equilibrado: [5, 2], muchos: [8, 3] };
+/** De los tipos de recurso de Content Studio a los nombres de la skill (gráfico o escena de animar-reels-claude). */
+export const SKILL_NAME = {
+  'escena-mapa': 'escena · mapa', 'escena-iconos': 'escena · lista_iconos', 'escena-cifra': 'escena · cifra', 'escena-comparar': 'escena · comparar',
+  'escena-mecanismo': 'escena · mecanismo', 'escena-objeto': 'escena · objeto', 'escena-3d': 'escena · pieza3d', 'escena-foto': 'escena · foto',
+  camara: 'cámara (plan.py camara)', broll: 'toma de apoyo (marco o toma)',
+};
+const TIPO = { cabeza: 'cabeza parlante', producto: 'producto con voz en off', animado: 'video animado' };
+
+const fileSafe = (t) => String(t || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+const localDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** «2026-11-23 · Café quemado en la italiana» (como las carpetas que crea la skill). */
+export const reelFolderName = (idea, date = new Date()) => `${localDate(date)} · ${fileSafe(idea.title).slice(0, 60) || idea.id}`;
+/** «CNT-abc toma1.mov»: el id del contenido delante para encontrar sus tomas. */
+export const takeName = (ideaId, n, ext) => `${ideaId} toma${n}.${String(ext || 'mov').replace(/^\./, '').toLowerCase()}`;
+export const takesOf = (ideaId, files) => files.filter((f) => f.kind === 'file' && f.name.startsWith(`${ideaId} `) && /\.(mov|mp4|m4v|mkv|webm|avi|mts)$/i.test(f.name));
+export const finalOf = (files) => files.find((f) => f.kind === 'file' && /^FINAL\b.*\.mp4$/i.test(f.name)) || null;
+/** Qué skill hace el video. */
+export const skillFor = (production) => (production === 'animado' ? 'animar-reels-claude' : 'editar-reels-claude');
+
+/** Opciones del video que la skill pregunta en su entrevista (con lo que sugiere el guion). */
+export function defaultVideoOpts({ idea, script }) {
+  const sd = script || {};
+  const production = sd.productionType || idea.productionType || 'cabeza';
+  const kinds = (sd.sections || []).map((s) => s.resource?.type).filter(Boolean);
+  return {
+    production, graphics: sd.graphics || 'equilibrado',
+    scenes: production === 'animado' ? 'video' : kinds.some((k) => String(k).startsWith('escena-')) ? 'algunas' : 'ninguna',
+    behind: production === 'cabeza' && kinds.includes('detras'),
+    music: 'marca', editor: true, review: 'guiada', voice: 'grabada', platform: (idea.platforms || [])[0] || 'instagram',
+  };
+}
+
+/** proyecto.json del reel. Las claves son las que crea la skill en su paso 1; `contenido` y `content_studio` son nuestras. */
+export function buildProyecto({ idea, brand, config, opts, take = '' }) {
+  const edit = editOf(config);
+  const [flotantes, pantalla] = PRESETS[opts.graphics] || PRESETS.equilibrado;
+  const p = {
+    toma: take, marca: edit.file || slugify(brand.name), tipo: TIPO[opts.production] || TIPO.cabeza,
+    resolucion: '1080', revision: opts.review || 'guiada', con_graficos: opts.graphics !== 'sin', flotantes, pantalla,
+    detras: !!opts.behind && opts.production === 'cabeza',
+    // «La de la marca» sin música elegida en Content Studio: la decide el archivo de la marca en la skill.
+    musica: opts.music === 'marca' ? (edit.music || undefined) : opts.music || 'ninguna',
+    red: opts.platform || 'instagram', editor: !!opts.editor,
+    contenido: idea.id,
+    content_studio: {
+      skill: skillFor(opts.production), escenas: opts.scenes, guion: 'trabajo/guion-aprobado.md', propuesta: 'trabajo/propuesta-graficos.md', vocab: 'trabajo/vocab.txt',
+      ...(opts.production === 'animado' ? { voz: opts.voice || 'grabada' } : {}),
+      creado: new Date().toISOString(),
+    },
+  };
+  if (p.musica === undefined) delete p.musica;
+  return p;
+}
+
+/** El guion aprobado en Markdown, para leerlo en la skill (y para grabar). */
+export function buildGuionMd({ idea, brand, script }) {
+  const s = script || {}; const h = s.hook || {};
+  const cell = (t) => String(t || '').replace(/\|/g, '/').replace(/\n+/g, ' ').trim();
+  const rows = (s.sections || []).map((x, i) => `| ${i + 1} | ${cell(x.beat || x.act)} | ${cell(x.voice)} | ${cell(x.onScreenText)} | ${cell(x.visual)} | ${cell(x.edit)} |`);
+  return [
+    `# ${idea.title}`, '',
+    `Contenido ${idea.id} · ${brand.name}`, s.promise && `Promesa: ${s.promise}`, '',
+    '## Gancho (0-3 s)',
+    `- Dice: «${h.narrado || ''}»`, h.textual && `- Texto del primer cuadro: ${h.textual}`, h.visual && `- Primer cuadro: ${h.visual}`, h.auditivo && `- Sonido: ${h.auditivo}`, '',
+    '## Guion',
+    '| # | Parte | Voz (lo que se dice) | Texto en pantalla | Visual | Edición |', '|---|---|---|---|---|---|', ...rows, '',
+    s.cta?.text && `## CTA\n- «${s.cta.text}»${s.cta.visual ? ` · ${s.cta.visual}` : ''}`,
+    (s.verify || []).filter((v) => v.claim).length ? `\n## Verificar antes de publicar\n${s.verify.filter((v) => v.claim).map((v) => `- ${v.claim}${v.reason ? ` (${v.reason})` : ''}`).join('\n')}` : '',
+    s.visualNotes && `\n## Indicaciones visuales\n${s.visualNotes}`, s.editingNotes && `\n## Indicaciones de edición\n${s.editingNotes}`,
+  ].filter((x) => x !== '' && x != null && x !== false).join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
+}
+
+/** La propuesta de gráficos, como la tabla que la skill enseña antes de construirlos. */
+export function buildPropuestaMd({ script, opts }) {
+  const s = script || {};
+  const cell = (t) => String(t || '').replace(/\|/g, '/').replace(/\n+/g, ' ').trim();
+  const [fl, pa] = PRESETS[opts?.graphics] || PRESETS.equilibrado;
+  const rows = [];
+  if (s.hook?.textual) rows.push(['0', `«${cell(s.hook.narrado)}»`, cell(s.hook.textual), 'gancho']);
+  (s.sections || []).forEach((x, i) => { const r = x.resource || {}; if (r.type) rows.push([String(i + 1), `«${cell(r.anchor || x.voice.split(/[.!?]/)[0])}»`, cell(r.what), SKILL_NAME[r.type] || r.type]); });
+  if (s.cta?.text) rows.push(['fin', `«${cell(s.cta.text)}»`, cell(s.cta.visual || s.cta.text), 'cierre']);
+  return [
+    '# Propuesta de gráficos (de Content Studio)', '',
+    'Es una propuesta hecha sobre el guion. Ánclala a las palabras reales de la toma (`plan.py resumen --palabras`), aplica',
+    'las reglas de la skill (ninguna cifra que no se pronuncie, nada sobre la cara, zona segura) y enseña la tabla para aprobarla.', '',
+    `Topes de este video: ${opts?.graphics === 'sin' ? 'sin gráficos' : `${fl} flotantes y ${pa} a pantalla completa`}.`, '',
+    '| # | Lo que dice | Qué aparece | Tipo |', '|---|---|---|---|',
+    ...rows.map((r) => `| ${r.join(' | ')} |`),
+  ].join('\n') + '\n';
+}
+
+/** Nombres propios para la transcripción: la marca, sus correcciones y la palabra clave del público. */
+export function buildVocab({ idea, brand, config }) {
+  const edit = editOf(config);
+  const corr = { ...(isObj(edit.raw?.correcciones) ? edit.raw.correcciones : {}), ...parseCorrections(edit.corrections) };
+  return [...new Set([brand.name, ...Object.values(corr), idea.keyword].map((x) => String(x || '').trim()).filter(Boolean))].join(', ') + '\n';
+}
+
+/** El mensaje para pegar en Claude Code. */
+export function editMessage({ folderName, opts, take }) {
+  const skill = skillFor(opts.production);
+  return [
+    `Usa la skill ${skill} con el reel «Reels/${folderName}».`,
+    'Lo preparó Content Studio: su proyecto.json ya trae las respuestas de la entrevista (marca, tipo, gráficos, música, red, editor), así que no las vuelvas a preguntar; solo confírmalas en una frase.',
+    take ? `La toma es «Tomas/${take}».` : 'La toma está en Tomas/ con el id del contenido delante del nombre.',
+    'Lee trabajo/guion-aprobado.md antes de cortar y usa trabajo/vocab.txt en --vocab al transcribir.',
+    'En la pasada de gráficos, parte de trabajo/propuesta-graficos.md: ánclala a las palabras reales y enséñame la tabla antes de construir.',
+  ].join('\n');
+}
+
+/** Lo que se dijo de verdad, desde el plan de la skill (sus subtítulos), para los copies. */
+export function spokenFromPlan(plan) {
+  const subs = Array.isArray(plan?.subtitulos) ? plan.subtitulos : [];
+  return subs.map((s) => s.frase || (s.palabras || []).map((w) => w.w).join(' ')).filter(Boolean).join(' ').replace(/[*|]/g, '').replace(/\s+/g, ' ').trim();
+}

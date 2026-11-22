@@ -9,10 +9,12 @@ import { call, isConfigured } from '../services/api.js';
 import { syncNow, fullPull, syncState, resolveConflict } from '../services/sync.js';
 import { listModels, usageToday, generate, AI_PROVIDERS, aiChain, modelFor, providerInfo } from '../services/ai.js';
 import { loadDemo } from '../services/demo.js';
+import * as F from '../services/folder.js';
+import { syncAll } from '../services/production.js';
 import { pageHeader } from './shared.js';
 
 const TABS = [
-  { id: 'conexion', label: 'Conexión y sync', icon: 'cloud' }, { id: 'ia', label: 'IA (proveedores)', icon: 'sparkle' },
+  { id: 'conexion', label: 'Conexión y sync', icon: 'cloud' }, { id: 'ia', label: 'IA (proveedores)', icon: 'sparkle' }, { id: 'carpeta', label: 'Carpeta de reels', icon: 'film' },
   { id: 'datos', label: 'Datos y copias', icon: 'download' }, { id: 'papelera', label: 'Papelera', icon: 'trash' },
   { id: 'conflictos', label: 'Conflictos', icon: 'alert' }, { id: 'apariencia', label: 'Apariencia', icon: 'eye' },
 ];
@@ -24,7 +26,7 @@ export function render(main, { params }) {
     main.innerHTML = `${pageHeader({ title: 'Ajustes' })}${tabs(TABS.map((t) => ({ ...t, count: t.id === 'conflictos' ? nConf || null : t.id === 'papelera' ? store.trash().length || null : null })), tab)}<div class="settings-body"></div>`;
     main.querySelectorAll('[data-tab]').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; history.replaceState(null, '', `#/ajustes/${tab}`); draw(); }));
     const host = main.querySelector('.settings-body');
-    await ({ conexion, ia, datos, papelera, conflictos: conflictsTab, apariencia })[tab](host, draw);
+    await ({ conexion, ia, carpeta, datos, papelera, conflictos: conflictsTab, apariencia })[tab](host, draw);
   };
   draw();
   return on('sync', () => { if (tab === 'conexion') { const el = main.querySelector('[data-syncstate]'); if (el) el.innerHTML = syncInfo(); } });
@@ -215,3 +217,37 @@ function apariencia(host) {
 }
 
 export { modal };
+
+// ---------- Carpeta de reels (skill editar-reels-claude) ----------
+async function carpeta(host, redraw) {
+  const fs = await F.folderState();
+  const chk = fs.connected && fs.granted ? await F.checkStructure().catch(() => null) : null;
+  const row = (ok, label) => `<div class="row-between"><span>${label}</span><b style="color:var(${ok ? '--ok' : '--warn'})">${ok ? 'sí' : 'no'}</b></div>`;
+  host.innerHTML = `<div class="split"><section class="card"><div class="card-h"><h3>${icon('film')}Carpeta «Reels con Claude»</h3></div><div class="card-b stack">
+    <p class="small">Es la carpeta de tu skill <code>editar-reels-claude</code> (normalmente <code>Escritorio/Claude Code/Videos Claude/Reels con Claude</code>). Conectada, la app:</p>
+    <ul class="small" style="margin:0">
+      <li>guarda el estilo de cada marca en <code>Mi estilo/marcas/</code> sin descargar archivos;</li>
+      <li>crea el encargo de cada video en <code>Reels/</code> y copia la toma a <code>Tomas/</code>;</li>
+      <li>marca sola «Grabado» y «Editado» al encontrar la toma y el <code>FINAL - ….mp4</code>, y te enseña el video.</li>
+    </ul>
+    ${!fs.supported ? `<div class="notice warn">${icon('alert')}<div><p><b>Este navegador no deja conectar carpetas.</b></p><ol class="small" style="margin:6px 0 0 18px;padding:0">
+        <li>En Brave, abre una pestaña nueva y escribe <code>brave://flags/#file-system-access-api</code>.</li><li>Cambia <b>File System Access API</b> a <b>Enabled</b>.</li><li>Pulsa <b>Relaunch</b> (se reinicia Brave) y vuelve aquí.</li></ol>
+        <p class="xs muted">También funciona en Chrome y Edge sin tocar nada. En el celular no está disponible: allí la app funciona igual, sin la carpeta.</p></div></div>`
+      : !fs.connected ? `<button class="btn btn-primary" data-connect>${icon('link')}Conectar carpeta</button><p class="xs muted" style="margin:0">Elige la carpeta «Reels con Claude» (la que contiene Mi estilo, Tomas y Reels) y acepta «Ver y editar».</p>`
+      : `<div class="row-between"><span>Carpeta</span><b>${esc(fs.name)}</b></div>
+        ${fs.granted ? '' : `<div class="notice">${icon('lock')}<div><p>El navegador pide permiso en cada sesión.</p><button class="btn btn-sm btn-primary" data-grant style="margin-top:6px">${icon('check', 'ic-sm')}Dar permiso</button></div></div>`}
+        ${chk ? `<div class="stack small">${row(chk.misEstilo, 'Mi estilo/')}${row(chk.marcas, 'Mi estilo/marcas/')}${row(chk.tomas, 'Tomas/')}${row(chk.reels, 'Reels/')}</div>
+          ${chk.nested ? `<div class="notice warn">${icon('alert')}<div><p>Dentro hay otra carpeta «Reels con Claude»: conecta esa.</p></div></div>` : !chk.tomas && !chk.reels ? `<div class="notice warn">${icon('alert')}<div><p>No parece la carpeta de la skill (no tiene Tomas/ ni Reels/). Las que faltan se crearán al usarlas.</p></div></div>` : ''}` : ''}
+        <div class="row"><button class="btn" data-connect>${icon('refresh', 'ic-sm')}Cambiar carpeta</button><button class="btn btn-ghost" data-disconnect>${icon('x', 'ic-sm')}Desconectar</button></div>`}
+  </div></section>
+  <aside class="stack-lg">${fs.connected && fs.granted ? `<section class="card"><div class="card-h"><h3>${icon('check')}Estados</h3></div><div class="card-b stack small">
+    <p class="xs muted" style="margin:0">Revisa todos los contenidos con guion aprobado: los que tengan toma pasan a «Grabado» y los que tengan video final, a «Editado».</p>
+    <button class="btn" data-sync>${icon('refresh', 'ic-sm')}Comprobar todos</button><div data-out class="small"></div></div></section>` : ''}</aside></div>`;
+  host.querySelectorAll('[data-connect]').forEach((b) => b.addEventListener('click', async () => { try { await F.connectFolder(); toast('Carpeta conectada', 'success'); redraw(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, 'error'); } }));
+  host.querySelector('[data-grant]')?.addEventListener('click', async () => { await F.getRoot({ ask: true }); redraw(); });
+  host.querySelector('[data-disconnect]')?.addEventListener('click', async () => { await F.disconnectFolder(); toast('Carpeta desconectada', 'success'); redraw(); });
+  host.querySelector('[data-sync]')?.addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
+    const r = await syncAll();
+    host.querySelector('[data-out]').innerHTML = r.length ? r.map((x) => `<div>${icon('check', 'ic-sm')} <a href="#/contenido/${x.idea.id}/edicion">${esc(x.idea.title)}</a> <span class="muted">→ ${esc(x.changed.join(', '))}</span></div>`).join('') : '<span class="muted">Sin cambios.</span>';
+  }, 'Comprobando…'));
+}

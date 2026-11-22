@@ -212,3 +212,5 @@ input[type="color"] { width: 38px; height: 32px; border: 1px solid var(--border-
 .sec-res > label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .sec-res select { width: auto; max-width: 240px; }
 .sec-res.on { border-top-color: var(--accent); }
+/* Contenido → Edición: pasos en la carpeta */
+.row > .sev { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }

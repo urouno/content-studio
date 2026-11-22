@@ -2,9 +2,11 @@
 // de las skills editar-reels-claude y animar-reels-claude (Mi estilo/marcas/<marca>.json + su guía corta).
 // Lo que cambia en cada video (cuántos gráficos, escenas, música concreta) se elige en cada contenido.
 import { store } from '../core/store.js';
-import { icon, toast, modal, renderFields, readFields, bindAutosave } from '../core/ui.js';
+import { icon, toast, modal, renderFields, readFields, bindAutosave, withBusy } from '../core/ui.js';
 import { esc, download, copyText, fmtRelative } from '../core/utils.js';
 import { brandConfig } from '../services/workflow.js';
+import * as F from '../services/folder.js';
+import { saveBrandToFolder, importBrandFromFolder, skillBrandFiles } from '../services/production.js';
 import {
   COLOR_ROLES, FONT_ROLES, STATUSES, autoStatus, fontFile, SUBTITLE_ANIMATIONS, CARD_STYLES, CAMERA_MOVES, SFX_TYPES, MUSIC_STYLES, SKILL_GRAPHICS,
   editOf, buildMarcaJson, mergeStyleGuide, stripGuideBlock, GUIDE_MAX, parseMarcaJson, missingForSkill, marcaFileName, guideFileName, slugify,
@@ -85,6 +87,7 @@ export function tabEdit(host, brandId) {
       <aside class="stack-lg sticky">
         <section class="card"><div class="card-h"><h3>${icon('download')}Para la skill</h3><span class="badge ${st === 'definida' ? 'ok' : 'warn'}">${esc(st)}</span></div><div class="card-b stack small">
           <p class="xs muted" style="margin:0" data-miss>${missText(miss, st)}</p>
+          <div class="stack" data-folderbtns style="gap:6px"></div>
           <button class="btn btn-sm btn-primary" data-dl-json>${icon('download', 'ic-sm')}${esc(marcaFileName(brand, cfg))}</button>
           <button class="btn btn-sm" data-dl-md>${icon('download', 'ic-sm')}${esc(guideFileName(brand, cfg))}</button>
           <button class="btn btn-sm" data-preview>${icon('eye', 'ic-sm')}Ver los dos archivos</button>
@@ -106,8 +109,34 @@ export function tabEdit(host, brandId) {
       const on = form.querySelectorAll('[data-chips="sfx"] input:checked');
       if (on.length > 3) { e.target.checked = false; toast('Como mucho 3 efectos de sonido por marca.', 'error'); }
     });
+    drawFolder();
     auto = bindAutosave(form, fields, () => ({}), async (d) => { await save(fromForm(d, fonts, editOf(brandConfig(brandId)))); refreshSide(); });
   };
+
+  // Con la carpeta «Reels con Claude» conectada: guardar y traer sin descargar archivos.
+  async function drawFolder() {
+    const box = host.querySelector('[data-folderbtns]'); if (!box) return;
+    const fs = await F.folderState();
+    if (!fs.connected || !fs.granted) {
+      box.innerHTML = fs.supported ? `<p class="xs muted" style="margin:0">${fs.connected ? `<a href="#" data-grant>Da permiso a la carpeta</a>` : 'Conecta la carpeta «Reels con Claude» en <a href="#/ajustes/carpeta">Ajustes → Carpeta de reels</a>'} para guardar directamente en Mi estilo/.</p>` : '';
+      box.querySelector('[data-grant]')?.addEventListener('click', async (e) => { e.preventDefault(); await F.getRoot({ ask: true }); drawFolder(); });
+      return;
+    }
+    const names = await skillBrandFiles().catch(() => []);
+    box.innerHTML = `<button class="btn btn-sm btn-primary" data-save-folder>${icon('check', 'ic-sm')}Guardar en Mi estilo/</button>
+      <button class="btn btn-sm" data-load-folder>${icon('download', 'ic-sm')}Traer de Mi estilo/</button>
+      ${names.length ? `<p class="xs muted" style="margin:0">Marcas en la skill: ${names.map((n) => `<code>${esc(n)}</code>`).join(' ')}</p>` : ''}`;
+    // Sugerencias para «Nombre del archivo».
+    const inp = host.querySelector('[name="file"]');
+    if (inp && names.length) { inp.setAttribute('list', 'skill-brand-files'); if (!host.querySelector('#skill-brand-files')) inp.insertAdjacentHTML('afterend', `<datalist id="skill-brand-files">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>`); }
+    box.querySelector('[data-save-folder]').addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
+      auto?.flush();
+      try { const r = await saveBrandToFolder(brandId); toast(`Guardado ${r.json}${r.guide ? ` y ${r.guide}` : ''}`, 'success'); draw(); } catch (err) { toast(err.message, 'error'); }
+    }, 'Guardando…'));
+    box.querySelector('[data-load-folder]').addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
+      try { const r = await importBrandFromFolder(brandId); toast(`Traído de la carpeta${r.guide ? ', con su guía' : ''}`, 'success'); draw(); } catch (err) { toast(err.message, 'error'); }
+    }, 'Leyendo…'));
+  }
 
   // Solo se redibuja el lateral (estado y nombres), para no perder el foco del formulario.
   const refreshSide = () => {

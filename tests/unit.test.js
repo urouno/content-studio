@@ -306,3 +306,31 @@ test('marca para la skill: no nombra una guía que la skill no tiene', async () 
   assert.equal(out.guia, undefined); assert.equal(out.estado, 'pendiente'); assert.deepEqual(out.notas, ['No inventes colores.']);
   assert.equal(R.buildMarcaJson({ brand: { name: 'Sin guía' }, config: { visual: { edit: { ...ed, guideLinked: true } } } }).guia, 'Reglas-de-estilo-Sin-guia.md');
 });
+
+test('encargo de edición: archivos del reel, tomas y mensaje para Claude Code', async () => {
+  const R = await import('../js/services/reels.js');
+  const idea = { id: 'CNT-ab12-cd34', title: 'Café: ¿quemado? / italiana', platforms: ['tiktok'], keyword: 'cafetera italiana', productionType: 'cabeza' };
+  const script = { productionType: 'cabeza', graphics: 'pocos', promise: 'Sabrás por qué', hook: { narrado: 'Si tu café sale así', textual: '¿Café quemado?', visual: 'Chorro oscuro' },
+    sections: [{ beat: 'Problema', voice: 'Hay tres errores | comunes.', onScreenText: '3 errores', resource: { type: 'lista', what: 'A · B · C', anchor: 'tres errores' } }, { voice: 'En Jalisco pasa mucho.', resource: { type: 'escena-mapa', what: 'Jalisco', anchor: 'Jalisco' } }],
+    cta: { text: 'Guárdalo' }, verify: [{ claim: 'tres errores', reason: 'fuente' }] };
+  const brand = { name: 'Lumbre' }; const config = { visual: { edit: { file: 'lumbre', music: 'lofi', corrections: 'Lunbre = Lumbre' } } };
+  assert.equal(R.reelFolderName(idea, new Date(2026, 10, 23)), '2026-11-23 · Café ¿quemado italiana');
+  const opts = R.defaultVideoOpts({ idea, script });
+  assert.equal(opts.scenes, 'algunas'); assert.equal(opts.platform, 'tiktok');
+  const p = R.buildProyecto({ idea, brand, config, opts, take: 'CNT-ab12-cd34 toma1.mov' });
+  assert.equal(p.marca, 'lumbre'); assert.equal(p.tipo, 'cabeza parlante'); assert.equal(p.flotantes, 3); assert.equal(p.pantalla, 1);
+  assert.equal(p.musica, 'lofi'); assert.equal(p.contenido, idea.id); assert.equal(p.content_studio.skill, 'editar-reels-claude');
+  assert.equal(R.buildProyecto({ idea, brand, config, opts: { ...opts, production: 'animado' } }).content_studio.skill, 'animar-reels-claude');
+  const md = R.buildGuionMd({ idea, brand, script });
+  assert.match(md, /Si tu café sale así/); assert.match(md, /Hay tres errores \/ comunes/); assert.match(md, /Verificar antes de publicar/);
+  const prop = R.buildPropuestaMd({ script, opts });
+  assert.match(prop, /\| 1 \| «tres errores» \| A · B · C \| lista \|/); assert.match(prop, /escena · mapa/); assert.match(prop, /3 flotantes y 1 a pantalla completa/);
+  assert.equal(R.buildVocab({ idea, brand, config }), 'Lumbre, cafetera italiana\n');
+  assert.equal(R.takeName(idea.id, 2, '.MOV'), 'CNT-ab12-cd34 toma2.mov');
+  const files = [{ kind: 'file', name: 'CNT-ab12-cd34 toma1.mov' }, { kind: 'file', name: 'CNT-zz toma1.mov' }, { kind: 'file', name: 'otra.mov' }];
+  assert.deepEqual(R.takesOf(idea.id, files).map((f) => f.name), ['CNT-ab12-cd34 toma1.mov']);
+  assert.equal(R.finalOf([{ kind: 'file', name: 'preview.mp4' }, { kind: 'file', name: 'FINAL - Café.mp4' }]).name, 'FINAL - Café.mp4');
+  const msg = R.editMessage({ folderName: '2026-11-23 · Café', opts, take: 'CNT-ab12-cd34 toma1.mov' });
+  assert.match(msg, /skill editar-reels-claude con el reel «Reels\/2026-11-23 · Café»/); assert.match(msg, /no las vuelvas a preguntar/); assert.match(msg, /propuesta-graficos\.md/);
+  assert.equal(R.spokenFromPlan({ subtitulos: [{ frase: 'No tienes que | abrir *editor*' }, { palabras: [{ w: 'de' }, { w: 'vídeos' }] }] }), 'No tienes que abrir editor de vídeos');
+});

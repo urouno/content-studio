@@ -57,3 +57,23 @@ La agencia de referencia recomienda trabajar **por rondas**: preparar unos 8 vid
 - `Enter` sobre una tarjeta del tablero la abre.
 - `Esc` cierra ventanas.
 - Doble clic en un día del calendario programa un contenido en esa fecha.
+
+
+## Edición con la skill de reels (Claude Code)
+
+Content Studio prepara el trabajo de las skills `editar-reels-claude` y `animar-reels-claude`, que corren en tu
+computadora con Claude Code. Plan completo en [PLAN_INTEGRACION_EDICION.md](PLAN_INTEGRACION_EDICION.md).
+
+1. **Conecta la carpeta** «Reels con Claude» en *Ajustes → Carpeta de reels* (Chrome, Edge o Brave con
+   `brave://flags/#file-system-access-api` activado). El navegador vuelve a pedir permiso en cada sesión.
+2. **Marca → Estilo de edición**: *Traer de Mi estilo/* la primera vez; después, *Guardar en Mi estilo/* cuando cambies
+   algo. Se conserva lo que la skill afinó (medidas, notas, «Aprendido en los reels»).
+3. **Contenido → Edición** (con el guion aprobado): elige las opciones del video y pulsa *Enviar a edición*. Crea
+   `Reels/<fecha · tema>/` con `proyecto.json`, `trabajo/guion-aprobado.md`, `trabajo/propuesta-graficos.md` y
+   `trabajo/vocab.txt`.
+4. **Añadir toma** copia tu grabación a `Tomas/` con el id del contenido delante: el contenido pasa a *Grabado*.
+5. **Copiar mensaje para Claude Code** y pégalo en Claude Code abierto en «Reels con Claude».
+6. Cuando la skill deje `FINAL - ….mp4`, la app lo encuentra (al abrir el contenido, con *Comprobar* o en *Ajustes →
+   Carpeta de reels → Comprobar todos*): pasa a *Editado*, enseña el video y los copies usan lo que se dijo de verdad.
+
+Sin carpeta conectada (por ejemplo, en el celular), *Descargar el encargo* baja los cuatro archivos para ponerlos a mano.
