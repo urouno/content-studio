@@ -77,6 +77,9 @@ volvería otra app. La edición pesada se queda en tu skill.
 - Lo que sí puede hacer el navegador (Chrome o Edge de escritorio) es **escribir y leer una carpeta local** que tú le
   autorices (File System Access API). Con eso basta para dejar el encargo y ver qué ya se editó.
   En Safari, Firefox o el celular no existe: ahí la app **descarga un .zip** con el encargo.
+- **Brave** (el navegador que usas) trae esta función **apagada por defecto**. Se enciende una vez en
+  `brave://flags/#file-system-access-api` → *Enabled* → reiniciar Brave. Si prefieres no tocarlo, todo funciona con
+  descargas .zip; solo se pierde que la app marque sola «Grabado» y «Editado».
 
 ---
 
@@ -273,11 +276,120 @@ Cada fase se puede usar sola. La 1 ya resuelve el modo paralelo; la 2 ya da el m
 
 ---
 
-## 9. Lo que necesito de ti para empezar
+## 9. Decisiones tomadas
 
-1. **Tu skill de edición** (la carpeta completa, con su `SKILL.md` y sus scripts): no venía en el zip.
-2. **¿En qué navegador usas Content Studio en la computadora?** Chrome o Edge permiten la carpeta conectada; con otro,
-   todo funciona con descargas .zip.
-3. **¿Dónde corre Claude Code?** Asumo que en la misma computadora donde están los videos.
-4. **¿Qué parte de la edición usa Higgsfield o motion graphics y cuál es solo cortes, subtítulos y zooms?** Cambia qué
-   campos de estilo hacen falta y cuánto cuesta cada video.
+| Pregunta | Respuesta | Qué cambia |
+|---|---|---|
+| Navegador | Brave | Carpeta conectada con el flag de Brave encendido (sección 3); si no, descargas .zip. |
+| Dónde corre Claude Code | En la misma computadora que los videos | Se confirma la conexión por carpeta local. |
+| Uso de Higgsfield y motion graphics | En los dos tipos de producción (sección 10) | El guion pasa a incluir un **plan de recursos visuales**. |
+| Skill `editar-reels-claude` | Sin localizar: no está en el zip ni en tus repositorios de GitHub | Ver sección 11. |
+
+---
+
+## 10. Dos tipos de producción y el plan de recursos visuales
+
+Cada contenido tendrá un campo nuevo, **Tipo de producción**:
+
+| Tipo | Qué es | Grabación | Qué hace la skill |
+|---|---|---|---|
+| **A cámara** | Hay tomas en crudo de una persona hablando. | Sí (modo grabación, teleprompter) | Corta, subtitula y **enriquece** la toma con recursos visuales. |
+| **Desde cero** | No hay nada que editar. | No (como mucho, la voz en off) | **Genera** todo: tomas y B-roll con Higgsfield, tarjetas y animaciones con motion graphics. |
+| **Mixto** | Toma a cámara con partes generadas (p. ej., un gancho generado y luego la persona). | Sí | Las dos cosas. |
+
+En los tres casos, la decisión de **qué se ve en cada momento** se toma en Content Studio, al escribir el guion, y viaja
+a la skill en un archivo: **`recursos.json`**. Es el `momentos.json` de Sloth llevado a tu caso. Así la IA de guiones
+(Gemini, barata) hace el trabajo creativo de decidir, y Claude solo ejecuta, alinea con la toma real y revisa. Es la
+mayor palanca de ahorro de tokens.
+
+### 10.1 Tipos de recurso
+
+| Recurso | Ejemplo | Herramienta | Cuándo lo propone la IA |
+|---|---|---|---|
+| **Tarjeta de texto** | Una cifra grande, una palabra clave | Motion graphics | Datos, cifras, palabras que importan |
+| **Lista animada** | «Tres razones» → los tres puntos aparecen uno a uno | Motion graphics | El guion enumera (estructura *lista*, *paso a paso*) |
+| **Mapa** | Se menciona un país → zoom al mapa | Motion graphics | Lugares, países, ciudades |
+| **Comparativa / gráfico** | X vs. Y, antes y después, una barra que crece | Motion graphics | Estructura *comparativa*, datos verificados |
+| **B-roll generado** | Granos de cacao cayendo a cámara lenta | Higgsfield | Lo que se nombra y no se puede grabar |
+| **Gancho visual** | La cara de la persona se derrite como chocolate | Higgsfield (desde el primer cuadro de la toma real) | Los primeros 0–3 s, si el tema lo permite |
+| **Animación / escena completa** | Toda la escena de un video desde cero | Higgsfield + motion graphics | Tipo de producción *desde cero* |
+| **Cara** | La persona a cámara, sin nada encima | — | Opinión, cercanía, CTA |
+
+### 10.2 Ejemplo de `recursos.json`
+
+Cada recurso se ancla a una frase del guion (`palabra`, como en Sloth). La skill la busca en la transcripción real, así
+que funciona aunque la toma no sea idéntica al guion.
+
+```json
+{
+  "contenido": "CNT-0057",
+  "tipo": "a-camara",
+  "presupuesto": { "higgsfield": 3 },
+  "recursos": [
+    { "palabra": "por qué es bueno comer chocolate", "tipo": "gancho-visual", "herramienta": "higgsfield",
+      "desde": "primer-cuadro", "prompt": "la cara de la persona se derrite lentamente como chocolate caliente, luz cálida, realista", "dura": 2.5 },
+    { "palabra": "tres razones", "tipo": "lista", "herramienta": "motion",
+      "items": ["Antioxidantes", "Mejora el ánimo", "Protege el corazón"] },
+    { "palabra": "en Ghana", "tipo": "mapa", "herramienta": "motion", "lugar": "Ghana", "zoom": "pais" },
+    { "palabra": "cacao puro", "tipo": "broll", "herramienta": "higgsfield",
+      "prompt": "granos de cacao cayendo sobre una mesa de madera, cámara lenta, macro" },
+    { "palabra": "70 por ciento", "tipo": "tarjeta", "herramienta": "motion", "texto": "70 %", "verificar": true },
+    { "palabra": "guárdalo", "tipo": "cara" }
+  ]
+}
+```
+
+### 10.3 Reglas que conviene fijar (en la ficha de la marca)
+
+- **Densidad:** un recurso cada X segundos y un % de tiempo con la cara visible (Sloth usa del 25 al 35 %).
+- **Presupuesto de Higgsfield por video** (genera con créditos): la IA propone como mucho N recursos con Higgsfield y el
+  resto con motion graphics, que no cuesta.
+- **Estilo de motion graphics:** colores y fuentes de la marca, cómo entran las tarjetas, cómo se ven las listas y los
+  mapas.
+- **Estilo de Higgsfield:** estética base (realista, 3D, ilustración), lo que nunca debe generar (personas reales, logos
+  de terceros) y un texto base que se añade a cada prompt.
+- **Veracidad:** una tarjeta con una cifra hereda el `[VERIFICAR]` del guion y no se renderiza sin revisión.
+
+### 10.4 Qué cambia en Content Studio
+
+- **Guion:** cada sección suma su lista de recursos, con tipo, herramienta, anclaje y prompt. La IA los propone al
+  generar el guion y se pueden editar, quitar o regenerar uno a uno, como hoy las secciones. El hook gana su **gancho
+  visual** con prompt de Higgsfield cuando el tema lo permite.
+- **Evaluador local:** avisa si hay demasiado tiempo sin recursos, si se supera el presupuesto de Higgsfield o si una
+  lista del guion no tiene su recurso de lista.
+- **Ficha de marca → Estilo de edición:** los campos de la sección 10.3.
+- **Encargo:** añade `Tipo de producción:` y `recursos.json`.
+- **Flujo:** en *Desde cero* no hay paso «Por grabar»: se pasa de guion aprobado a edición (o a «grabar voz en off», si
+  la voz es tuya).
+
+### 10.5 Qué cambia en la skill
+
+Leer `recursos.json`, generar lo de Higgsfield **antes** de editar (va de fondo y es lo que más tarda), hacer lo de
+motion graphics con plantillas fijas (una por tipo: tarjeta, lista, mapa, comparativa) y respetar el presupuesto. Si un
+recurso no se puede hacer, lo dice en `notas.md` y sigue con el resto. Cuántas plantillas ya trae tu skill y cómo llama
+a Higgsfield (MCP, API o navegador) lo veremos al revisarla.
+
+### 10.6 Fases, ajustadas
+
+La fase 2 añade el **Tipo de producción** y `recursos.json` en el guion. El resto del plan (sección 8) no cambia.
+
+---
+
+## 11. Lo que falta: tu skill
+
+No la encuentro en este entorno: no estaba en el zip ni en tus repositorios de GitHub, y esta sesión corre en la nube,
+sin acceso a tu computadora. Lo normal es que esté en:
+
+- Mac: `~/.claude/skills/editar-reels-claude/`
+- Windows: `C:\Users\<tú>\.claude\skills\editar-reels-claude\`
+
+(o dentro de `.claude/skills/` de la carpeta del proyecto donde la usas). Para compartirla, cualquiera de estas
+opciones:
+
+1. **Comprímela en .zip y súbela al chat** (lo más rápido).
+2. Súbela a un repositorio de GitHub tuyo y dime cuál.
+3. Conecta tu computadora a esta sesión con Remote Control (app de escritorio de Claude → Ajustes → Claude Code →
+   Remote Control) y comparte esa carpeta.
+
+En GitHub hay varias skills públicas con nombres parecidos (por ejemplo, *editar-reels-con-claude*). Si la tuya salió de
+una de ellas, dime de cuál y la reviso, pero la que cuenta es tu copia, porque puede tener cambios tuyos.
