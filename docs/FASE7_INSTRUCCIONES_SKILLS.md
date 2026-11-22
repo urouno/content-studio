@@ -21,6 +21,7 @@ Estas instrucciones son para pegarlas en **Claude Code abierto en tu Mac**, porq
 | 1 | `editar-reels-claude` lee el encargo de Content Studio: sin repetir la entrevista | Alta |
 | 2 | `animar-reels-claude` lee el encargo (video animado y escenas) | Alta |
 | 3 | B-roll de bancos libres (Pexels, Pixabay, Wikimedia Commons) | Media |
+| 3b | B-roll sin claves (Wikimedia, Openverse, Internet Archive, NASA) y banco propio por marca | Media |
 | 4 | Mapas de cualquier país, no solo México | Media |
 | 5 | Biblioteca de escenas por marca | Baja |
 | 6 | Revisión de acabado de las animaciones | Baja |
@@ -147,6 +148,30 @@ que se ve (no por el título) y dejar FUENTES.md con los derechos de cada clip.
 
 Prueba: con el reel de prueba del bloque 1, busca «coffee pouring» y «moka pot stove», enséñame la hoja, baja uno y
 ponlo como marco en una frase. Después explícame en 3 pasos cómo consigo las claves gratuitas de Pexels y Pixabay.
+```
+
+---
+
+## Bloque 3b · B-roll sin claves (Pexels y Pixabay no dan claves nuevas)
+
+```text
+Pexels y Pixabay no dan claves nuevas ahora. Cambia broll_banco.py para no depender de ellos:
+
+1. Bancos sin clave, buscados a la vez: Wikimedia Commons (como hoy), Openverse (api.openverse.org, imágenes; acepta
+   peticiones anónimas con límite), Internet Archive (archive.org/advancedsearch.php, vídeos de dominio público o CC BY)
+   y NASA (images-api.nasa.gov, imágenes y vídeo). Mismo filtro de licencias: solo CC0, dominio público y CC BY.
+   Respeta los límites de cada uno: pocas peticiones, esperas largas en los reintentos y nada de bucles rápidos.
+2. Pexels y Pixabay quedan como opcionales: si algún día hay clave en ~/.config/reels-claude/claves.json, se usan; si
+   no, ni se mencionan.
+3. Banco propio por marca: Mi estilo/broll/<marca>/ con las tomas que ya grabé. Búscalo PRIMERO (por nombre de archivo
+   y por un archivo indice.json con una línea de qué se ve en cada toma). Añade «guarda esta toma en el banco de la
+   marca» para ir llenándolo desde los reels hechos, y una orden para describir las tomas de una carpeta.
+4. La hoja de candidatos no debe sobrescribir la anterior: guárdala como broll-candidatos-<n>.jpg / .json y que
+   --bajar acepte códigos de cualquiera de ellas.
+5. Actualiza docs/BROLL-BANCOS.md y la sección de SKILL.md.
+
+Prueba con el reel de prueba: busca «coffee pouring», «earth from space» y «old car show», enséñame la hoja y dime de
+qué banco salió cada candidato y con qué licencia. No hagas copia de seguridad todavía.
 ```
 
 ---
