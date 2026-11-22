@@ -3,7 +3,7 @@ import { store } from '../core/store.js';
 import { generate } from './ai.js';
 import * as P from './prompts.js';
 import { brandConfig, approvedVersion } from './workflow.js';
-import { learningsFor } from './analytics.js';
+import { learningsFor, topContents } from './analytics.js';
 import { normalizeScript } from './scriptkit.js';
 import { structureName } from './workflow.js';
 import { docsContext, docsFor, templateFor, templateMarkdown, cleanDoc } from './branddocs.js';
@@ -38,9 +38,10 @@ export async function aiIdeas(brandId, opts) {
   const ctx = brandCtx(brandId, 'ideas');
   const pillar = opts.pillarId ? store.get('pillars', opts.pillarId) : null;
   const existing = store.all('ideas', { brandId }).map((i) => i.title);
-  const r = await generate({ system: P.systemPrompt(ctx, 'estratega de contenido'), prompt: P.ideasPrompt({ ...opts, pillar, existing }) });
+  const winners = topContents(brandId, 5);
+  const r = await generate({ system: P.systemPrompt(ctx, 'estratega de contenido'), prompt: P.ideasPrompt({ ...opts, pillar, existing, winners }), maxTokens: 8000 });
   const list = r.json?.ideas || r.json || [];
-  return list.map((i) => ({ ...i, pillarId: ctx.pillars.find((p) => p.name.toLowerCase() === String(i.pillar || '').toLowerCase())?.id || opts.pillarId || '' }));
+  return list.map((i) => ({ ...i, pitch: ideaPitch(i), pillarId: ctx.pillars.find((p) => p.name.toLowerCase() === String(i.pillar || '').toLowerCase())?.id || opts.pillarId || '' }));
 }
 
 export async function aiAngles(idea, similar) {
@@ -62,12 +63,14 @@ export async function aiScripts(idea, opts) {
     prompt: P.scriptPrompt({ idea, pillar, ...opts, recentHooks: recentHooks(idea.brandId, idea.id) }),
   });
   const arr = r.json?.versions || (Array.isArray(r.json) ? r.json : [r.json]);
-  return arr.filter(Boolean).map(normalizeScript);
+  const production = opts.production || idea.productionType || 'cabeza';
+  return arr.filter(Boolean).map((s) => normalizeScript({ ...s, productionType: production, graphics: opts.graphics || 'equilibrado' }));
 }
 
 export async function aiRewrite(idea, script, opts) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: P.rewritePrompt({ script, ...opts }), temperature: 0.8, maxTokens: 7000 });
-  return normalizeScript(r.json?.versions?.[0] || r.json);
+  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: `${P.rewritePrompt({ script, ...opts })}\n\n${P.resourcesBrief(script.productionType, script.graphics)}`, temperature: 0.8, maxTokens: 7000 });
+  // La reescritura conserva el tipo de producción y la cantidad de gráficos elegidos.
+  return normalizeScript({ ...(r.json?.versions?.[0] || r.json), productionType: script.productionType, graphics: script.graphics });
 }
 
 export async function aiEvaluate(idea, script, { durationTarget, localFindings }) {
@@ -107,4 +110,15 @@ export async function aiInsights(brandId, table) {
   const ctx = brandCtx(brandId, 'analisis');
   const r = await generate({ system: P.systemPrompt(ctx, 'analista de contenido', { compact: true }), prompt: P.insightsPrompt({ table, brandName: ctx.brand.name }), temperature: 0.3 });
   return r.json;
+}
+
+/** Empaque de una idea propuesta por la IA, con la forma que guarda la ficha (`pitch`). */
+export function ideaPitch(r = {}) {
+  const variants = (Array.isArray(r.variants) ? r.variants : []).map((v) => (typeof v === 'string' ? v : v?.text)).filter(Boolean);
+  const p4 = r.p4 && typeof r.p4 === 'object' ? r.p4 : {};
+  return {
+    firstFrameText: r.firstFrameText || '', firstFrameVisual: r.firstFrameVisual || '', variants: variants.join('\n'),
+    p4: { promesa: p4.promesa || '', prueba: p4.prueba || '', plan: p4.plan || '', persona: p4.persona || '' },
+    basedOn: r.basedOn || '', keepChange: r.keepChange || '', why: r.why || '', risk: r.risk || '',
+  };
 }

@@ -296,3 +296,15 @@ test('diagnosticarIA prueba los proveedores en paralelo y avisa de una clave de 
   assert.ok(logs.some((l) => /^✔ gemini/.test(l)));
   assert.ok(logs.some((l) => /^✘ groq → 401: Invalid API Key/.test(l)));
 });
+
+test('columnas nuevas de una actualización: se añaden solas y guardan sus datos', () => {
+  const { post, token, sheets } = ready();
+  // Hoja «Ideas» de una versión anterior, sin productionType ni pitch.
+  const sh = sheets.get('Ideas'); sh.data[0] = sh.data[0].filter((h) => h !== 'productionType' && h !== 'pitch');
+  const idea = rec('CNT-aa11-dd44', { title: 'Con empaque', status: 'idea', productionType: 'cabeza', pitch: { firstFrameText: '¿Café quemado?' } });
+  const r = post({ action: 'sync', token, since: '', ops: [{ key: 'k', table: 'ideas', id: idea.id, baseVersion: 0, record: idea }] });
+  assert.equal(r.applied.length, 1);
+  assert.ok(sh.data[0].includes('pitch') && sh.data[0].includes('productionType'));
+  const back = post({ action: 'sync', token, since: '', ops: [] }).changes.find((c) => c.record.id === idea.id).record;
+  assert.equal(back.productionType, 'cabeza'); assert.equal(back.pitch.firstFrameText, '¿Café quemado?');
+});

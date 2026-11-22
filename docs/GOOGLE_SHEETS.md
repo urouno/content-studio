@@ -25,7 +25,7 @@ La hoja tiene **18 pestañas de datos** y una pestaña `_Meta`. Se crean solas c
 | **ConfigMarca** | CFG | voice{}, visual{}, strategy{} (JSON) | brandId → Marcas (1:1) |
 | **Plataformas** | PLT | platform, goal, formats[], durationTarget, frequencyPerWeek, ctas[], active | brandId → Marcas (1:N) |
 | **Pilares** | PIL | name, description, objective, share | brandId → Marcas |
-| **Ideas** (contenidos) | CNT | title, topic, pillarId, audience, problem, keyword, objective, funnel, contentType, platforms[], format, priority, status, difficulty, experimental, knowledgeLevel, owner (ya no se edita; se conserva para datos antiguos), targetDate, references, notes, source, statusHistory[] | pillarId → Pilares. **El id de la idea es el identificador del contenido en todo el flujo** |
+| **Ideas** (contenidos) | CNT | title, topic, pillarId, audience, problem, keyword, objective, funnel, contentType, platforms[], format, priority, status, difficulty, experimental, knowledgeLevel, owner (ya no se edita; se conserva para datos antiguos), targetDate, references, notes, source, statusHistory[], productionType (cabeza · producto · animado), pitch{} (empaque: primer cuadro, variantes, gancho 4 P, por qué, riesgo, en qué se basa) | pillarId → Pilares. **El id de la idea es el identificador del contenido en todo el flujo** |
 | **Guiones** | GUI | ideaId, currentVersionId, approvedVersionId, locked, publishFilter[] | ideaId → Ideas (1:1); \*VersionId → VersionesGuion |
 | **VersionesGuion** | VER | scriptId, ideaId, versionNo, label, origin, data{} (guion completo), evaluation{} | scriptId → Guiones (1:N) |
 | **Copies** | CPY | ideaId, platform, title, caption, description, ctaText, hashtags[], coverText, variant, status | ideaId → Ideas (1:N) |

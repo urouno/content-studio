@@ -205,3 +205,10 @@ input[type="color"] { width: 38px; height: 32px; border: 1px solid var(--border-
 .prov-row.off { opacity: .65; }
 .ic.rot180 { transform: rotate(180deg); }
 .badge.ok { --bc: var(--ok); } .badge.warn { --bc: var(--warn); }
+/* Ideas: el primer cuadro propuesto, como una mini portada */
+.first-frame { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--text) 5%, transparent); border-radius: var(--r-sm); }
+/* Guion: recurso visual de cada sección */
+.sec-res { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.sec-res > label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.sec-res select { width: auto; max-width: 240px; }
+.sec-res.on { border-top-color: var(--accent); }

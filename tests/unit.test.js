@@ -178,3 +178,38 @@ test('IA: el presupuesto de documentos es menor en las tareas cortas', async () 
   assert.equal(TASK_LIMITS.guion, DOC_LIMITS);
   assert.ok(TASK_LIMITS.copies.total < DOC_LIMITS.total && TASK_LIMITS.hooks.total < DOC_LIMITS.total);
 });
+
+test('guion: los recursos visuales siguen las reglas de la skill de edición', async () => {
+  const { normalizeScript, localEvaluate } = await import('../js/services/scriptkit.js');
+  const base = { hook: { narrado: 'Por qué el chocolate te sube el ánimo', visual: 'taza', textual: 'Chocolate', p4: { promesa: 'sabrás por qué' } }, promise: 'x', cta: { text: 'Guárdalo para el chocolate' } };
+  const crit = (s) => localEvaluate(normalizeScript({ ...base, ...s }), {}).filter((f) => ['recursos', 'empaque'].includes(f.criterion)).map((f) => f.text);
+  // Cifra en pantalla que no se dice, anclaje que no está en la voz, enumeración sin lista y gancho sin prueba.
+  let t = crit({ graphics: 'pocos', sections: [{ act: 'inicio', voice: 'Hay tres razones para comerlo.', resource: { type: 'tarjeta', what: '70 % cacao', anchor: 'cinco motivos' } }] });
+  assert.ok(t.some((x) => /muestra 70/.test(x)));
+  assert.ok(t.some((x) => /no está en lo que se dice/.test(x)));
+  assert.ok(t.some((x) => /enumera/.test(x)));
+  assert.ok(t.some((x) => /prueba/.test(x)));
+  // Topes del video: 2 a pantalla completa con «pocos» (tope 1).
+  t = crit({ graphics: 'pocos', sections: [{ act: 'inicio', voice: 'Uno dos', resource: { type: 'dato', what: 'uno', anchor: 'Uno' } }, { act: 'desenlace', voice: 'Tres cuatro', resource: { type: 'pasos', what: 'tres', anchor: 'Tres' } }] });
+  assert.ok(t.some((x) => /2 gráficos a pantalla completa para un tope de 1/.test(x)));
+  // Video animado: cada sección necesita su escena; la palabra detrás de la cabeza no vale.
+  t = crit({ productionType: 'animado', sections: [{ act: 'inicio', voice: 'El cacao viene de lejos y tiene historia', resource: { type: 'detras', what: 'cacao', anchor: 'cacao' } }] });
+  assert.ok(t.some((x) => /sin escena en un video animado/.test(x)));
+  assert.ok(t.some((x) => /solo funciona con cabeza parlante/.test(x)));
+  // Uno correcto no tiene avisos de recursos.
+  t = crit({ graphics: 'equilibrado', hook: { ...base.hook, p4: { promesa: 'a', prueba: 'b' } }, sections: [{ act: 'inicio', voice: 'Tiene 70 por ciento de cacao.', resource: { type: 'contador', what: '70', anchor: '70 por ciento' } }] });
+  assert.deepEqual(t, []);
+});
+
+test('ideas: el empaque propuesto por la IA se guarda con la forma de la ficha', async () => {
+  const { ideaPitch } = await import('../js/services/assistant.js');
+  const p = ideaPitch({ firstFrameText: 'A', variants: [{ text: 'B' }, 'C'], p4: { prueba: 'P' } });
+  assert.equal(p.variants, 'B\nC'); assert.equal(p.p4.prueba, 'P'); assert.equal(p.p4.plan, '');
+});
+
+test('ideas: el prompt pide variantes de lo que ya funcionó, ordenadas de segura a arriesgada', async () => {
+  const { ideasPrompt } = await import('../js/services/prompts.js');
+  const p = ideasPrompt({ count: 5, winners: ['«Café quemado» · 12.000 vistas'] });
+  assert.match(p, /MÁS SEGURA a la MÁS ARRIESGADA/); assert.match(p, /Café quemado/); assert.match(p, /firstFrameText/); assert.match(p, /keepChange/);
+  assert.match(ideasPrompt({ count: 3 }), /Aún no hay resultados medidos/);
+});

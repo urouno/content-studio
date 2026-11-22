@@ -2,9 +2,9 @@
 import { store } from '../core/store.js';
 import { app, go } from '../core/app.js';
 import { PIPELINE, ALL_STATUSES, statusInfo, PRIORITIES } from '../core/schema.js';
-import { OBJECTIVES, FUNNEL, CONTENT_TYPES, STRUCTURES, PLATFORMS, KNOWLEDGE_LEVELS, byId } from '../services/methodology.js';
+import { OBJECTIVES, FUNNEL, CONTENT_TYPES, STRUCTURES, PLATFORMS, KNOWLEDGE_LEVELS, byId, PRODUCTION_TYPES, HOOK_4P } from '../services/methodology.js';
 import { icon, modal, renderFields, readFields, validateFields, toast, badge, withBusy } from '../core/ui.js';
-import { esc, fmtDate, todayISO } from '../core/utils.js';
+import { esc, fmtDate, todayISO, deepGet } from '../core/utils.js';
 import { aiAvailable } from '../services/ai.js';
 import { findSimilarIdeas } from '../services/workflow.js';
 import { aiAngles } from '../services/assistant.js';
@@ -47,6 +47,7 @@ export function ideaFields(brandId) {
     { name: 'pillarId', label: 'Pilar de contenido', type: 'select', options: pillars.map((p) => ({ value: p.id, label: p.name })), empty: pillars.length ? '—' : 'Define pilares en la marca' },
     { name: 'objective', label: 'Objetivo', type: 'select', options: OBJECTIVES.map((o) => ({ value: o.id, label: o.name })) },
     { name: 'format', label: 'Estructura del guion', type: 'select', options: STRUCTURES.map((o) => ({ value: o.id, label: o.name })) },
+    { name: 'productionType', label: 'Tipo de producción', type: 'select', options: PRODUCTION_TYPES.map((p) => ({ value: p.id, label: p.name })), empty: 'Sin decidir', hint: 'Decide qué skill lo edita y qué recursos visuales se proponen en el guion.' },
     { name: 'platforms', label: 'Plataformas', type: 'chips', options: PLATFORMS.map((p) => ({ value: p.id, label: p.name })), span: 3 },
     { name: 'priority', label: 'Prioridad', type: 'select', cast: 'number', options: PRIORITIES.map((p) => ({ value: p.id, label: p.name })) },
     { name: 'targetDate', label: 'Fecha objetivo', type: 'date' },
@@ -58,15 +59,29 @@ export function ideaFields(brandId) {
     { name: 'experimental', label: 'Contenido experimental (20 %)', type: 'checkbox', advanced: true },
     { name: 'references', label: 'Referencias y datos verificados', type: 'textarea', rows: 3, span: 3, hint: 'Enlaces, datos comprobados, fichas técnicas. La IA solo usará esto como fuente.', advanced: true },
     { name: 'notes', label: 'Notas', type: 'textarea', rows: 2, span: 3, advanced: true },
+    // Empaque (método de Sloth): en el feed no hay título; lo que cuenta es el primer cuadro y su texto.
+    { name: 'pitch.firstFrameText', label: 'Texto del primer cuadro', placeholder: '≤ 7 palabras, grandes', span: 3, group: 'pitch' },
+    { name: 'pitch.firstFrameVisual', label: 'Qué se ve en el primer cuadro', type: 'textarea', rows: 2, span: 3, hint: 'Máximo 3 elementos, con el resultado ya enseñado.', group: 'pitch' },
+    { name: 'pitch.variants', label: 'Variantes del texto del primer cuadro', type: 'textarea', rows: 3, span: 3, hint: 'Una por línea. Para probar una cada día o una en cada red.', group: 'pitch' },
+    ...HOOK_4P.map((p) => ({ name: `pitch.p4.${p.id}`, label: `Gancho · ${p.name}`, hint: p.desc, group: 'pitch' })),
+    { name: 'pitch.basedOn', label: 'Se basa en (lo que ya funcionó)', group: 'pitch' },
+    { name: 'pitch.keepChange', label: 'Qué conserva y qué cambia', span: 2, group: 'pitch' },
+    { name: 'pitch.why', label: 'Por qué funcionaría', type: 'textarea', rows: 2, span: 3, group: 'pitch' },
+    { name: 'pitch.risk', label: 'Riesgo: qué podría fallar', type: 'textarea', rows: 2, span: 3, group: 'pitch' },
   ];
 }
 
 /** Formulario de idea: campos principales + sección plegable "Más detalles (opcional)". */
 export function renderIdeaForm(fields, data = {}) {
-  const main = fields.filter((f) => !f.advanced); const adv = fields.filter((f) => f.advanced);
-  if (!adv.length) return renderFields(main, data);
-  const filled = adv.filter((f) => f.name !== 'knowledgeLevel' && (Array.isArray(data[f.name]) ? data[f.name].length : data[f.name] != null && data[f.name] !== '' && data[f.name] !== false)).length;
-  return `${renderFields(main, data)}<details class="more-fields span-3"><summary>${icon('down', 'ic-sm')}Más detalles (opcional)${filled ? ` <span class="muted">· ${filled} con datos</span>` : ''}</summary><div class="form-grid cols-3">${renderFields(adv, data)}</div></details>`;
+  const main = fields.filter((f) => !f.advanced && !f.group); const adv = fields.filter((f) => f.advanced); const pitch = fields.filter((f) => f.group === 'pitch');
+  const val = (f) => deepGet(data, f.name);
+  const count = (list) => list.filter((f) => f.name !== 'knowledgeLevel' && (Array.isArray(val(f)) ? val(f).length : val(f) != null && val(f) !== '' && val(f) !== false)).length;
+  const block = (list, title, open) => {
+    if (!list.length) return '';
+    const n = count(list);
+    return `<details class="more-fields span-3" ${open && n ? 'open' : ''}><summary>${icon('down', 'ic-sm')}${title}${n ? ` <span class="muted">· ${n} con datos</span>` : ''}</summary><div class="form-grid cols-3">${renderFields(list, data)}</div></details>`;
+  };
+  return `${renderFields(main, data)}${block(pitch, 'Empaque: primer cuadro y gancho', true)}${block(adv, 'Más detalles (opcional)', false)}`;
 }
 
 export function openIdeaModal({ idea = null, brandId = null, preset = {}, onSaved } = {}) {

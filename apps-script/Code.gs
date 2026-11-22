@@ -52,7 +52,7 @@ function instalar() {
   return token;
 }
 
-var VERSION = '1.5.0';
+var VERSION = '1.6.0';
 var BASE = ['id', 'brandId', 'createdAt', 'updatedAt', 'deletedAt', 'version', 'updatedBy'];
 var SERVER_COLS = ['syncedAt'];
 var MAX_CELL = 49000;
@@ -64,7 +64,7 @@ var TABLES = {
   brandConfigs:   { sheet: 'ConfigMarca',    prefix: 'CFG', cols: ['voice', 'visual', 'strategy'], json: ['voice', 'visual', 'strategy'] },
   platforms:      { sheet: 'Plataformas',    prefix: 'PLT', cols: ['platform', 'goal', 'formats', 'durationTarget', 'frequencyPerWeek', 'ctas', 'active'], json: ['formats', 'ctas'], num: ['durationTarget', 'frequencyPerWeek'], bool: ['active'] },
   pillars:        { sheet: 'Pilares',        prefix: 'PIL', cols: ['name', 'description', 'objective', 'share'], num: ['share'] },
-  ideas:          { sheet: 'Ideas',          prefix: 'CNT', cols: ['title', 'topic', 'pillarId', 'audience', 'problem', 'keyword', 'objective', 'funnel', 'contentType', 'platforms', 'format', 'priority', 'status', 'difficulty', 'experimental', 'knowledgeLevel', 'owner', 'targetDate', 'references', 'notes', 'source', 'statusHistory'], json: ['platforms', 'statusHistory'], num: ['priority', 'knowledgeLevel'], bool: ['experimental'], required: ['title', 'status'] },
+  ideas:          { sheet: 'Ideas',          prefix: 'CNT', cols: ['title', 'topic', 'pillarId', 'audience', 'problem', 'keyword', 'objective', 'funnel', 'contentType', 'platforms', 'format', 'priority', 'status', 'difficulty', 'experimental', 'knowledgeLevel', 'owner', 'targetDate', 'references', 'notes', 'source', 'statusHistory', 'productionType', 'pitch'], json: ['platforms', 'statusHistory', 'pitch'], num: ['priority', 'knowledgeLevel'], bool: ['experimental'], required: ['title', 'status'] },
   scripts:        { sheet: 'Guiones',        prefix: 'GUI', cols: ['ideaId', 'currentVersionId', 'approvedVersionId', 'locked', 'publishFilter'], json: ['publishFilter'], bool: ['locked'], required: ['ideaId'] },
   scriptVersions: { sheet: 'VersionesGuion', prefix: 'VER', cols: ['scriptId', 'ideaId', 'versionNo', 'label', 'origin', 'data', 'evaluation'], json: ['data', 'evaluation'], num: ['versionNo'], required: ['scriptId', 'ideaId'] },
   copies:         { sheet: 'Copies',         prefix: 'CPY', cols: ['ideaId', 'platform', 'title', 'caption', 'description', 'ctaText', 'hashtags', 'coverText', 'variant', 'status'], json: ['hashtags'], num: ['variant'], required: ['ideaId', 'platform'] },
@@ -216,6 +216,13 @@ function readTable_(t) {
   }
   var values = sh.getDataRange().getValues();
   var header = values[0] || [];
+  // Columnas nuevas de una actualización: se añaden al final para que no se pierdan sus datos al escribir.
+  var missing = headers_(t).filter(function (h) { return header.indexOf(h) === -1; });
+  if (header.length && missing.length) {
+    sh.getRange(1, header.length + 1, 1, missing.length).setValues([missing]);
+    header = header.concat(missing);
+    values = values.map(function (row, i) { return i === 0 ? header : row.concat(missing.map(function () { return ''; })); });
+  }
   var idx = {}; header.forEach(function (h, i) { if (h) idx[h] = i; });
   var rows = []; var byId = {};
   for (var r = 1; r < values.length; r++) {
