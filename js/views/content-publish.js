@@ -4,7 +4,7 @@ import { icon, toast, confirmDialog, withBusy, emptyState, modal, renderFields, 
 import { esc, fmtDate, todayISO, copyText, debounce, fmtNum, fmtPct } from '../core/utils.js';
 import { PLATFORMS, byId } from '../services/methodology.js';
 import { METRICS, DERIVED } from '../core/schema.js';
-import { approvedVersion, schedule, markPublished, addResult } from '../services/workflow.js';
+import { approvedVersion, schedule, markPublished, addResult, scriptFor } from '../services/workflow.js';
 import { aiCopies } from '../services/assistant.js';
 import { derive } from '../services/analytics.js';
 import { aiGuard, platformLabel } from './shared.js';
@@ -17,6 +17,7 @@ export function renderCopies(host, b, ctx) {
     const copies = store.filter('copies', (c) => c.ideaId === idea.id).sort((a, c) => a.platform.localeCompare(c.platform) || (a.variant || 0) - (c.variant || 0));
     const platforms = idea.platforms?.length ? idea.platforms : ['tiktok', 'instagram'];
     host.innerHTML = `${ver ? '' : `<div class="notice warn" style="margin-bottom:12px">${icon('alert')}<div><b>Sin guion aprobado.</b><p>Los copies se generan a partir del guion aprobado para que coincidan con lo que se ve y se dice en el video. Puedes escribirlos a mano igualmente.</p></div></div>`}
+      ${scriptFor(idea.id)?.credits ? `<div class="notice warn" style="margin-bottom:12px">${icon('alert')}<div><b>Créditos obligatorios en la publicación</b><p>El video usa material de terceros con licencia de atribución. Pon al final del texto: <b>Créditos: ${esc(scriptFor(idea.id).credits)}</b>. Los copies generados con IA ya lo incluyen.</p></div></div>` : ''}
       <div class="card" style="margin-bottom:16px"><div class="card-b row-between">
         <div class="row"><span class="small muted">Plataformas:</span>${PLATFORMS.map((p) => `<label class="chip-opt"><input type="checkbox" data-pl="${p.id}" ${platforms.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span></label>`).join('')}</div>
         <div class="row"><button class="btn btn-sm" data-manual>${icon('plus', 'ic-sm')}Copy manual</button><button class="btn btn-sm btn-ai" data-gen ${ver ? '' : 'disabled'}>${icon('sparkle', 'ic-sm')}Generar copies</button></div></div></div>

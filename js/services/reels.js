@@ -429,3 +429,21 @@ export function spokenFromPlan(plan) {
   const subs = Array.isArray(plan?.subtitulos) ? plan.subtitulos : [];
   return subs.map((s) => s.frase || (s.palabras || []).map((w) => w.w).join(' ')).filter(Boolean).join(' ').replace(/[*|]/g, '').replace(/\s+/g, ' ').trim();
 }
+
+/**
+ * Créditos obligatorios del material de terceros que puso la skill (FUENTES.md del reel): las licencias CC BY y
+ * CC BY-SA exigen nombrar al autor; CC0 y dominio público, no. Devuelve líneas «Autor (licencia)» sin repetir.
+ */
+export function creditsFromSources(md) {
+  const text = String(md || '');
+  // Un bloque por clip: secciones «## …» si las hay; si no, cada línea (tablas o listas de una línea).
+  const blocks = /^#{2,3}\s/m.test(text) ? text.split(/\n(?=#{2,3}\s)/) : text.split('\n');
+  const out = [];
+  blocks.forEach((b) => {
+    if (/\bCC0\b|dominio p[uú]blico|public domain/i.test(b)) return;
+    const lic = (b.match(/\bCC[\s-]?BY(?:[\s-](?:SA|NC|ND))*(?:[\s-]\d(?:\.\d)?)?/i) || [])[0];
+    const autor = (b.match(/\b(?:autor(?:a)?|author|cr[eé]dito)\s*:\s*\**\s*([^|\n*;()]+)/i) || [])[1];
+    if (lic && autor) out.push(`${autor.trim()} (${lic.toUpperCase().replace(/[\s-]+/g, (m) => (m.includes('-') ? '-' : ' '))})`);
+  });
+  return [...new Set(out)];
+}

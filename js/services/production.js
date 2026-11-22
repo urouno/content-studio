@@ -4,7 +4,7 @@ import { store } from '../core/store.js';
 import * as F from './folder.js';
 import {
   buildProyecto, buildGuionMd, buildPropuestaMd, buildVocab, reelFolderName, takeName, takesOf, finalOf, spokenFromPlan,
-  buildMarcaJson, mergeStyleGuide, stripGuideBlock, parseMarcaJson, editOf, marcaFileName, guideFileName,
+  buildMarcaJson, mergeStyleGuide, stripGuideBlock, parseMarcaJson, editOf, marcaFileName, guideFileName, creditsFromSources,
 } from './reels.js';
 import { scriptFor, ensureScript, approvedVersion, brandConfig, productionState, setRecorded, setEdited } from './workflow.js';
 import { scriptStats } from './scriptkit.js';
@@ -82,6 +82,9 @@ export async function syncStatus(ideaId, st = null) {
     const s = scriptFor(ideaId);
     const text = spokenFromPlan(await F.readJSON(`${REELS}/${status.folder}/trabajo/plan.json`));
     if (s && text && text !== s.finalText) { await store.update('scripts', s.id, { finalText: text }, { silent: true }); changed.push('texto'); }
+    // Material de terceros con atribución obligatoria (B-roll de bancos libres): va a los copies.
+    const credits = creditsFromSources(await F.readText(`${REELS}/${status.folder}/FUENTES.md`)).join('; ');
+    if (s && credits !== (s.credits || '')) { await store.update('scripts', s.id, { credits }, { silent: true }); if (credits) changed.push('créditos'); }
   }
   return changed;
 }

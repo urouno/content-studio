@@ -90,7 +90,7 @@ export async function aiCtas(idea, script) {
 export async function aiCopies(idea, platforms) {
   const ver = approvedVersion(idea.id);
   if (!ver) throw new Error('Aprueba un guion antes de generar copies.');
-  const r = await generate({ task: 'copies', system: P.systemPrompt(brandCtx(idea.brandId, 'copies'), 'copywriter de redes sociales', { compact: true }), prompt: P.copiesPrompt({ script: ver.data, idea, platforms, spoken: store.find('scripts', (s) => s.ideaId === idea.id)?.finalText || '' }), temperature: 0.85 });
+  const r = await generate({ task: 'copies', system: P.systemPrompt(brandCtx(idea.brandId, 'copies'), 'copywriter de redes sociales', { compact: true }), prompt: P.copiesPrompt({ script: ver.data, idea, platforms, spoken: store.find('scripts', (s) => s.ideaId === idea.id)?.finalText || '', credits: store.find('scripts', (s) => s.ideaId === idea.id)?.credits || '' }), temperature: 0.85 });
   return r.json?.copies || [];
 }
 

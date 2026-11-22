@@ -367,3 +367,11 @@ test('vía Claude: el pedido trae todo el contexto y la respuesta vuelve con el 
   assert.throws(() => C.toResult({ error: 'falta la marca' }, { json: true }), /falta la marca/);
   assert.throws(() => C.toResult({ texto: 'no es json' }, { json: true }), /formato inesperado/);
 });
+
+test('créditos del material de terceros (FUENTES.md) para los copies', async () => {
+  const { creditsFromSources } = await import('../js/services/reels.js');
+  const md = `# Fuentes y derechos\n\n## B1 · moka pot\n- Autor: Shokuiku Cuisine\n- Licencia: CC BY 3.0\n- URL: https://commons.wikimedia.org/x\n\n## A2 · coffee\n- Autor: Ana\n- Licencia: CC0\n\n## C3\n- Autor: Pepe Pérez\n- Licencia: CC BY-SA 4.0\n`;
+  assert.deepEqual(creditsFromSources(md), ['Shokuiku Cuisine (CC BY 3.0)', 'Pepe Pérez (CC BY-SA 4.0)']);
+  assert.deepEqual(creditsFromSources('| B1 | Autor: Mia | CC BY 4.0 |'), ['Mia (CC BY 4.0)']);
+  assert.deepEqual(creditsFromSources(''), []);
+});
