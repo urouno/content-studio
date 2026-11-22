@@ -11,6 +11,7 @@ import { listModels, usageToday, generate, AI_PROVIDERS, aiChain, modelFor, prov
 import { loadDemo } from '../services/demo.js';
 import * as F from '../services/folder.js';
 import { syncAll } from '../services/production.js';
+import { CC_TASKS, CC_MESSAGE, listRequests, discardRequest } from '../services/claudecode.js';
 import { pageHeader } from './shared.js';
 
 const TABS = [
@@ -155,6 +156,7 @@ function ia(host) {
 
   // Qué proveedores tienen clave en Apps Script.
   if (mode === 'proxy' && isConfigured()) call('ping').then((r) => { if (r.providers) { configured = r.providers; redrawRows(); } }).catch(() => {});
+  claudeCodeCard(host);
 }
 
 async function datos(host, redraw) {
@@ -250,4 +252,36 @@ async function carpeta(host, redraw) {
     const r = await syncAll();
     host.querySelector('[data-out]').innerHTML = r.length ? r.map((x) => `<div>${icon('check', 'ic-sm')} <a href="#/contenido/${x.idea.id}/edicion">${esc(x.idea.title)}</a> <span class="muted">→ ${esc(x.changed.join(', '))}</span></div>`).join('') : '<span class="muted">Sin cambios.</span>';
   }, 'Comprobando…'));
+}
+
+// ---------- Vía Claude: tareas que resuelve Claude Code con tu plan ----------
+async function claudeCodeCard(host) {
+  const sec = document.createElement('section'); sec.className = 'card'; sec.style.marginTop = '16px';
+  host.append(sec);
+  const draw = async () => {
+    const fs = await F.folderState();
+    const on = settings.get('claudeCodeTasks') || [];
+    const reqs = fs.connected && fs.granted ? await listRequests().catch(() => []) : [];
+    sec.innerHTML = `<div class="card-h"><h3>${icon('sparkle')}Claude Code (tu plan de Claude)</h3><span class="xs muted">Sin pagar API</span></div><div class="card-b stack">
+      <p class="small" style="margin:0">Las tareas marcadas no van a los proveedores de arriba: la app deja el pedido en <code>Reels con Claude/Content Studio/pedidos/</code>, Claude Code lo resuelve en tu computadora con la skill <code>content-studio-claude</code> y la app carga la respuesta sola. Más calidad (y búsqueda web para investigar); necesita Claude Code abierto y comparte el límite de tu plan con la edición.</p>
+      ${!fs.supported || !fs.connected ? `<div class="notice warn">${icon('alert')}<div><p>Necesita la carpeta «Reels con Claude» conectada (pestaña <a href="#/ajustes/carpeta">Carpeta de reels</a>). Sin ella, todas las tareas van a los proveedores de arriba.</p></div></div>` : !fs.granted ? `<div class="notice">${icon('lock')}<div><p>Falta el permiso de la carpeta en esta sesión.</p><button class="btn btn-sm btn-primary" data-ccgrant style="margin-top:6px">Dar permiso</button></div></div>` : ''}
+      <div class="field"><span>Tareas que hace Claude Code</span><div class="chips">${CC_TASKS.map((t) => `<label class="chip-opt"><input type="checkbox" data-cctask="${t.id}" ${on.includes(t.id) ? 'checked' : ''}><span>${esc(t.name)}</span></label>`).join('')}</div>
+        <small class="hint">Recomendado: Ideas, Guiones y Documentos de marca. Lo rápido (hooks, copies) va mejor con los proveedores gratuitos.</small></div>
+      <div class="divider-label">Instalar la skill (una vez)</div>
+      <ol class="small" style="margin:0 0 0 18px;padding:0"><li>Descarga <b>SKILL.md</b>.</li><li>En la Terminal de tu Mac:<pre class="xs" style="white-space:pre-wrap;margin:4px 0">mkdir -p ~/.claude/skills/content-studio-claude && mv ~/Downloads/SKILL.md ~/.claude/skills/content-studio-claude/</pre></li><li>Abre una sesión nueva de Claude Code en «Reels con Claude».</li></ol>
+      <div class="row"><button class="btn btn-sm" data-ccskill>${icon('download', 'ic-sm')}Descargar SKILL.md</button><button class="btn btn-sm btn-ai" data-ccmsg>${icon('copy', 'ic-sm')}Copiar «atiende los pedidos»</button></div>
+      ${reqs.length ? `<div class="divider-label">Pedidos en la carpeta (${reqs.length})</div>${reqs.map((r) => `<div class="row-between small"><span>${esc(CC_TASKS.find((t) => t.id === r.task)?.name || r.task || 'Pedido')} <span class="xs muted">· ${esc(r.id)}${r.answered ? ' · respondido' : ' · esperando a Claude Code'}</span></span><button class="btn btn-sm btn-ghost" data-ccdrop="${esc(r.id)}">${icon('x', 'ic-sm')}Descartar</button></div>`).join('')}<p class="xs muted" style="margin:0">Mientras la pantalla que lo pidió siga abierta, la respuesta se carga sola. Descarta los que ya no necesites.</p>` : ''}
+    </div>`;
+    sec.querySelectorAll('[data-cctask]').forEach((cb) => cb.addEventListener('change', () => {
+      settings.set({ claudeCodeTasks: [...sec.querySelectorAll('[data-cctask]:checked')].map((x) => x.dataset.cctask) });
+      toast('Guardado', 'success', { timeout: 1200 });
+    }));
+    sec.querySelector('[data-ccgrant]')?.addEventListener('click', async () => { await F.getRoot({ ask: true }); draw(); });
+    sec.querySelector('[data-ccmsg]').addEventListener('click', async () => { await navigator.clipboard?.writeText(CC_MESSAGE); toast('Copiado: pégalo en Claude Code', 'success'); });
+    sec.querySelector('[data-ccskill]').addEventListener('click', async () => {
+      try { const r = await fetch('./claude-skills/content-studio-claude/SKILL.md', { cache: 'no-store' }); if (!r.ok) throw new Error(); download('SKILL.md', await r.text(), 'text/markdown'); } catch { toast('No se pudo descargar: está en claude-skills/content-studio-claude/SKILL.md del repositorio.', 'error'); }
+    });
+    sec.querySelectorAll('[data-ccdrop]').forEach((b) => b.addEventListener('click', async () => { await discardRequest(b.dataset.ccdrop); draw(); }));
+  };
+  draw();
 }

@@ -11,6 +11,7 @@ const DEFAULTS = {
   aiModels: {}, // modelo por proveedor ("auto" = el mejor disponible en la cuenta)
   aiProvider: 'gemini', // antiguo: proveedor único (se migra a aiChain)
   model: 'gemini-flash-latest', modelClaude: 'claude-opus-5-5', temperature: 0.9,
+  claudeCodeTasks: [], // tareas que resuelve Claude Code en tu computadora (ver js/services/claudecode.js)
   aiDailyLimit: 150, theme: 'system', currentBrand: 'all', userName: '',
 };
 

@@ -39,25 +39,25 @@ export async function aiIdeas(brandId, opts) {
   const pillar = opts.pillarId ? store.get('pillars', opts.pillarId) : null;
   const existing = store.all('ideas', { brandId }).map((i) => i.title);
   const winners = topContents(brandId, 5);
-  const r = await generate({ system: P.systemPrompt(ctx, 'estratega de contenido'), prompt: P.ideasPrompt({ ...opts, pillar, existing, winners }), maxTokens: 8000 });
+  const r = await generate({ task: 'ideas', system: P.systemPrompt(ctx, 'estratega de contenido'), prompt: P.ideasPrompt({ ...opts, pillar, existing, winners }), maxTokens: 8000 });
   const list = r.json?.ideas || r.json || [];
   return list.map((i) => ({ ...i, pitch: ideaPitch(i), pillarId: ctx.pillars.find((p) => p.name.toLowerCase() === String(i.pillar || '').toLowerCase())?.id || opts.pillarId || '' }));
 }
 
 export async function aiAngles(idea, similar) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'ideas'), 'estratega de contenido'), prompt: P.anglesPrompt({ idea, similar }) });
+  const r = await generate({ task: 'ideas', system: P.systemPrompt(brandCtx(idea.brandId, 'ideas'), 'estratega de contenido'), prompt: P.anglesPrompt({ idea, similar }) });
   return r.json?.angles || [];
 }
 
 export async function aiResearch(brandId, topic, idea) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(brandId, 'investigacion'), 'investigador de contenido', { compact: true }), prompt: P.researchPrompt({ topic, idea }), json: false, grounding: true, temperature: 0.4 });
+  const r = await generate({ task: 'investigacion', system: P.systemPrompt(brandCtx(brandId, 'investigacion'), 'investigador de contenido', { compact: true }), prompt: P.researchPrompt({ topic, idea }), json: false, grounding: true, temperature: 0.4 });
   return { text: r.text, sources: r.sources };
 }
 
 export async function aiScripts(idea, opts) {
   const ctx = brandCtx(idea.brandId, 'guion');
   const pillar = idea.pillarId ? store.get('pillars', idea.pillarId) : null;
-  const r = await generate({
+  const r = await generate({ task: 'guion',
     // Una versión cabe de sobra en 7.000 tokens; varias necesitan más.
     system: P.systemPrompt(ctx), maxTokens: (opts.versions || 1) > 1 ? 12000 : 7000,
     prompt: P.scriptPrompt({ idea, pillar, ...opts, recentHooks: recentHooks(idea.brandId, idea.id) }),
@@ -68,29 +68,29 @@ export async function aiScripts(idea, opts) {
 }
 
 export async function aiRewrite(idea, script, opts) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: `${P.rewritePrompt({ script, ...opts })}\n\n${P.resourcesBrief(script.productionType, script.graphics)}`, temperature: 0.8, maxTokens: 7000 });
+  const r = await generate({ task: 'guion', system: P.systemPrompt(brandCtx(idea.brandId, 'guion')), prompt: `${P.rewritePrompt({ script, ...opts })}\n\n${P.resourcesBrief(script.productionType, script.graphics)}`, temperature: 0.8, maxTokens: 7000 });
   // La reescritura conserva el tipo de producción y la cantidad de gráficos elegidos.
   return normalizeScript({ ...(r.json?.versions?.[0] || r.json), productionType: script.productionType, graphics: script.graphics });
 }
 
 export async function aiEvaluate(idea, script, { durationTarget, localFindings }) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'evaluacion'), 'editor y evaluador de guiones'), prompt: P.evaluatePrompt({ script, durationTarget, localFindings }), temperature: 0.3 });
+  const r = await generate({ task: 'evaluacion', system: P.systemPrompt(brandCtx(idea.brandId, 'evaluacion'), 'editor y evaluador de guiones'), prompt: P.evaluatePrompt({ script, durationTarget, localFindings }), temperature: 0.3 });
   return r.json;
 }
 
 export async function aiHooks(idea, script, opts = {}) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'hooks'), 'guionista', { compact: true }), prompt: P.hooksPrompt({ idea, script, ...opts }) });
+  const r = await generate({ task: 'hooks', system: P.systemPrompt(brandCtx(idea.brandId, 'hooks'), 'guionista', { compact: true }), prompt: P.hooksPrompt({ idea, script, ...opts }) });
   return r.json?.hooks || [];
 }
 export async function aiCtas(idea, script) {
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'hooks'), 'guionista', { compact: true }), prompt: P.ctaPrompt({ idea, script, objective: idea.objective }) });
+  const r = await generate({ task: 'hooks', system: P.systemPrompt(brandCtx(idea.brandId, 'hooks'), 'guionista', { compact: true }), prompt: P.ctaPrompt({ idea, script, objective: idea.objective }) });
   return r.json?.ctas || [];
 }
 
 export async function aiCopies(idea, platforms) {
   const ver = approvedVersion(idea.id);
   if (!ver) throw new Error('Aprueba un guion antes de generar copies.');
-  const r = await generate({ system: P.systemPrompt(brandCtx(idea.brandId, 'copies'), 'copywriter de redes sociales', { compact: true }), prompt: P.copiesPrompt({ script: ver.data, idea, platforms, spoken: store.find('scripts', (s) => s.ideaId === idea.id)?.finalText || '' }), temperature: 0.85 });
+  const r = await generate({ task: 'copies', system: P.systemPrompt(brandCtx(idea.brandId, 'copies'), 'copywriter de redes sociales', { compact: true }), prompt: P.copiesPrompt({ script: ver.data, idea, platforms, spoken: store.find('scripts', (s) => s.ideaId === idea.id)?.finalText || '' }), temperature: 0.85 });
   return r.json?.copies || [];
 }
 
@@ -100,7 +100,7 @@ export async function aiBrandDoc(doc) {
   // Contexto: la ficha y los demás documentos (todas las tareas), sin el documento que se redacta.
   const ctx = { ...brandCtx(doc.brandId, null), ...docsCtx(doc.brandId, null, { docs: docsFor(doc.brandId).filter((d) => d.id !== doc.id) }) };
   const current = cleanDoc(doc.content);
-  const r = await generate({
+  const r = await generate({ task: 'documento',
     system: P.systemPrompt(ctx, 'estratega de marca y comunicación'), json: false, temperature: 0.4, maxTokens: 8000,
     prompt: P.brandDocPrompt({ title: doc.title, purpose: t?.purpose || 'Documento de referencia de la marca.', template: t ? templateMarkdown(t.type) : doc.content, current }),
   });
@@ -108,7 +108,7 @@ export async function aiBrandDoc(doc) {
 }
 export async function aiInsights(brandId, table) {
   const ctx = brandCtx(brandId, 'analisis');
-  const r = await generate({ system: P.systemPrompt(ctx, 'analista de contenido', { compact: true }), prompt: P.insightsPrompt({ table, brandName: ctx.brand.name }), temperature: 0.3 });
+  const r = await generate({ task: 'analisis', system: P.systemPrompt(ctx, 'analista de contenido', { compact: true }), prompt: P.insightsPrompt({ table, brandName: ctx.brand.name }), temperature: 0.3 });
   return r.json;
 }
 

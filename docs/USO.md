@@ -93,3 +93,20 @@ Con el guion aprobado, **Guion → Modo grabación** (o *Edición → Modo graba
   barra espaciadora lo pausa; − y + cambian la velocidad, A− y A+ la letra; ⇋ lo pone en espejo para teleprompters con
   cristal; la pantalla no se apaga mientras corre. Ábrelo en otro dispositivo (tableta, computadora) si grabas con el
   celular.
+
+## Ideas y guiones con tu plan de Claude (Claude Code)
+
+En **Ajustes → IA → Claude Code** eliges qué tareas resuelve Claude Code en tu computadora en vez de los proveedores
+de la API (recomendado: ideas, guiones y documentos de marca). Necesita la carpeta «Reels con Claude» conectada.
+
+1. Instala una vez la skill: *Descargar SKILL.md* y en la Terminal
+   `mkdir -p ~/.claude/skills/content-studio-claude && mv ~/Downloads/SKILL.md ~/.claude/skills/content-studio-claude/`.
+   (Está en `claude-skills/content-studio-claude/SKILL.md` de este repositorio.)
+2. Usa la app como siempre (por ejemplo, *Generar ideas con IA*). La app deja el pedido en
+   `Content Studio/pedidos/` y te avisa.
+3. En Claude Code, abierto en «Reels con Claude», escribe **«Usa la skill content-studio-claude: atiende los pedidos de
+   Content Studio»** (o `/loop 1m usa la skill content-studio-claude` para que revise cada minuto).
+4. La respuesta aparece en la app en unos segundos, como si viniera de cualquier otra IA, y los archivos se borran.
+
+La app espera hasta 20 minutos con la pantalla abierta. Los pedidos que se queden en la carpeta se ven (y se descartan)
+en *Ajustes → IA*.

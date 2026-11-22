@@ -19,7 +19,7 @@ export const AI_PROVIDERS = [
   { id: 'deepseek', name: 'DeepSeek', paid: true, key: 'DEEPSEEK_API_KEY', where: 'platform.deepseek.com → API Keys', note: 'De pago con saldo prepagado (muy barato). El chat de deepseek.com es gratis, su API no.', defModel: 'deepseek-chat' },
   { id: 'claude', name: 'Claude', paid: true, search: true, key: 'ANTHROPIC_API_KEY', where: 'platform.claude.com', note: 'De pago por uso. La suscripción Claude Pro no incluye la API.', defModel: 'claude-opus-5-5' },
 ];
-export const providerInfo = (id) => AI_PROVIDERS.find((p) => p.id === id) || { id, name: id };
+export const providerInfo = (id) => AI_PROVIDERS.find((p) => p.id === id) || (id === 'claude-code' ? { id, name: 'Claude Code' } : { id, name: id });
 // Groq primero: es el más rápido. Para investigar, chainFor() pone delante a Gemini (búsqueda de Google).
 export const DEFAULT_CHAIN = ['groq', 'gemini', 'openrouter', 'cerebras'];
 
@@ -53,7 +53,8 @@ export function aiAvailable() {
   if (mode === 'off') return { ok: false, reason: 'La IA está desactivada en Ajustes.' };
   if (!navigator.onLine) return { ok: false, reason: 'Sin conexión: la IA necesita Internet. Puedes seguir trabajando manualmente.' };
   if (mode === 'direct' && !settings.getDirectKey()) return { ok: false, reason: 'Modo directo sin clave: añádela en Ajustes → IA (solo para esta sesión).' };
-  if (mode === 'proxy' && !(settings.get('syncUrl') && settings.get('token'))) return { ok: false, reason: 'Configura el Web App de Apps Script en Ajustes → Conexión para usar la IA de forma segura.' };
+  // Con tareas por Claude Code no hace falta Apps Script para esas tareas (generate() lo decide en cada una).
+  if (mode === 'proxy' && !(settings.get('syncUrl') && settings.get('token')) && !(settings.get('claudeCodeTasks') || []).length) return { ok: false, reason: 'Configura el Web App de Apps Script en Ajustes → Conexión para usar la IA de forma segura.' };
   return { ok: true };
 }
 
@@ -106,7 +107,18 @@ async function rawGenerate(body, chain) {
  *   `only`: probar solo ese proveedor (lo usa «Probar cada proveedor» en Ajustes).
  * @returns {Promise<{text, json, sources, usage, provider, model}>}
  */
-export async function generate({ system, prompt, json = true, temperature, grounding = false, maxTokens = 8192, only = null }) {
+export async function generate({ system, prompt, json = true, temperature, grounding = false, maxTokens = 8192, only = null, task = null }) {
+  // Vía Claude: esta tarea la resuelve Claude Code en tu computadora (ver claudecode.js).
+  if (!only && task) {
+    const cc = await import('./claudecode.js');
+    if (await cc.useClaudeCode(task)) {
+      const r = await cc.generateViaClaudeCode({ task, system, prompt, json, grounding, maxTokens }, {
+        onSent: () => emit('toast', { msg: 'Pedido enviado a Claude Code. Allí escribe: «atiende los pedidos de Content Studio».', type: 'info', action: { label: 'Copiar', fn: () => navigator.clipboard?.writeText(cc.CC_MESSAGE) }, timeout: 20000 }),
+      });
+      lastProvider = 'claude-code'; addUsage(0, 'claude-code');
+      return r;
+    }
+  }
   const avail = aiAvailable();
   if (!avail.ok) throw new ApiError(avail.reason, { code: 'AI_UNAVAILABLE' });
   const limit = settings.get('aiDailyLimit');

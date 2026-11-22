@@ -194,7 +194,7 @@ async function boot() {
     try { const r = await syncNow(); if (!r.skipped) toast(`Sincronizado: ${r.pushed} enviados, ${r.pulled} recibidos${r.conflicts ? `, ${r.conflicts} conflictos` : ''}`, r.conflicts ? 'info' : 'success'); } catch (e) { toast(e.message, 'error'); }
   });
   on('sync', renderSyncPill); on('outbox', renderSyncPill);
-  on('toast', ({ msg, type }) => toast(msg, type));
+  on('toast', ({ msg, type, action, timeout }) => toast(msg, type, { action, ...(timeout ? { timeout } : {}) }));
   on('settings', () => applyTheme());
   window.addEventListener('online', updateOnline); window.addEventListener('offline', updateOnline);
   window.addEventListener('hashchange', route);

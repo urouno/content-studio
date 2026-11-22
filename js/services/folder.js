@@ -90,3 +90,8 @@ export async function checkStructure() {
   const has = (n) => names.includes(n);
   return { misEstilo: has('Mi estilo'), tomas: has('Tomas'), reels: has('Reels'), marcas: has('Mi estilo') && (await exists('Mi estilo/marcas')), nested: has('Reels con Claude'), names };
 }
+export async function remove(path) {
+  const ps = parts(path); const name = ps.pop();
+  const d = await dirAt(ps.join('/')); if (!d) return;
+  try { await d.removeEntry(name); } catch (e) { if (e.name !== 'NotFoundError') throw e; }
+}

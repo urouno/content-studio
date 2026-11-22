@@ -350,3 +350,17 @@ test('modo grabación: guion segundo a segundo y lista de qué preparar', async 
   assert.ok(prep.some((t) => /Luz de frente/.test(t)));
   assert.ok(prepList(script, 'producto').some((p) => /Una toma por frase/.test(p.text)));
 });
+
+test('vía Claude: el pedido trae todo el contexto y la respuesta vuelve con el formato de la IA', async () => {
+  const C = await import('../js/services/claudecode.js');
+  const req = C.buildRequest({ task: 'guion', system: 'Eres guionista…', prompt: 'Devuelve JSON: {…}', json: true, grounding: false, maxTokens: 7000 });
+  assert.match(req.id, /^PED-\d{14}-[a-z0-9]{4}$/); assert.equal(req.salida, 'json'); assert.equal(req.system, 'Eres guionista…'); assert.equal(req.max_palabras, 4900);
+  const r = C.toResult({ id: req.id, json: { versions: [{ title: 'A' }] } }, { json: true });
+  assert.deepEqual(r.json, { versions: [{ title: 'A' }] }); assert.equal(r.provider, 'claude-code');
+  // También si el JSON viene como texto, o el texto con fuentes.
+  assert.deepEqual(C.toResult({ texto: '```json\n{"ideas": []}\n```' }, { json: true }).json, { ideas: [] });
+  const t = C.toResult({ texto: '# Investigación', fuentes: [{ titulo: 'OMS', url: 'https://who.int' }, 'https://x.org'] }, { json: false });
+  assert.equal(t.text, '# Investigación'); assert.deepEqual(t.sources.map((s) => s.uri), ['https://who.int', 'https://x.org']);
+  assert.throws(() => C.toResult({ error: 'falta la marca' }, { json: true }), /falta la marca/);
+  assert.throws(() => C.toResult({ texto: 'no es json' }, { json: true }), /formato inesperado/);
+});

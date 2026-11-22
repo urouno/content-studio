@@ -227,7 +227,7 @@ descargas .zip, pero sin estado automático.
 | **3** ✅ | **Marca estable para edición** (hecha) | Pestaña «Estilo de edición»; exportar e importar `marcas/<marca>.json` y `Reglas-de-estilo-<Marca>.md` | Content Studio | Que las skills editen con tu marca, ya en paralelo |
 | **4** ✅ | **Carpeta conectada y envío a edición** (hecha) | Conectar `Reels con Claude/`, «Enviar a edición» con ajustes del video, «Añadir toma», «Editar con Claude», estado automático, vista previa | Content Studio | El modo integrado de punta a punta |
 | **5** ✅ | **Modo grabación** (hecha) | Teleprompter, tabla segundo a segundo, variantes, qué preparar, zonas seguras | Content Studio | Grabar con todo delante |
-| **6** | **Vía Claude** | Pedidos y respuestas en la carpeta; skill `content-studio-claude` | Content Studio + skill nueva | Ideas y guiones con Claude sin pagar API |
+| **6** ✅ | **Vía Claude** (hecha) | Pedidos y respuestas en la carpeta; skill `content-studio-claude` | Content Studio + skill nueva | Ideas y guiones con Claude sin pagar API |
 | **7** | **Skills: mejoras gratuitas** | Leer el `proyecto.json` de Content Studio, B-roll de bancos libres, mapas del mundo, biblioteca de escenas, acabado | Tus skills | Videos más ricos, gratis |
 | **8** | *Pendiente:* video generativo | `clip_ia` con la herramienta que elijas | Tus skills | Ganchos y B-roll generados |
 
