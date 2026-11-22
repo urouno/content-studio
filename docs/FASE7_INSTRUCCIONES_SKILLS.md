@@ -22,7 +22,7 @@ Estas instrucciones son para pegarlas en **Claude Code abierto en tu Mac**, porq
 | 2 | `animar-reels-claude` lee el encargo (video animado y escenas) | Alta |
 | 3 | B-roll de bancos libres (Pexels, Pixabay, Wikimedia Commons) | Media |
 | 3b | B-roll sin claves (Wikimedia, Openverse, Internet Archive, NASA) y banco propio por marca | Media |
-| 4 | Mapas de cualquier país, no solo México | Media |
+| 4 | Mapas de cualquier país, no solo México | Omitido (no hace falta: los mapas de México bastan) |
 | 5 | Biblioteca de escenas por marca | Baja |
 | 6 | Revisión de acabado de las animaciones | Baja |
 
