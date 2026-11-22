@@ -375,7 +375,11 @@ La fase 2 añade el **Tipo de producción** y `recursos.json` en el guion. El re
 
 ---
 
-## 11. Lo que falta: tu skill
+## 11. Lo que falta: tus skills
+
+Son dos, en tu computadora: `~/.claude/skills/editar-reels-claude` y `~/.claude/skills/animar-reels-claude`. A falta de
+revisarlas, la suposición es que `editar-reels-claude` cubre el tipo **A cámara** y `animar-reels-claude` el tipo
+**Desde cero** (y las piezas generadas del **Mixto**). El encargo diría qué skill usar según el tipo de producción.
 
 No la encuentro en este entorno: no estaba en el zip ni en tus repositorios de GitHub, y esta sesión corre en la nube,
 sin acceso a tu computadora. Lo normal es que esté en:
