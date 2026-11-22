@@ -285,3 +285,14 @@ test('ping dice qué proveedores tienen clave', () => {
   const r = post({ action: 'ping', token });
   assert.equal(r.providers.groq, true); assert.equal(r.providers.openrouter, false); assert.equal(r.providers.gemini, false);
 });
+
+test('diagnosticarIA prueba los proveedores en paralelo y avisa de una clave de Groq mal puesta', () => {
+  const logs = [];
+  const { ctx, props } = ready({ geminiResponder: (url) => (url.endsWith('/models') ? { code: 200, body: { data: [{ id: 'llama-3.3-70b-versatile' }] } } : url.includes('groq') ? { code: 401, body: { error: { message: 'Invalid API Key' } } } : { code: 200, body: { candidates: [{ content: { parts: [{ text: 'ok' }] } }] } }) });
+  ctx.console.log = (m) => logs.push(String(m));
+  props.set('GROQ_API_KEY', 'org_123'); props.set('GEMINI_API_KEY', 'g');
+  ctx.diagnosticarIA();
+  assert.ok(logs.some((l) => /no empieza por gsk_/.test(l)));
+  assert.ok(logs.some((l) => /^✔ gemini/.test(l)));
+  assert.ok(logs.some((l) => /^✘ groq → 401: Invalid API Key/.test(l)));
+});

@@ -20,6 +20,7 @@
  *   SPREADSHEET_ID  Solo si el script NO está vinculado a la hoja
  *   AI_DAILY_LIMIT  Solicitudes de IA por token y día (por defecto 300)
  *   AI_MAX_TOKENS   Máximo de tokens de salida por solicitud (por defecto 16384)
+ *   AI_TIME_BUDGET  Segundos tras los que ya no se prueba otro proveedor (por defecto 150)
  *
  * INSTALACIÓN: ejecuta la función instalar() (es la primera de la lista) y sigue
  * GUIA-DE-INSTALACION.html.
@@ -413,8 +414,13 @@ function aiGenerate_(user, req) {
   var tries = [];
   chain.forEach(function (c) { if (!aiConfigured_(c.provider)) tries.push({ provider: c.provider, status: 0, message: 'sin clave' }); });
   var lastErr = null;
+  // Apps Script no deja poner un tiempo máximo a cada llamada: si ya se gastó demasiado, no se prueban más
+  // proveedores (la app espera como mucho 5,5 min y el script se corta a los 6).
+  var budget = Number(PropertiesService.getScriptProperties().getProperty('AI_TIME_BUDGET') || 150) * 1000;
+  var t0 = Date.now();
   for (var i = 0; i < ready.length; i++) {
     var c = ready[i];
+    if (i > 0 && Date.now() - t0 > budget) { tries.push({ provider: c.provider, status: 0, message: 'sin tiempo para probarlo' }); continue; }
     try {
       var data = aiGenerateWith_(c.provider, c.model, b, maxTokens, ready.length > 1);
       data.usedProvider = c.provider;
@@ -668,16 +674,57 @@ function oaiPost_(p, payload) {
   }
 }
 
-/** Ejecuta en el editor: prueba cada proveedor de IA que tenga clave y dice cuál responde. */
+/**
+ * Ejecuta en el editor: prueba A LA VEZ cada proveedor de IA que tenga clave y dice cuál responde y en cuánto.
+ * Escribe cada paso antes de hacerlo: si algo se queda colgado, el último mensaje dice dónde.
+ */
 function diagnosticarIA() {
-  var body = { contents: [{ role: 'user', parts: [{ text: 'Responde solo: ok' }] }], generationConfig: { maxOutputTokens: 50, temperature: 0 } };
-  AI_PROVIDERS.forEach(function (p) {
-    if (!aiConfigured_(p)) { console.log('· ' + p + ': sin clave (' + aiKeyName_(p) + ')'); return; }
-    var t = Date.now();
-    try {
-      var d = aiGenerateWith_(p, p === 'gemini' ? 'gemini-flash-latest' : p === 'claude' ? 'claude-haiku-5-5' : 'auto', body, 50, true);
-      console.log('✔ ' + p + ' (' + d.usedModel + ') en ' + (Date.now() - t) + ' ms: ' + d.candidates[0].content.parts[0].text.slice(0, 40));
-    } catch (x) { console.log('✘ ' + p + ': ' + x.message); }
+  var t0 = Date.now();
+  var seg = function () { return ((Date.now() - t0) / 1000).toFixed(1) + ' s'; };
+  var props = PropertiesService.getScriptProperties();
+  var con = AI_PROVIDERS.filter(function (p) { var ok = aiConfigured_(p); if (!ok) console.log('· ' + p + ': sin clave (' + aiKeyName_(p) + ')'); return ok; });
+  if (!con.length) { console.log('No hay ninguna clave de IA en las propiedades del script.'); return; }
+  // Aviso típico: lo de Groq que empieza por org_ es el id de la organización, no la clave.
+  if (props.getProperty('GROQ_API_KEY') && !/^gsk_/.test(props.getProperty('GROQ_API_KEY'))) console.log('⚠ GROQ_API_KEY no empieza por gsk_: probablemente no es una clave de API.');
+  if (props.getProperty('OPENROUTER_API_KEY') && !/^sk-or-/.test(props.getProperty('OPENROUTER_API_KEY'))) console.log('⚠ OPENROUTER_API_KEY no empieza por sk-or-.');
+
+  // 1) Modelos de cada proveedor compatible con OpenAI, en paralelo.
+  var oai = con.filter(function (p) { return OAI_PROVIDERS[p]; });
+  var model = { gemini: 'gemini-flash-lite-latest', claude: 'claude-haiku-5-5' };
+  if (oai.length) {
+    console.log('[' + seg() + '] Pidiendo la lista de modelos a: ' + oai.join(', ') + '…');
+    var lists = UrlFetchApp.fetchAll(oai.map(function (p) { return { url: OAI_PROVIDERS[p].base + '/models', muteHttpExceptions: true, headers: oaiHeaders_(p) }; }));
+    oai.forEach(function (p, i) {
+      var code = lists[i].getResponseCode(); var conf = OAI_PROVIDERS[p]; var ids = [];
+      try {
+        ids = (JSON.parse(lists[i].getContentText()).data || []).filter(function (m) {
+          if (!m || !m.id || OAI_SKIP.test(m.id)) return false;
+          if (!conf.freeOnly) return true;
+          var pr = m.pricing || {}; return /:free$/.test(m.id) || (Number(pr.prompt) === 0 && Number(pr.completion) === 0);
+        }).map(function (m) { return m.id; });
+      } catch (x) { ids = []; }
+      var rank = function (id) { for (var k = 0; k < conf.prefer.length; k++) if (conf.prefer[k].test(id)) return k; return conf.prefer.length; };
+      ids.sort(function (a, b) { return rank(a) - rank(b); });
+      model[p] = ids[0] || conf.fallback;
+      console.log('[' + seg() + '] ' + p + ': ' + (code === 200 ? ids.length + ' modelos; se prueba ' + (model[p] || '—') : 'la lista respondió ' + code + ' ' + lists[i].getContentText().slice(0, 150)));
+    });
+  }
+
+  // 2) Una pregunta mínima a cada proveedor, en paralelo.
+  var reqs = con.filter(function (p) { return model[p]; }).map(function (p) {
+    if (p === 'gemini') return { p: p, r: { url: GEMINI_BASE + '/models/' + model.gemini + ':generateContent', method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { 'x-goog-api-key': aiKey_(p) }, payload: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Responde solo: ok' }] }], generationConfig: { maxOutputTokens: 200 } }) } };
+    if (p === 'claude') return { p: p, r: { url: ANTHROPIC_BASE + '/messages', method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: claudeHeaders_(false), payload: JSON.stringify({ model: model.claude, max_tokens: 50, messages: [{ role: 'user', content: 'Responde solo: ok' }] }) } };
+    return { p: p, r: { url: OAI_PROVIDERS[p].base + '/chat/completions', method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: oaiHeaders_(p), payload: JSON.stringify({ model: model[p], max_tokens: 200, messages: [{ role: 'user', content: 'Responde solo: ok' }] }) } };
+  });
+  console.log('[' + seg() + '] Preguntando a la vez a: ' + reqs.map(function (x) { return x.p + ' (' + model[x.p] + ')'; }).join(', ') + '…');
+  var t1 = Date.now();
+  var res = UrlFetchApp.fetchAll(reqs.map(function (x) { return x.r; }));
+  console.log('[' + seg() + '] Respondieron todos en ' + ((Date.now() - t1) / 1000).toFixed(1) + ' s (el tiempo es el del más lento).');
+  reqs.forEach(function (x, i) {
+    var code = res[i].getResponseCode(); var txt = res[i].getContentText();
+    var d; try { d = JSON.parse(txt); } catch (e) { d = null; }
+    var err = d && d.error ? (typeof d.error === 'string' ? d.error : d.error.message || JSON.stringify(d.error)) : '';
+    console.log((code === 200 && !err ? '✔ ' : '✘ ') + x.p + ' → ' + code + (err ? ': ' + String(err).slice(0, 200) : ''));
   });
 }
 
