@@ -1,263 +1,247 @@
-# Plan: integrar Content Studio con las skills de edición y animación de reels
+# Plan de integración completa: Content Studio + Claude Code + skills de reels
 
-> Estado: **propuesta para revisar antes de desarrollar** (versión 2). No se ha cambiado código.
-> Fuentes: este repositorio, el repositorio de referencia **Sloth** y las guías (`.md`) de las skills
-> **`editar-reels-claude`** y **`animar-reels-claude`**. De las skills se leyeron las guías, no los scripts.
-> La versión 1 de este plan inventaba un formato de carpetas propio; esta versión lo sustituye por el que **ya usan tus
-> skills**.
+> Estado: **propuesta para revisar antes de desarrollar** (versión 3). No se ha cambiado código.
+> Fuentes: este repositorio, el repositorio de referencia **Sloth** (licencia MIT) y las guías de tus skills
+> **`editar-reels-claude`** y **`animar-reels-claude`** (se leyeron las guías, no los scripts).
 
----
+## 0. Qué cambia en esta versión
 
-## 1. Resumen
-
-**Lo más importante que salió de revisar tus skills:** ya funcionan como Sloth, e incluso mejor en edición. Tienen un
-plan único por reel (`trabajo/plan.json`), los gráficos anclados a palabras de la voz, un catálogo de unos 20 gráficos,
-escenas animadas (`trabajo/escenas.json`), un editor en vivo, revisión automática de zonas seguras y de cifras, reglas
-para gastar pocos tokens y **marcas guardadas como datos** (`Mi estilo/marcas/<marca>.json`).
-
-Por eso la integración **no necesita un formato nuevo**: Content Studio solo tiene que **escribir en las carpetas que
-tus skills ya leen** y **leer lo que ellas entregan**.
-
-| Content Studio aporta | Las skills ya hacen |
+| Decisión tuya | Consecuencia en el plan |
 |---|---|
-| La marca completa (voz, reglas, productos, nombres propios) | Cortar, subtitular, gráficos, cámara, sonido, máster, portada |
-| La idea y el guion aprobado | Transcribir la toma real y anclar todo a sus palabras |
-| Qué tipo de video es y cuántos gráficos lleva | La entrevista inicial (que así casi desaparece) |
-| Una propuesta de gráficos y escenas por frase del guion | Convertirla en gráficos reales, revisarla y pedirte el OK |
-| El seguimiento (grabado, editado, publicado, métricas) | Entregar `FINAL - <tema>.mp4` y `portada.png` |
-
-**Lo que falta de verdad:** Higgsfield. **No aparece en ninguna de las dos skills.** Hoy generan con HyperFrames (2D),
-three.js (3D ligero), tus fotos y mapas de México; Google Flow solo se usa, a mano, para el fondo de la portada.
-Integrar Higgsfield es trabajo nuevo **en las skills** (sección 6).
+| La ficha guarda **lo estable** de la marca (estilo, enfoque, discurso); la cantidad de gráficos y animaciones **varía por video** | La ficha exporta solo la identidad visual y verbal. Los topes y opciones de edición se eligen en cada contenido, con valores sugeridos. |
+| **Solo herramientas gratuitas, más Claude** | Fuera Higgsfield por ahora. Las animaciones salen de lo que ya tienen las skills (HyperFrames, three.js, mapas, tus fotos) y se suma **B-roll de bancos libres**. El video generativo queda como fase pendiente. |
+| La IA de Content Studio (Gemini) **es lenta o falla** | Fase nueva y primera: varios proveedores con respaldo automático y prompts más ligeros. Además, una **vía Claude** que usa tu plan de Claude (sin pagar API) para las tareas grandes, como hace Sloth. |
 
 ---
 
-## 2. Lo que hacen tus skills hoy
-
-### 2.1 Carpetas
+## 1. Visión general
 
 ```
-~/Desktop/Claude Code/Videos Claude/Reels con Claude/
-  Mi estilo/
-    marcas/<marca>.json             estilo de cada marca como datos (estado: definida · por confirmar · pendiente)
-    Reglas-de-estilo-<Marca>.md     guía corta de la marca (opcional; la skill la lee)
-    tipografias/  logos/  voz/      fuentes .woff2, logos oficiales, muestras de tu voz para clonarla
-  Tomas/                            tus videos en crudo (compartidos por todos los reels)
-  Música/                           opcional
-  Reels/
-    AAAA-MM-DD · <tema>/
-      proyecto.json                 toma, marca, tipo, resolución, revisión, con_graficos, flotantes, pantalla,
-                                    detras, musica, red, editor
-      trabajo/plan.json             el plan único: estilo, subtítulos, tomas, gráficos, cámara, sonido, portada
-      trabajo/escenas.json          escenas animadas (animar-reels-claude)
-      trabajo/guion.txt             guion (solo en video animado completo)
-      FINAL - <tema>.mp4            el entregable
-      portada.png
+┌──────────── Content Studio (navegador: Brave, celular) ────────────┐
+│ Marca estable · Ideas · Guion · Modo grabación · Calendario ·      │
+│ Copies · Resultados                                                │
+│ IA rápida en la app: Gemini / Groq / OpenRouter / … con respaldo   │
+└───────────────┬──────────────────────────────────▲─────────────────┘
+   escribe      │  pedidos, marca, encargos          │  lee: respuestas, estado, FINAL.mp4
+                ▼                                    │
+┌──────────── Carpeta «Reels con Claude» (tu computadora) ───────────┐
+│ Mi estilo/marcas/<marca>.json · Tomas/ · Reels/<fecha · tema>/     │
+│ Content Studio/pedidos/ · Content Studio/respuestas/               │
+└───────────────┬──────────────────────────────────▲─────────────────┘
+                ▼                                    │
+┌──────────── Claude Code (tu computadora, plan Pro) ────────────────┐
+│ content-studio-claude (nueva): ideas y guiones grandes             │
+│ editar-reels-claude: cortar, subtitular, gráficos, sonido          │
+│ animar-reels-claude: escenas 2D/3D, mapas, video animado completo  │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 Las dos skills y los tres tipos de video
+Cada parte hace lo que mejor sabe hacer:
+- **Content Studio** es la memoria: marca, ideas, guiones, estados y métricas, en el celular y en la computadora.
+- **Claude Code** es el trabajo pesado: guiones de calidad, edición y animación.
+- **La carpeta** une las dos partes, igual que Sloth, que sabe en qué paso va cada video viendo qué archivos existen.
 
-| Tipo | Skill | Qué pasa |
+---
+
+## 2. La IA de Content Studio: más rápida y sin bloqueos
+
+### 2.1 Por qué hoy va lenta o falla
+
+Revisado en `js/services/ai.js` y `apps-script/Code.gs`:
+
+1. **Plan gratuito de Gemini:** límites por minuto y por día, y saturación (errores 429 y 503). Cuando falla, Apps
+   Script prueba **otro modelo de Gemini, uno tras otro**: cada intento fallido suma espera.
+2. **Doble salto:** navegador → Apps Script → Gemini → Apps Script → navegador, sin streaming. No ves nada hasta que
+   termina todo.
+3. **Prompts muy grandes:** en cada petición van la metodología, la ficha completa, hooks, CTA, referencias y hasta 30.000
+   caracteres de documentos de marca (unos 8.000 tokens).
+4. **Respuestas muy largas:** un guion pide hasta 12.000 tokens de salida (2 versiones con 3 hooks alternativos y todas
+   las secciones).
+
+### 2.2 Solución en tres partes
+
+**a) Varios proveedores con respaldo automático** (la idea de Sloth, que trabaja con Claude, OpenCode gratis, DeepSeek,
+OpenRouter y otros mediante adaptadores). Casi todos hablan el mismo «idioma» (el formato de OpenAI), así que un solo
+adaptador sirve para varios:
+
+| Proveedor | Coste | Para qué |
 |---|---|---|
-| **Cabeza parlante** | `editar-reels-claude` | Corta silencios y tomas falsas, subtítulos, gráficos, cámara, texto detrás de la cabeza, música y efectos |
-| **Producto con voz en off** | `editar-reels-claude` | Monta tus tomas de producto sobre la voz, frase por frase |
-| **Video animado completo** | `animar-reels-claude` (modo B) | Desde un tema o guion: voz (grabada, clonada o genérica) y escenas animadas cada 3-5 s |
-| *(cualquiera de los dos primeros)* + **escenas animadas** | `animar-reels-claude` (modo A) | B-roll animado insertado en un reel grabado |
+| **Gemini** (el actual) | Gratis con límites | Investigación con búsqueda de Google |
+| **Groq** | Plan gratuito con límites | Respuestas muy rápidas (copies, hooks, reescrituras) |
+| **OpenRouter**, modelos `:free` | Gratis con límite diario | Respaldo cuando los demás se saturan |
+| **Cerebras** | Plan gratuito con límites | Otra opción rápida de respaldo |
+| **DeepSeek** | **No es gratis**, pero cuesta céntimos | Opcional, si quieres algo muy estable por muy poco |
 
-### 2.3 Reglas que comparten con Content Studio
+Los límites exactos de cada plan gratuito cambian a menudo: se confirman al implementarlo. En Ajustes eliges el orden.
+Si uno devuelve 429 o 5xx, la app pasa **al siguiente proveedor** (no a otro modelo del mismo, que suele estar igual de
+saturado) y te dice cuál respondió. Las claves siguen guardadas en Apps Script, como hoy.
 
-- **«Los gráficos ilustran lo que dice la voz»** y **«ninguna cifra que no se pronuncie»** (lo bloquea un script). Es la
-  misma idea que las reglas de veracidad de los prompts de Content Studio. Las dos apps dicen lo mismo con distintas
-  palabras, así que encajan.
-- **Gastar pocos tokens:** no leer `plan.json` ni `words.json` enteros (`plan.py resumen`), un solo comando para revisar
-  y exportar, una sola hoja de capturas por revisión. Es justo lo que recomendaba Sloth.
-- **Zonas seguras:** 220 px arriba, 380 abajo y 140 a la derecha (Content Studio debería usar las mismas al preparar la
-  grabación).
+**b) Prompts a dieta:**
+- Cada tarea recibe solo lo que necesita. Los copies no necesitan la competencia; los hooks no necesitan el catálogo
+  entero.
+- Presupuesto de documentos por tarea: grande en guiones e ideas, pequeño en copies y hooks.
+- Por defecto, **una versión** de guion. La segunda, solo si la pides.
+- La metodología completa va solo en ideas y guiones. En el resto basta un resumen.
 
-### 2.4 Lo que esto cambia frente a la versión 1 del plan
-
-- Fuera `_marca/`, `MARCA.md`, `estilo.json`, `encargo.md` y `recursos.json` inventados: se usan `marcas/<marca>.json`,
-  `Reglas-de-estilo-<Marca>.md`, `proyecto.json`, `plan.json` y `escenas.json`.
-- **Ahorrar tokens con la transcripción ya está resuelto**: la skill transcribe en local con Whisper (no gasta tokens) y
-  no lee los archivos largos. Lo que más ahorra ahora es que **la entrevista inicial y la propuesta de gráficos lleguen
-  hechas** desde Content Studio.
+**c) La vía Claude para lo grande** (sección 3): usa tu plan de Claude, sin coste extra.
 
 ---
 
-## 3. La integración, pieza por pieza
+## 3. La vía Claude: ideas y guiones con tu plan de Claude
 
-### 3.1 Marca: Content Studio ↔ `Mi estilo/marcas/<marca>.json`
+Es lo que más se parece a Sloth: el agente trabaja con **tu cuenta** de Claude Code, no con una API de pago.
 
-La ficha de marca de Content Studio genera (y lee) el archivo de la marca de la skill, y su guía corta.
+1. En Content Studio pulsas, por ejemplo, **«Generar con Claude»** (en ideas, guion o documento de marca).
+2. La app deja un **pedido** en `Content Studio/pedidos/<id>.json`: la tarea, el contenido y la marca. La marca ya está
+   exportada en la carpeta (sección 5), así que no se repite en cada pedido.
+3. En Claude Code, una skill nueva y pequeña, **`content-studio-claude`**, atiende los pedidos pendientes («atiende los
+   pedidos de Content Studio»). Escribe la respuesta en `respuestas/<id>.json` con **el mismo formato JSON que ya
+   esperan las pantallas de la app**.
+4. La app ve la respuesta y la carga, como si viniera de Gemini.
 
-| En la skill (`marcas/<marca>.json`) | Sale de Content Studio |
+**Ventajas:** mejor calidad, Claude puede buscar en la web para investigar y no hay límites de un plan gratuito de API.
+**Contras:** requiere tener Claude Code abierto en tu computadora y comparte el límite de uso de tu plan con la edición.
+Por eso **las dos vías conviven**: la rápida en la app (el celular, tareas cortas) y la de Claude para guiones e ideas
+importantes.
+
+---
+
+## 4. Mejoras de método tomadas de Sloth (ideas y guiones)
+
+La skill `ideas-vertical` de Sloth tiene un método muy concreto. Lo que se puede llevar a los prompts y a las fichas de
+Content Studio, sin su motor de investigación (que rastrea TikTok e Instagram):
+
+| De Sloth | En Content Studio |
 |---|---|
-| `nombre`, `estado` | Nombre de la marca; `definida` cuando la pestaña «Estilo de edición» está completa |
-| `colores` (`texto`, `acento`, `sobre_acento`, `oscuro`, `detras`) | Paleta, con un **rol** asignado a cada color (hoy los colores solo tienen nombre) |
-| `fuentes` (familia, peso, archivo `.woff2`) | Tipografías + el archivo de cada una en *Recursos* |
-| `subtitulos.animacion`, `mayusculas`, `contorno`… | Nuevos campos con las opciones reales de la skill (`alterna`, `karaoke`, `resaltado`…) |
-| `tarjetas.estilo` | Nuevo campo: `blanca`, `cristal`, `cristal_oscuro`, `oscura` |
-| `graficos_permitidos` | Nuevo campo: casillas con el catálogo de gráficos |
-| `zoom.movimientos` | Nuevo campo: casillas con los movimientos de cámara (`[]` = ninguno) |
-| `sonido.efectos` | Nuevo campo: hasta 3 tipos de efecto (`whoosh`, `pop`, `impact`…) |
-| `correcciones` | **Nombres propios y productos** de la ficha (p. ej. `{"Kafe Rico": "KafeRico"}`): Whisper deja de escribirlos mal |
-| `notas` | Reglas de *Reglas, límites y temas sensibles* que afectan a lo que sale en pantalla |
-| `Reglas-de-estilo-<Marca>.md` | Se genera desde la pestaña «Estilo de edición» y la de comunicación, en el formato de `guia-de-estilo-ejemplo.md` (tono, lienzo, tipografía, color, subtítulos, motion graphics, ritmo, sonido, logos, prohibido) |
+| **El empaque es el primer cuadro y su texto en pantalla** | Cada idea tiene «Texto del primer cuadro» y «Qué se ve en el primer cuadro» (máx. 3 elementos, el resultado ya enseñado) |
+| **Variantes del gancho** para probar | 2-3 textos alternativos del primer cuadro por idea (para probar uno por día o uno por red) |
+| **Gancho de las 4 P en 3 s**: Promesa, Prueba (enseñar el resultado primero), Plan, Persona | El gancho se pide y se evalúa con las 4 P. El evaluador avisa si falta la prueba |
+| **De lo más seguro a lo más arriesgado**; las seguras son **variantes de lo que ya funcionó, cambiando una sola cosa** | Las ideas usan los mejores contenidos de *Resultados* y las *Referencias* de la marca, y dicen qué conservan y qué cambian |
+| **Riesgo dicho sin rodeos** y **por qué funcionaría** | Campos «Por qué» y «Riesgo» en cada idea |
+| **Piso y techo** de vistas, realistas y marcados como estimación | Opcional, a partir de la mediana de la marca en *Resultados* |
+| **CTA «Comenta X y te mando…»** cuando el objetivo es vender | Ya existe como tipo de CTA; se propone cuando el objetivo es conversión |
+| **Guion palabra por palabra medido contra la duración** y **final que empalma con el principio** (TikTok repite el video) | El evaluador local añade la comprobación del empalme |
 
-**Ida y vuelta.** El editor en vivo de la skill tiene «Guardar como estilo de la marca», que reescribe
-`marcas/<marca>.json`. Para no pisar esos ajustes, Content Studio **lee el archivo antes de escribirlo** y conserva lo
-que se ajustó en el editor (tamaños, posiciones). La regla propuesta es que cada lado mande en lo suyo:
+---
 
-- **Manda Content Studio:** identidad, reglas, colores con su rol, fuentes, correcciones, gráficos permitidos.
-- **Manda la skill:** medidas finas (`tam`, `y`, `alto`, márgenes) que se afinan mirando el video.
+## 5. La marca: lo estable en la ficha, lo variable en cada video
 
-Con esto, los campos de *Identidad visual* que hoy «no sirven para nada» (sección 9 de
-[FICHA_DE_MARCA.md](FICHA_DE_MARCA.md)) pasan a ser los que alimentan la edición. Los de texto libre se cambian por las
-opciones reales de la skill: así no se inventan valores que la skill no entiende.
+### 5.1 Lo que guarda la ficha (estable)
 
-### 3.2 Contenido: Content Studio → `Reels/<fecha · tema>/`
+Casi todo ya existe en Content Studio: identidad, documentos, comunicación, pilares, hooks y CTA. Para la edición se
+añade una pestaña **«Estilo de edición»** solo con lo que define cómo se **ve y suena** la marca siempre:
 
-Al pulsar **«Enviar a edición»** en un contenido con guion aprobado, Content Studio crea la carpeta del reel con:
-
-1. **`proyecto.json` ya rellenado** (marca, tipo, red, con_graficos, flotantes, pantalla, música, editor) y un campo
-   nuevo, `contenido: "CNT-0042"`. Así la entrevista de la skill se reduce a confirmar la toma.
-2. **`trabajo/guion-aprobado.md`**: el guion con sus secciones (voz, texto en pantalla, visual, edición, pico), la CTA y
-   los datos marcados `[VERIFICAR]`.
-3. **`trabajo/propuesta-graficos.md`**: la tabla *Lo que dice · Qué aparece · Tipo* (como `plan-graficos.md` del
-   ejemplo), con los **tipos reales del catálogo** (`lista`, `contador`, `comparativa`, `pasos`, `gancho`, `cierre`…) y
-   las escenas de `animar-reels-claude` (`mapa`, `cifra`, `mecanismo`, `pieza3d`…). Es una **propuesta**: la skill la
-   ancla a las palabras reales de la toma con `plan.py`, la revisa y te enseña su tabla para el OK, como hoy.
-4. **`trabajo/vocab.txt`**: los nombres propios para `transcribe.py --vocab`.
-
-**La toma.** Las tomas viven en `Tomas/`, compartidas. Para ligar una toma a su contenido, Content Studio la copia ahí con
-el id en el nombre: `Tomas/CNT-0042 toma1.mov`. Con eso detecta solo que está **grabado**.
-
-### 3.3 Lanzar la edición
-
-| Nivel | Cómo |
+| Campo | Va al archivo de la skill (`marcas/<marca>.json`) |
 |---|---|
-| **1. Copiar mensaje** (primero) | Botón «Editar con Claude» en el contenido. Copia `Usa la skill editar-reels-claude con el reel «Reels/2026-11-23 · Café quemado»` (o `animar-reels-claude` si el tipo es animado). Lo pegas en Claude Code abierto en `Reels con Claude/`. |
-| **2. Pendientes** | «Edita los reels pendientes»: la skill busca los `proyecto.json` con `contenido` y sin `FINAL - *.mp4`. |
-| **3. Automático** (opcional, al final) | Un script local que vigila la carpeta y lanza Claude Code. No lo recomiendo al principio: tus skills piden tu OK en varios pasos (palabras clave, tabla de gráficos, muestra de voz), y eso no tiene sentido sin ti delante. |
+| Colores con rol (texto, acento, sobre acento, oscuro, detrás) | `colores` |
+| Tipografías con su archivo | `fuentes` |
+| Cómo se animan los subtítulos (alterna, karaoke, resaltado…) y si van en mayúsculas | `subtitulos` |
+| Estilo de tarjetas (blanca, cristal, cristal oscuro, oscura) | `tarjetas.estilo` |
+| Movimientos de cámara que acepta la marca | `zoom.movimientos` |
+| Sus 3 efectos de sonido y su tipo de música | `sonido` |
+| Lo que nunca sale en pantalla (emojis, menciones prohibidas…) | `notas` |
+| Nombres propios y productos bien escritos | `correcciones` (Whisper deja de escribirlos mal) |
+| Guía corta de estilo | `Reglas-de-estilo-<Marca>.md`, generada con la voz, el discurso y las reglas de Content Studio |
 
-### 3.4 Volver a Content Studio
+**Ida y vuelta.** Antes de escribir el archivo de la marca, Content Studio lo lee y conserva lo que afinaste en el
+editor en vivo de la skill (tamaños, posiciones). Si una marca ya tiene archivo en la skill, la primera vez se
+**importa**.
 
-Con la carpeta conectada, Content Studio detecta solo:
+### 5.2 Lo que se elige en cada contenido (variable)
 
-| Estado | Cómo lo detecta |
+Al enviar un contenido a edición, una ficha corta con **valores sugeridos** según la duración y el tipo, que puedes
+cambiar:
+
+- **Tipo de producción:** cabeza parlante · producto con voz en off · animado completo.
+- **Gráficos:** sin gráficos · pocos (3 + 1) · equilibrado (5 + 2) · muchos (8 + 3). Son los presets de la propia skill.
+- **Escenas animadas:** ninguna · 2-3 · video animado completo.
+- **Texto detrás de la cabeza:** sí o no (tarda más en procesarse).
+- **Música:** la de la marca, otra o ninguna.
+- **Editor en vivo antes de exportar:** sí o no.
+
+---
+
+## 6. Edición y animación con herramientas gratuitas
+
+### 6.1 Lo que ya tienen tus skills (gratis)
+
+Whisper local, corte de silencios, subtítulos animados, unos 20 gráficos (listas, contadores, comparativas, pasos,
+chats, precios…), movimientos de cámara, texto detrás de la cabeza, escenas 2D y 3D ligero (HyperFrames y three.js),
+mapas de México, fotos en capas, música y efectos por síntesis (SynthFlow), voz clonada local y Google Flow (gratis, a
+mano) para la portada. Para los ejemplos que diste:
+
+| Lo que pediste | Cómo se hace gratis |
 |---|---|
-| **Grabado** | Existe `Tomas/CNT-0042*` |
-| **Editado** | Existe `Reels/<…>/FINAL - *.mp4` en la carpeta del reel con `contenido: "CNT-0042"` |
-| Vista previa | Reproduce el `FINAL` y enseña `portada.png` dentro del contenido |
-| Copies | Usan los subtítulos reales (lo que se dijo de verdad) en lugar del guion, si están disponibles |
+| Lista de tres puntos | Gráfico `lista` o escena `lista_iconos`, un renglón al decir cada punto |
+| Referencia a un lugar con zoom al mapa | Escena `mapa` (hoy solo México; ver 6.2) |
+| Gancho visual fuerte | Palabra gigante detrás de la cabeza, golpe de cámara, transición y un clip de un banco libre. La cara derritiéndose queda para el video generativo (6.3) |
 
-Publicado y métricas siguen a mano, como pediste.
+### 6.2 Mejoras propuestas en las skills (gratis)
 
-### 3.5 Brave
+1. **B-roll de bancos libres.** Sloth (estilo documental) busca clips y fotos reales en Mixkit, Wikimedia Commons,
+   Archive.org y NASA, y deja un `FUENTES.md` con los derechos. Pexels y Pixabay tienen API gratuita. Es la alternativa
+   gratuita a generar B-roll: un tipo de escena `clip` (de banco) con `busca: "cacao cayendo"`. El código de Sloth es MIT
+   y se puede adaptar, conservando su aviso de licencia.
+2. **Mapas del mundo.** El script `preparar_mapa.py` ya parte del archivo de países de Natural Earth: ampliarlo a todos
+   los países (zoom a Ghana, a España…).
+3. **Biblioteca de escenas de la marca.** Como la biblioteca de modelos 3D de Sloth: las escenas que te gustaron se
+   guardan como plantilla de la marca y se reutilizan. Así cada video se parece más al anterior y gasta menos.
+4. **Leer lo que prepara Content Studio:** `proyecto.json` con el id del contenido (la entrevista se reduce a confirmar
+   la toma), la propuesta de gráficos por frase y los nombres propios para Whisper.
+5. **Mejor acabado de las animaciones:** revisar la hoja de capturas contra la guía de estilo de la marca (máximo 3
+   colores, una idea por escena, fondo oscuro) y añadir 2-3 animaciones de entrada y salida más.
 
-La carpeta conectada usa la File System Access API, que **Brave trae apagada por defecto**. Se enciende una vez en
-`brave://flags/#file-system-access-api` → *Enabled* → reiniciar Brave. Sin eso, todo funciona con descargas .zip que
-descomprimes en `Reels/`, pero el estado no se detecta solo.
+### 6.3 Pendiente: video generativo
 
----
-
-## 4. El guion, preparado para la edición
-
-Para que la propuesta de gráficos sea buena, el generador de guiones de Content Studio cambia así:
-
-- **Tipo de producción** en cada contenido: *Cabeza parlante*, *Producto con voz en off*, *Animado completo*. Decide la
-  skill, si hay paso «Por grabar» (no lo hay en animado con voz clonada o genérica) y qué tipos de recurso se proponen.
-- **Recursos por sección**, con el vocabulario de la skill: cada sección del guion propone 0-1 gráfico o escena, con su
-  tipo, la frase que lo motiva y sus datos (los puntos de la lista, la cifra, el estado del mapa). La IA respeta los
-  **topes** de la marca (flotantes 0-8, pantalla completa 0-3) y la regla de **no poner cifras que no se dicen**.
-- **Ejemplos** de lo que pediste:
-  - «tres razones» → `lista` (o `lista_iconos` animada), un renglón por razón, que entra al decirlo.
-  - Un lugar de México → escena `mapa` con zoom al estado. **Hoy el mapa solo tiene México**: un país como Ghana
-    necesita ampliar los datos del mapa (sección 6).
-  - El gancho «por qué es bueno comer chocolate» → gancho visual con Higgsfield (sección 6).
-- **Modo grabación** (lo que Sloth hace en «Preparar para grabar»): teleprompter a pantalla completa, tabla segundo a
-  segundo, variantes de gancho, qué preparar antes de grabar y las zonas seguras de la skill. Solo para *Cabeza
-  parlante* y *Producto con voz en off*.
+Queda **reservado** un tipo `clip_ia` (B-roll generado, gancho visual sobre el primer cuadro, escenas del video
+animado), con su presupuesto por video. Cuando elijas herramienta (Higgsfield u otra), se conecta ahí sin rehacer el
+resto.
 
 ---
 
-## 5. Cambios en Content Studio
+## 7. Del guion al video publicado
 
-| # | Cambio | Dónde |
-|---|---|---|
-| 1 | Pestaña **«Estilo de edición»** con las opciones reales de la skill (roles de color, fuentes con archivo, animación de subtítulos, estilo de tarjetas, gráficos permitidos, movimientos de cámara, efectos de sonido, música) | `js/views/brands.js`, `js/core/schema.js` (`brandConfigs.visual`) |
-| 2 | **Exportar e importar** `marcas/<marca>.json` y `Reglas-de-estilo-<Marca>.md` | Nuevo servicio `js/services/reels.js` |
-| 3 | **Tipo de producción** y **recursos por sección** en el guion | `js/core/schema.js` (ideas), `js/services/prompts.js`, `js/views/content-script.js` |
-| 4 | **Modo grabación** | `js/views/content-script.js` |
-| 5 | **«Enviar a edición»** y **«Editar con Claude»** | `js/views/content.js` + `js/services/reels.js` |
-| 6 | **Carpeta conectada** (Brave/Chrome): estado automático, vista previa, subtítulos reales para los copies | `js/services/reels.js`, `js/views/settings.js` |
+1. **Guion aprobado** con su tipo de producción y su propuesta de gráficos y escenas por frase, usando los nombres reales
+   del catálogo de la skill.
+2. **Modo grabación** (cabeza parlante y producto): teleprompter, tabla segundo a segundo, variantes del gancho, qué
+   preparar y las zonas seguras de la skill (220 px arriba, 380 abajo, 140 a la derecha).
+3. **Enviar a edición:** crea `Reels/<fecha · tema>/` con `proyecto.json` ya rellenado, el guion y la propuesta.
+   Copias la toma con «Añadir toma», que la guarda como `Tomas/CNT-0042 toma1.mov`.
+4. **Editar con Claude:** copia el mensaje para Claude Code («Usa la skill editar-reels-claude con el reel …»), o «edita
+   los reels pendientes».
+5. **Estado automático:** «Grabado» cuando existe la toma; «Editado» cuando existe `FINAL - *.mp4`. Vista previa y
+   portada dentro del contenido. Los copies usan lo que se dijo de verdad.
+6. **Publicado y métricas:** a mano, como ahora.
 
-El catálogo de gráficos y escenas se copia como **datos** (nombres de tipos y sus campos), no como código: los scripts
-de la skill son de Viegas Estudio, con licencia de uso para tus videos y sin reventa, y este repositorio es público.
-
----
-
-## 6. Cambios en las skills
-
-### 6.1 Leer lo que prepara Content Studio (pequeños)
-
-1. **Entrevista:** si `proyecto.json` trae `contenido`, dar por respondido lo que ya trae y preguntar solo la toma (si
-   no hay `Tomas/<CNT>*`).
-2. **Gráficos:** si existe `trabajo/propuesta-graficos.md`, partir de ahí para la tabla (anclar con `plan.py`, verificar,
-   enseñar).
-3. **Transcripción:** usar `trabajo/vocab.txt` en `--vocab`.
-4. **Pendientes:** la orden «edita los reels pendientes».
-
-### 6.2 Higgsfield (nuevo)
-
-Hoy no existe en ninguna de las dos skills. Lo que harían falta:
-
-| Pieza | Qué es | Cómo encaja en lo que ya hay |
-|---|---|---|
-| **B-roll generado** | Un clip de 2-5 s de lo que se nombra y no se grabó | Un tipo nuevo en `escenas.json` (p. ej. `clip_ia`, con `prompt`, `uso: marco \| pantalla`, `desde_palabra`). El gráfico `marco` ya sabe enseñar un clip (`src`) |
-| **Gancho visual** | Transformar el primer cuadro de la toma (la cara que se derrite como chocolate) | Un `clip_ia` con `desde: primer_fotograma`, que **sustituye** los primeros 2-3 s del video base. La voz sigue siendo la grabada (Regla 1) |
-| **Escenas de video animado** | Tomas generadas en el modo B | `clip_ia` con `uso: video`, mezclado con las escenas 2D |
-| **Presupuesto** | Higgsfield gasta créditos | `limites.ia` en `proyecto.json` (p. ej. 3 clips por reel); el plan no guarda más |
-| **Estilo de la marca** | Estética base y lo que no se genera | `marcas/<marca>.json → ia` (`estetica`, `prohibido`, texto base para cada prompt) |
-
-**Cómo se llama a Higgsfield** está por decidir. Hay dos caminos:
-
-- **Por su API, si tu cuenta la tiene:** la skill lo genera sola en segundo plano (lo más cómodo; necesita guardar la
-  llave en tu computadora, fuera de la skill).
-- **A mano, como Google Flow en la portada:** un script prepara el fotograma y el prompt (`trabajo/ia/<id>-prompt.txt`),
-  Claude o tú lo generáis en el navegador con tu sesión, **pidiendo permiso antes de subir y de descargar**, y se guarda
-  en `trabajo/ia/<id>.mp4`.
-
-En los dos casos, el clip se genera **antes** de exportar, porque es lo que más tarda, y si falla el reel sale igual con
-una escena 2D en su lugar.
-
-### 6.3 Mapas fuera de México
-
-El tipo `mapa` usa datos de Natural Earth reducidos a México (`datos/mexico.json`). El mismo script
-(`preparar_mapa.py`) ya parte del archivo de países del mundo: ampliarlo a países (zoom a Ghana, a España…) es una
-extensión natural.
+En Brave, la carpeta conectada necesita encender `brave://flags/#file-system-access-api` una vez. Sin eso funciona con
+descargas .zip, pero sin estado automático.
 
 ---
 
-## 7. Plan por fases
+## 8. Fases
 
-| Fase | Qué | Lado | Ya sirve para |
-|---|---|---|---|
-| **1** | Pestaña «Estilo de edición» + exportar/importar `marcas/<marca>.json` y `Reglas-de-estilo-<Marca>.md` | Content Studio | Que las skills editen con la marca de Content Studio (modo paralelo) |
-| **2** | Tipo de producción + recursos por sección en el guion + «Enviar a edición» (descarga) + «Editar con Claude» | Content Studio + 6.1 en las skills | Modo integrado con copiar y pegar |
-| **3** | Modo grabación | Content Studio | Grabar con el guion delante |
-| **4** | Carpeta conectada: tomas con su id, estado automático, vista previa, subtítulos reales | Content Studio | Seguimiento sin marcar a mano |
-| **5** | Higgsfield (`clip_ia`, gancho visual, presupuesto) | Skills | B-roll y ganchos generados |
-| **6** | Mapas del mundo | Skill de animar | Lugares fuera de México |
+| # | Fase | Qué incluye | Dónde se hace | Qué te resuelve |
+|---|---|---|---|---|
+| **1** | **IA rápida y fiable** | Adaptador de varios proveedores (Gemini, Groq, OpenRouter, Cerebras; DeepSeek opcional), respaldo automático entre proveedores, prompts a dieta, una versión de guion por defecto | Content Studio + Apps Script | Lo lento y los fallos de hoy |
+| **2** | **Método de ideas y guiones** | Primer cuadro y variantes, gancho de las 4 P, por qué y riesgo, variantes de lo que funcionó, empalme final; tipo de producción y propuesta de gráficos por frase | Content Studio | Mejores ideas y guiones listos para editar |
+| **3** | **Marca estable para edición** | Pestaña «Estilo de edición»; exportar e importar `marcas/<marca>.json` y `Reglas-de-estilo-<Marca>.md` | Content Studio | Que las skills editen con tu marca, ya en paralelo |
+| **4** | **Carpeta conectada y envío a edición** | Conectar `Reels con Claude/`, «Enviar a edición» con ajustes del video, «Añadir toma», «Editar con Claude», estado automático, vista previa | Content Studio | El modo integrado de punta a punta |
+| **5** | **Modo grabación** | Teleprompter, tabla segundo a segundo, variantes, qué preparar, zonas seguras | Content Studio | Grabar con todo delante |
+| **6** | **Vía Claude** | Pedidos y respuestas en la carpeta; skill `content-studio-claude` | Content Studio + skill nueva | Ideas y guiones con Claude sin pagar API |
+| **7** | **Skills: mejoras gratuitas** | Leer el `proyecto.json` de Content Studio, B-roll de bancos libres, mapas del mundo, biblioteca de escenas, acabado | Tus skills | Videos más ricos, gratis |
+| **8** | *Pendiente:* video generativo | `clip_ia` con la herramienta que elijas | Tus skills | Ganchos y B-roll generados |
 
-Las fases 1 a 4 son de Content Studio y se pueden hacer desde aquí. Las 5 y 6 cambian tus skills, que viven en tu
-computadora: se harían en una sesión de Claude Code abierta allí, o mandando aquí la carpeta de scripts.
+**Orden.** La 1 primero, porque es lo que hoy molesta y no depende de nada. La 3 ya sirve para editar en paralelo. Con
+la 4 queda el modo integrado completo. La 6 necesita la carpeta de la 4.
+
+**Dónde se programa cada fase.** Las fases 1 a 6 se hacen en este repositorio, desde aquí. La skill nueva de la fase 6
+y los cambios de la 7 viven en tu computadora (`~/.claude/skills/`). Se hacen en una sesión de Claude Code abierta allí,
+o se escriben aquí y los copias.
 
 ---
 
-## 8. Lo que queda por decidir
+## 9. Lo que necesito para empezar la fase 1
 
-1. **Higgsfield: ¿tu cuenta tiene API?** Si no, va a mano como Google Flow.
-2. **¿Qué marcas de Content Studio ya tienen su `marcas/<marca>.json` en la skill?** Para esas, la fase 1 empieza
-   **importando** (la skill ya tiene su estilo afinado) y no exportando.
-3. **¿Empezamos por la fase 1?** Es la que menos depende de lo demás y ya te sirve hoy.
+1. **Crear cuentas gratuitas** en uno o dos proveedores (recomiendo **Groq** y **OpenRouter**) y guardar sus claves en
+   Apps Script → Propiedades del script, como la de Gemini. Te dejo los pasos al implementarlo.
+2. **DeepSeek:** ¿lo incluimos como opción de pago muy barata o solo gratuitos?
