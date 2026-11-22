@@ -6,10 +6,11 @@ import { KNOWLEDGE_LEVELS, PLATFORMS, STRUCTURES, CTA_TYPES, HOOK_PATTERNS, HOOK
 import { createBrand, duplicateBrand, brandConfig, ensureBrandConfig } from '../services/workflow.js';
 import { pageHeader } from './shared.js';
 import { tabDocs } from './brand-docs.js';
+import { tabEdit } from './brand-edit.js';
 
 const TABS = [
   { id: 'general', label: 'Identidad general', icon: 'brand' }, { id: 'documentos', label: 'Documentos', icon: 'book' }, { id: 'comunicacion', label: 'Comunicación', icon: 'text' },
-  { id: 'visual', label: 'Identidad visual', icon: 'image' }, { id: 'redes', label: 'Redes sociales', icon: 'send' },
+  { id: 'visual', label: 'Identidad visual', icon: 'image' }, { id: 'edicion', label: 'Estilo de edición', icon: 'film' }, { id: 'redes', label: 'Redes sociales', icon: 'send' },
   { id: 'estrategia', label: 'Pilares y estrategia', icon: 'target' }, { id: 'biblioteca', label: 'Hooks y CTA', icon: 'layers' },
   { id: 'referencias', label: 'Referencias', icon: 'link' },
 ];
@@ -61,7 +62,7 @@ export function render(main, { params, query }) {
     const body = main.querySelector('.bbody'); body.innerHTML = '';
     const host = document.createElement('div'); body.append(host);
     await ensureBrandConfig(id);
-    cleanup = ({ general: tabGeneral, documentos: tabDocs, comunicacion: tabVoice, visual: tabVisual, redes: tabPlatforms, estrategia: tabStrategy, biblioteca: tabLibrary, referencias: tabRefs })[tab](host, id, subId) || null;
+    cleanup = ({ general: tabGeneral, documentos: tabDocs, comunicacion: tabVoice, visual: tabVisual, edicion: tabEdit, redes: tabPlatforms, estrategia: tabStrategy, biblioteca: tabLibrary, referencias: tabRefs })[tab](host, id, subId) || null;
   };
   drawTabs(); drawBody();
   return () => { try { cleanup?.(); } catch { /* */ } };
@@ -131,7 +132,7 @@ function tabVisual(host, id) {
       <section class="card"><div class="card-h"><h3>Tipografías</h3><button class="btn btn-sm" data-addfont>${icon('plus', 'ic-sm')}Tipografía</button></div><div class="card-b stack">
         ${(cfg.visual.fonts || []).map((f, i) => `<div class="row"><input class="input input-sm" data-frole="${i}" value="${esc(f.role)}" placeholder="Uso" style="width:160px"><input class="input input-sm" data-ffam="${i}" value="${esc(f.family)}" placeholder="Nombre de la fuente" style="flex:1"><span style="font-family:${esc(f.family)};min-width:80px">Aa Bb 123</span><button class="icon-btn sm" data-delfont="${i}">${icon('x', 'ic-sm')}</button></div>`).join('')}
       </div></section>
-      <section class="card"><div class="card-h"><h3>Estilo audiovisual</h3><span class="xs muted">La IA lo tiene en cuenta en guiones y copies</span></div><div class="card-b"><form class="form-grid" data-vform>${renderFields(VISUAL, cfg)}</form></div></section>
+      <section class="card"><div class="card-h"><h3>Estilo audiovisual</h3><span class="xs muted">Subtítulos, edición y ritmo los usa la IA de guiones; todo va a la guía de estilo de la skill de edición (pestaña Estilo de edición)</span></div><div class="card-b"><form class="form-grid" data-vform>${renderFields(VISUAL, cfg)}</form></div></section>
     </div>
     <aside class="stack-lg"><section class="card"><div class="card-h"><h3>${icon('image')}Recursos de la marca</h3></div><div class="card-b stack">
       <label class="dropzone" data-drop>${icon('upload')}<div class="small">Arrastra logotipos, imágenes o gráficos (≤ 1,5 MB) o haz clic</div><input type="file" accept="image/*,.svg" multiple hidden data-file></label>

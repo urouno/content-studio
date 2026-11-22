@@ -213,3 +213,37 @@ test('ideas: el prompt pide variantes de lo que ya funcionó, ordenadas de segur
   assert.match(p, /MÁS SEGURA a la MÁS ARRIESGADA/); assert.match(p, /Café quemado/); assert.match(p, /firstFrameText/); assert.match(p, /keepChange/);
   assert.match(ideasPrompt({ count: 3 }), /Aún no hay resultados medidos/);
 });
+
+test('marca para la skill: exporta lo estable y conserva lo afinado en el editor en vivo', async () => {
+  const R = await import('../js/services/reels.js');
+  // Lo que ya tenía la skill: medidas finas, otras claves y efectos.
+  const skillFile = { nombre: 'Café Lumbre', estado: 'por confirmar', colores: { texto: '#ffffff', acento: '#000000' },
+    subtitulos: { tam: 92, y: 1350, animacion: 'linea' }, fuentes: { clave: { familia: 'Anton', ancho_car: 0.47 }, archivos: [{ familia: 'Anton', archivo: 'Anton.woff2' }] },
+    sonido: { musica_db: -12, efectos: { activo: true, tipos: { glitch: {}, riser: {} }, usos: { camara: 'riser' } } }, correcciones: { 'Lunbre': 'Lumbre' }, notas: ['Sin emojis'] };
+  const imported = R.parseMarcaJson(JSON.stringify(skillFile), { fileName: 'cafe-lumbre.json' });
+  assert.equal(imported.file, 'cafe-lumbre'); assert.equal(imported.fonts.clave, 'Anton'); assert.deepEqual(imported.sfx, ['glitch', 'riser']);
+  assert.equal(imported.never, 'Sin emojis'); assert.match(imported.corrections, /Lunbre = Lumbre/);
+  // Content Studio cambia lo estable.
+  const edit = { ...imported, roles: { texto: '#FFFFFF', acento: '#F59E0B' }, fonts: { texto: 'Rajdhani', clave: 'Anton' }, subtitles: { animacion: 'karaoke', mayusculas: true, contorno: null, sin_puntuacion: null }, cards: 'cristal', camera: [], sfx: ['whoosh', 'pop'], corrections: 'Lunbre = Lumbre\nexpreso = espresso' };
+  const brand = { name: 'Café Lumbre' };
+  const config = { voice: { avoid: 'barato, garantizado' }, visual: { fonts: [{ role: 'Títulos', family: 'Anton' }, { role: 'Texto', family: 'Rajdhani' }], colors: [{ name: 'Ámbar', hex: '#F59E0B' }], edit } };
+  const out = R.buildMarcaJson({ brand, config });
+  assert.equal(out.estado, 'definida');
+  assert.equal(out.colores.acento, '#F59E0B');
+  assert.equal(out.subtitulos.animacion, 'karaoke'); assert.equal(out.subtitulos.tam, 92); assert.equal(out.subtitulos.y, 1350); // medidas conservadas
+  assert.deepEqual(out.fuentes.clave, { familia: 'Anton', ancho_car: 0.47 }); // objeto de la skill respetado
+  assert.equal(out.fuentes.texto, 'Rajdhani');
+  assert.deepEqual(out.zoom.movimientos, []); // ninguno = solo zoom de fondo
+  assert.deepEqual(Object.keys(out.sonido.efectos.tipos), ['whoosh', 'pop']); // sin los tipos viejos
+  assert.equal(out.sonido.musica_db, -12); assert.equal(out.sonido.efectos.usos.camara, 'riser');
+  assert.equal(out.correcciones.expreso, 'espresso');
+  assert.ok(Array.isArray(out.notas) && out.notas.some((n) => /barato, garantizado/.test(n)));
+  assert.equal(out.guia, 'Reglas-de-estilo-Cafe-Lumbre.md');
+  // Reimportar no duplica la línea de palabras prohibidas.
+  assert.ok(!R.parseMarcaJson(out).never.includes('barato'));
+  // Sin colores ni fuentes, queda por confirmar.
+  assert.equal(R.buildMarcaJson({ brand, config: { visual: {} } }).estado, 'por confirmar');
+  // La guía corta usa los campos audiovisuales de texto libre de la ficha.
+  const md = R.buildStyleGuide({ brand, config: { ...config, visual: { ...config.visual, pace: 'Cambio de plano cada 2-4 s', intro: 'Logo 1 s' } } });
+  assert.match(md, /^# Reglas de estilo · Café Lumbre/); assert.match(md, /Cambio de plano cada 2-4 s/); assert.match(md, /Intro: Logo 1 s/); assert.match(md, /220 px/);
+});

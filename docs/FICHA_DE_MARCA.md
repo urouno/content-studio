@@ -9,6 +9,7 @@ Este documento repasa **todo lo que pide la ficha de una marca** (Marcas → *Fi
 | 🤖 **IA** | Se envía a la IA (Gemini) como contexto al generar contenido. |
 | ⚙️ **App** | Lo usa la propia app para cálculos, avisos o valores por defecto (no la IA). |
 | 👁️ **Solo vista** | Solo se muestra o se usa para organizar la interfaz. No influye en el contenido. |
+| 🎬 **Edición** | Va a los archivos de la skill de edición de reels (`Mi estilo/marcas/<marca>.json` y `Reglas-de-estilo-<Marca>.md`, pestaña *Estilo de edición*). |
 | ❌ **Sin uso** | Se guarda (y se sincroniza con Google Sheets), pero **ninguna parte de la app lo usa**. |
 
 ## Cómo llega la ficha a la IA
@@ -119,7 +120,7 @@ Tabla `ConfigMarca`, columna `voice`.
 
 Tabla `ConfigMarca`, columna `visual`, y tabla `Recursos`.
 
-> ⚠️ La tarjeta *Estilo audiovisual* dice "La IA lo tiene en cuenta en guiones y copies", pero **solo 3 de sus 10 campos se envían a la IA**. Los otros 7 no se usan en ninguna parte.
+> Solo 3 de los 10 campos de *Estilo audiovisual* se envían a la IA de guiones. **Todos** van a la guía de estilo de la skill de edición (`Reglas-de-estilo-<Marca>.md`), que se descarga en la pestaña *Estilo de edición*.
 
 | Campo | Para qué sirve | Uso |
 |---|---|---|
@@ -128,13 +129,13 @@ Tabla `ConfigMarca`, columna `visual`, y tabla `Recursos`.
 | **Estilo de subtítulos** | Indicaciones de subtítulos para el guion. | 🤖 IA |
 | **Estilo de edición** | Indicaciones de edición para el guion. | 🤖 IA |
 | **Ritmo** | Cambios de plano, silencios… | 🤖 IA |
-| **Posición de textos** | — | ❌ Sin uso |
-| **Transiciones** | — | ❌ Sin uso |
-| **Música** | — | ❌ Sin uso |
-| **Efectos de sonido** | — | ❌ Sin uso |
-| **Recursos gráficos y referencias** | — | ❌ Sin uso |
-| **Intro** | — | ❌ Sin uso |
-| **Outro** | — | ❌ Sin uso |
+| **Posición de textos** | Guía de estilo para la edición del reel. | 🎬 Edición |
+| **Transiciones** | Guía de estilo para la edición del reel. | 🎬 Edición |
+| **Música** | Guía de estilo para la edición del reel. | 🎬 Edición |
+| **Efectos de sonido** | Guía de estilo para la edición del reel. | 🎬 Edición |
+| **Recursos gráficos y referencias** | Guía de estilo para la edición del reel. | 🎬 Edición |
+| **Intro** | Guía de estilo para la edición del reel. | 🎬 Edición |
+| **Outro** | Guía de estilo para la edición del reel. | 🎬 Edición |
 
 **Recursos de la marca** (logos, imágenes, gráficos, fuentes, audio, plantillas; archivo ≤ 1,5 MB o enlace): biblioteca de consulta para el equipo. Los archivos subidos se quedan **solo en ese dispositivo** (no se sincronizan); los enlaces sí. Se copian al duplicar la marca. **No se envían a la IA** ni se usan en ningún otro sitio. 👁️ Solo vista
 
@@ -220,17 +221,34 @@ Se crean a mano o al aprobar un guion (se guarda su hook).
 
 ---
 
+## 8 bis. Estilo de edición (skill de reels)
+
+Pestaña nueva. Guarda lo **estable** de cómo se ven y suenan los reels de la marca y genera los dos archivos que lee la skill
+`editar-reels-claude` (también `animar-reels-claude`). Lo que cambia en cada video (cuántos gráficos, escenas) se elige en el
+guion de cada contenido. Todo es 🎬 Edición.
+
+| Campo | Va a |
+|---|---|
+| Nombre del archivo | `Mi estilo/marcas/<nombre>.json` |
+| Colores por uso (texto, acento, texto sobre el acento, oscuro, palabra detrás) | `colores` |
+| Tipografías por uso, con su archivo .woff2 y peso | `fuentes` |
+| Animación de subtítulos, mayúsculas, contorno, sin puntuación | `subtitulos` |
+| Estilo de las tarjetas | `tarjetas.estilo` |
+| Gráficos que usa la marca | `graficos_permitidos` |
+| Movimientos de cámara permitidos | `zoom.movimientos` |
+| Sus 3 efectos de sonido y estilo de música | `sonido` |
+| Lo que nunca sale en pantalla (+ palabras prohibidas de *Comunicación*) | `notas` |
+| Nombres propios bien escritos | `correcciones` |
+
+Al **importar** el archivo que ya tenga la skill se conservan sus medidas (tamaños y posiciones afinados en su editor en vivo):
+al exportar solo se sustituye lo de esta tabla.
+
 ## 9. Resumen: campos que no sirven para nada (hoy)
+
+> Los 7 campos audiovisuales de *Identidad visual* que antes estaban aquí ya se usan: van a la guía de estilo de la skill de edición.
 
 | Pestaña | Campo | Qué hacer si se quiere que cuente |
 |---|---|---|
-| Identidad visual | Posición de textos | Escribirlo en *Estilo de subtítulos* o *Estilo de edición*. |
-| Identidad visual | Transiciones | Escribirlo en *Estilo de edición*. |
-| Identidad visual | Música | Escribirlo en *Estilo de edición* o en un documento propio. |
-| Identidad visual | Efectos de sonido | Escribirlo en *Estilo de edición*. |
-| Identidad visual | Recursos gráficos y referencias | Escribirlo en *Referencias → Notas generales*. |
-| Identidad visual | Intro | Escribirlo en *Estilo de edición* o en *Líneas editoriales → Series y formatos recurrentes*. |
-| Identidad visual | Outro | Igual que Intro. |
 | Pilares y estrategia | Notas estratégicas | Pasarlo a **Foco comercial actual** o **Líneas editoriales y temas**. |
 | (oculto) Marcas | `logoAssetId` | — |
 | (oculto) Hooks | Objetivo, idea de origen | — |
