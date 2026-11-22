@@ -228,7 +228,7 @@ descargas .zip, pero sin estado automático.
 | **4** ✅ | **Carpeta conectada y envío a edición** (hecha) | Conectar `Reels con Claude/`, «Enviar a edición» con ajustes del video, «Añadir toma», «Editar con Claude», estado automático, vista previa | Content Studio | El modo integrado de punta a punta |
 | **5** ✅ | **Modo grabación** (hecha) | Teleprompter, tabla segundo a segundo, variantes, qué preparar, zonas seguras | Content Studio | Grabar con todo delante |
 | **6** ✅ | **Vía Claude** (hecha) | Pedidos y respuestas en la carpeta; skill `content-studio-claude` | Content Studio + skill nueva | Ideas y guiones con Claude sin pagar API |
-| **7** | **Skills: mejoras gratuitas** | Leer el `proyecto.json` de Content Studio, B-roll de bancos libres, mapas del mundo, biblioteca de escenas, acabado | Tus skills | Videos más ricos, gratis |
+| **7** 📝 | **Skills: mejoras gratuitas** (instrucciones en [FASE7_INSTRUCCIONES_SKILLS.md](FASE7_INSTRUCCIONES_SKILLS.md)) | Leer el `proyecto.json` de Content Studio, B-roll de bancos libres, mapas del mundo, biblioteca de escenas, acabado | Tus skills | Videos más ricos, gratis |
 | **8** | *Pendiente:* video generativo | `clip_ia` con la herramienta que elijas | Tus skills | Ganchos y B-roll generados |
 
 **Orden.** La 1 primero, porque es lo que hoy molesta y no depende de nada. La 3 ya sirve para editar en paralelo. Con
