@@ -422,3 +422,55 @@ textarea.voice { font-style: normal; }
 @media (max-width: 860px) {
   .page-h .actions > [data-new] { display: none; }
 }
+
+/* =========================================================================
+   v2.1.1 · Estabilidad del diseño (revisión en 320–1920 px)
+   ========================================================================= */
+/* Títulos de tarjeta con controles: que bajen de renglón en vez de apretarse */
+.card-h { flex-wrap: wrap; row-gap: 8px; }
+.card-h > h3 { min-width: 0; }
+/* Indicadores: etiquetas largas ("Mediana compartidos/alcance") parten la palabra en vez de empujar el ícono */
+.kpi-top .eyebrow { min-width: 0; overflow-wrap: anywhere; }
+
+/* Tableta (561–860 px): flujo en 3 columnas y menú inferior centrado, no a todo lo ancho */
+@media (min-width: 561px) and (max-width: 860px) {
+  .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .bottomnav { left: 0; right: 0; margin: 0 auto; width: min(560px, calc(100% - 24px)); }
+  .more-sheet { right: max(12px, calc(50% - 280px)); }
+}
+
+/* Celular: zonas táctiles de al menos 40 px */
+@media (max-width: 760px) {
+  .btn-group .btn, .btn-group .btn:first-child, .btn-group .btn:last-child { height: 40px; }
+  .icon-btn.sm { width: 38px; height: 38px; }
+  .topbar .logo-m { width: 40px; height: 40px; align-items: center; justify-content: center; }
+  .sync-pill { height: 38px; min-width: 38px; justify-content: center; }
+
+  /* Guion: encabezado de la escena y fila de recurso visual en varias líneas */
+  .sec-h > input[data-p$=".beat"] { flex: 1 1 100% !important; order: 5; }
+  .sec-h > select { flex: 1 1 40%; }
+  .sec-res > select, .sec-res > .input { flex: 1 1 100% !important; max-width: none; width: 100%; }
+
+  /* Calendario: los 7 días caben sin deslizar */
+  .daystrip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; overflow: visible; padding: 0; margin: 0; }
+  .daystrip-wrap { margin: 0 0 12px; }
+  .ds-day { flex: none; padding: 7px 0 6px; border-radius: 10px; min-width: 0; }
+  .ds-day small { font-size: 10px; }
+  .ds-day b { font-size: 17px; }
+}
+/* Textos largos sin espacios (URL, códigos) no rompen la caja */
+.conn-steps, .conn-steps li, .notice, .card-b code { overflow-wrap: anywhere; }
+/* Inicio: la píldora y la marca se recortan; en pantallas estrechas "Abrir" baja de renglón */
+.alerts li { flex-wrap: wrap; }
+.al-row { min-width: 0; }
+.al-row .btag { min-width: 0; overflow: hidden; }
+.al-row .btag .small { overflow: hidden; text-overflow: ellipsis; }
+.btn { max-width: 100%; }
+@media (max-width: 420px) {
+  .al-main { flex-basis: 100%; }
+  .alerts li > .btn { margin-left: auto; }
+  /* Botones con texto largo: pasan a dos renglones en lugar de salirse */
+  .btn { white-space: normal; height: auto; min-height: 40px; padding-top: 8px; padding-bottom: 8px; line-height: 1.25; }
+  .btn-sm { min-height: 36px; }
+  .cal-bar .icon-btn { flex: none; width: 40px; }
+}
