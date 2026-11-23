@@ -24,20 +24,22 @@ export const TABLES = {
   history: { sheet: 'Historial', prefix: 'HIS', cols: ['table', 'recordId', 'action', 'before', 'summary'], json: ['before'], appendOnly: true },
 };
 
+// Colores por fase (Studio Pulse): ideas pizarra, guion índigo, grabar cian, editar coral, editado/copies ámbar,
+// programado violeta, publicado esmeralda.
 export const PIPELINE = [
   { id: 'idea', name: 'Idea registrada', group: 'ideas', color: '#94a3b8' },
   { id: 'aprobada', name: 'Idea aprobada', group: 'ideas', color: '#64748b' },
-  { id: 'guion', name: 'Guion en desarrollo', group: 'guion', color: '#a78bfa' },
-  { id: 'guion_aprobado', name: 'Guion aprobado', group: 'guion', color: '#7c3aed' },
+  { id: 'guion', name: 'Guion en desarrollo', group: 'guion', color: '#818cf8' },
+  { id: 'guion_aprobado', name: 'Guion aprobado', group: 'guion', color: '#6366f1' },
   // Grabación (con el teléfono) y edición (con Claude) solo se registran como hechas o no.
-  { id: 'por_grabar', name: 'Por grabar', group: 'grabar', color: '#f59e0b' },
-  { id: 'grabado', name: 'Grabado · por editar', group: 'editar', color: '#d97706' },
-  { id: 'listo', name: 'Editado', group: 'editado', color: '#0284c7' },
-  { id: 'calendarizado', name: 'Calendarizado', group: 'publicacion', color: '#14b8a6' },
-  { id: 'publicado', name: 'Publicado', group: 'publicacion', color: '#16a34a' },
-  { id: 'analizado', name: 'Analizado', group: 'analisis', color: '#15803d' },
+  { id: 'por_grabar', name: 'Por grabar', group: 'grabar', color: '#06b6d4' },
+  { id: 'grabado', name: 'Grabado · por editar', group: 'editar', color: '#f43f5e' },
+  { id: 'listo', name: 'Editado', group: 'editado', color: '#f59e0b' },
+  { id: 'calendarizado', name: 'Calendarizado', group: 'publicacion', color: '#8b5cf6' },
+  { id: 'publicado', name: 'Publicado', group: 'publicacion', color: '#10b981' },
+  { id: 'analizado', name: 'Analizado', group: 'analisis', color: '#059669' },
 ];
-export const DISCARDED = { id: 'descartada', name: 'Descartada', color: '#ef4444' };
+export const DISCARDED = { id: 'descartada', name: 'Descartada', color: '#64748b' };
 export const ALL_STATUSES = [...PIPELINE, DISCARDED];
 export const statusIndex = (s) => PIPELINE.findIndex((p) => p.id === s);
 export const statusInfo = (s) => ALL_STATUSES.find((p) => p.id === s) || PIPELINE[0];

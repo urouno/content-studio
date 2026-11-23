@@ -25,7 +25,7 @@ export function render(main) {
       ${rows.length ? '' : `<div class="card">${emptyState('Aún no hay resultados registrados', 'Cuando publiques un contenido, registra sus métricas desde su pestaña Resultados o desde aquí. La app calculará tasas por alcance, comparará contenidos y detectará patrones.', '', 'chart')}</div>`}
       ${rows.length ? `
       <details class="help-note">${'<summary>'}${icon('info', 'ic-sm')}¿Cómo leer estos datos?</summary><p>Se usan medianas y la última medición de cada publicación. Los patrones muestran <b>asociaciones, no causas</b>: un patrón puede deberse al tema, la plataforma, la fecha o la duración. Con menos de 5 contenidos por grupo, trátalo como una pista y pruébalo variando una sola cosa.</p></details>
-      <div class="grid g-4" style="margin-bottom:16px">${summaryKpis(rows)}</div>
+      <div class="grid g-4 kpis" style="margin-bottom:16px">${summaryKpis(rows)}</div>
       <div class="split">
         <section class="card"><div class="card-h"><h3>${icon('layers')}Patrones</h3><div class="row">
           <select class="input input-sm" data-dim>${DIMENSIONS.map((d) => `<option value="${d.id}" ${d.id === state.dim ? 'selected' : ''}>${d.name}</option>`).join('')}</select>
@@ -57,8 +57,8 @@ export function render(main) {
 function summaryKpis(rows) {
   const med = (k) => { const a = rows.map((r) => r.m[k]).filter((x) => x != null).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
   return [
-    ['Contenidos medidos', fmtNum(rows.length)], ['Mediana % visto', fmtPct(med('avgPct'))], ['Mediana compartidos/alcance', fmtPct(med('sendRate'), 2)], ['Mediana consultas/1k', fmtNum(med('inquiriesPer1k'), 2)],
-  ].map(([l, v]) => `<div class="card kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+    ['Contenidos medidos', fmtNum(rows.length), 'chart', ''], ['Mediana % visto', fmtPct(med('avgPct')), 'eye', 'info'], ['Mediana compartidos/alcance', fmtPct(med('sendRate'), 2), 'send', 'violet'], ['Mediana consultas/1k', fmtNum(med('inquiriesPer1k'), 2), 'trend', 'ok'],
+  ].map(([l, v, ic, k]) => `<div class="card kpi ${k}"><div class="kpi-top"><span class="eyebrow">${esc(l)}</span><span class="kpi-ic">${icon(ic)}</span></div><div class="v">${v}</div></div>`).join('');
 }
 
 function patternTable(rows) {
@@ -75,7 +75,7 @@ function objectiveTop(rows) {
   const metric = o.primary[0];
   const list = rows.filter((r) => r.m[metric] != null).sort((a, b) => b.m[metric] - a.m[metric]).slice(0, 6);
   return `<p class="xs muted">Métrica principal: <b>${esc(DERIVED.find((d) => d.id === metric)?.name || metric)}</b> · control: ${o.control.map((c) => esc(DERIVED.find((d) => d.id === c)?.name || c)).join(', ')}</p>
-    ${list.length ? `<ol class="toplist">${list.map((r) => `<li><a href="#/contenido/${r.ideaId}/resultados">${esc(r.title)}</a><span class="xs muted">${esc(platformLabel(r.platform))} · ${esc(r.dims.structure)} · ${esc(r.dims.hookPattern)}</span><b>${fmtM(metric, r.m[metric])}</b></li>`).join('')}</ol>` : '<p class="muted small">Sin datos para esta métrica.</p>'}
+    ${list.length ? `<ol class="toplist ranked">${list.map((r, n) => `<li><span class="rank">${n + 1}</span><a href="#/contenido/${r.ideaId}/resultados">${esc(r.title)}</a><span class="xs muted">${esc(platformLabel(r.platform))} · ${esc(r.dims.structure)} · ${esc(r.dims.hookPattern)}</span><b>${fmtM(metric, r.m[metric])}</b></li>`).join('')}</ol>` : '<p class="muted small">Sin datos para esta métrica.</p>'}
     <p class="xs muted">Un contenido con muchas vistas puede no cumplir su objetivo, y uno con pocas vistas sí. Compara contenidos con el mismo objetivo.</p>`;
 }
 

@@ -8,6 +8,7 @@ import { esc, fmtRelative } from './core/utils.js';
 import { startAutoSync, syncState, syncNow } from './services/sync.js';
 import { isConfigured } from './services/api.js';
 import { migrateLegacyStatuses } from './services/workflow.js';
+import { openIdeaModal } from './views/shared.js';
 
 import * as dashboard from './views/dashboard.js';
 import * as ideas from './views/ideas.js';
@@ -21,17 +22,22 @@ import * as method from './views/method.js';
 import * as settingsView from './views/settings.js';
 
 const NAV = [
-  { path: '/', label: 'Inicio', icon: 'home', view: dashboard },
+  { path: '/', label: 'Inicio', icon: 'grid', view: dashboard },
   { path: '/ideas', label: 'Ideas', icon: 'bulb', view: ideas },
-  { path: '/contenidos', label: 'Contenidos', icon: 'film', view: contents },
+  { path: '/contenidos', label: 'Contenidos', icon: 'columns', view: contents },
   { path: '/calendario', label: 'Calendario', icon: 'calendar', view: calendar },
-  { path: '/resultados', label: 'Resultados', icon: 'chart', view: results },
+  { path: '/resultados', label: 'Resultados', icon: 'trend', view: results },
   { path: '/marcas', label: 'Marcas', icon: 'brand', view: brands },
 ];
-// Celular: 4 secciones abajo + "Más" (el resto, incluido Método, que salió del menú principal).
-const BOTTOM = ['/', '/ideas', '/contenidos', '/calendario'];
+// Escritorio: barra lateral con NAV + pie (Método y Ajustes).
+const SIDE_FOOT = [
+  { path: '/metodo', label: 'Método', icon: 'book' }, { path: '/ajustes', label: 'Ajustes', icon: 'settings' },
+];
+// Celular: Inicio, Contenidos, [Crear], Calendario y "Más" (el resto).
+const BOTTOM_L = ['/', '/contenidos'];
+const BOTTOM_R = ['/calendario'];
 const MORE = [
-  { path: '/resultados', label: 'Resultados', icon: 'chart' }, { path: '/marcas', label: 'Marcas', icon: 'brand' },
+  { path: '/ideas', label: 'Ideas', icon: 'bulb' }, { path: '/resultados', label: 'Resultados', icon: 'trend' }, { path: '/marcas', label: 'Marcas', icon: 'brand' },
   { path: '/metodo', label: 'Método (guía de guiones)', icon: 'book' }, { path: '/ajustes', label: 'Ajustes', icon: 'settings' },
 ];
 const ROUTES = [
@@ -75,16 +81,20 @@ function renderNav(base) {
   const pendingIdeas = store.all('ideas', { brandId: bId }).filter((i) => i.status === 'idea').length;
   const link = (n) => `<a href="#${n.path}" title="${n.label}" class="${n.path === base ? 'active' : ''}" ${n.path === base ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span>${n.path === '/ideas' && pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</a>`;
   nav.innerHTML = NAV.map(link).join('');
+  document.getElementById('side-foot').innerHTML = SIDE_FOOT.map(link).join('');
   const moreActive = MORE.some((m) => m.path === base);
-  document.getElementById('bottomnav').innerHTML = NAV.filter((n) => BOTTOM.includes(n.path)).map(link).join('')
-    + `<button type="button" class="${moreActive ? 'active' : ''}" data-more aria-haspopup="true" aria-expanded="false">${icon('list')}<span>Más</span></button>
-    <div class="more-sheet" hidden role="menu">${MORE.map((m) => `<a href="#${m.path}" role="menuitem" class="${m.path === base ? 'active' : ''}">${icon(m.icon)}${m.label}</a>`).join('')}</div>`;
+  const pick = (paths) => NAV.filter((n) => paths.includes(n.path)).map(link).join('');
+  document.getElementById('bottomnav').innerHTML = pick(BOTTOM_L)
+    + `<button type="button" class="bn-create" data-create aria-label="Nueva idea"><i>${icon('plus')}</i><span>Crear</span></button>`
+    + pick(BOTTOM_R)
+    + `<button type="button" class="${moreActive ? 'active' : ''}" data-more aria-haspopup="true" aria-expanded="false">${icon('list')}<span>Más</span>${pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</button>
+    <div class="more-sheet" hidden role="menu">${MORE.map((m) => `<a href="#${m.path}" role="menuitem" class="${m.path === base ? 'active' : ''}">${icon(m.icon)}${m.label}${m.path === '/ideas' && pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</a>`).join('')}</div>`;
   renderBrandSwitch();
 }
 
 function renderNavBadge() {
   const n = store.all('ideas', { brandId: app.brandId }).filter((i) => i.status === 'idea').length;
-  document.querySelectorAll('#mainnav a[href="#/ideas"], #bottomnav a[href="#/ideas"]').forEach((a) => {
+  document.querySelectorAll('#mainnav a[href="#/ideas"], #bottomnav [data-more], #bottomnav .more-sheet a[href="#/ideas"]').forEach((a) => {
     let em = a.querySelector('em');
     if (!n) { em?.remove(); return; }
     if (!em) { em = document.createElement('em'); a.append(em); }
@@ -92,33 +102,18 @@ function renderNavBadge() {
   });
 }
 
+// Selector de marca: fila de píldoras (todas + cada marca) con el color de la marca. Se desliza en celular.
 function renderBrandSwitch() {
   const host = document.getElementById('brand-switch');
-  const b = app.brand();
-  host.innerHTML = `<button class="brand-btn" aria-haspopup="true" aria-expanded="false" title="Cambiar de marca">
-    <span class="brand-dot" style="background:${esc(b?.color || 'conic-gradient(#6366f1,#f59e0b,#14b8a6,#6366f1)')}"></span>
-    <span class="truncate">${esc(b?.name || 'Todas las marcas')}</span>${icon('down', 'ic-sm')}</button>`;
-}
-
-function openBrandMenu(btn) {
-  const host = document.getElementById('brand-switch');
-  if (host.querySelector('.menu')) { host.querySelector('.menu').remove(); btn.setAttribute('aria-expanded', 'false'); return; }
   const cur = app.brandId;
-  const menu = document.createElement('div');
-  menu.className = 'menu'; menu.setAttribute('role', 'menu');
-  menu.innerHTML = `<button data-b="all" class="${cur === 'all' ? 'active' : ''}"><span class="brand-dot" style="background:conic-gradient(#6366f1,#f59e0b,#14b8a6,#6366f1)"></span>Todas las marcas</button><div class="sep"></div>
-    ${app.activeBrands().map((x) => `<button data-b="${x.id}" class="${cur === x.id ? 'active' : ''}"><span class="brand-dot" style="background:${esc(x.color)}"></span><span class="truncate">${esc(x.name)}</span></button>`).join('') || '<p class="muted small" style="padding:6px 9px">Aún no hay marcas.</p>'}
-    <div class="sep"></div><a href="#/marcas?new=1">${icon('plus')}Nueva marca</a>`;
-  host.append(menu); btn.setAttribute('aria-expanded', 'true');
-  menu.querySelector('button')?.focus();
-  const close = (e) => { if (!host.contains(e.target)) { menu.remove(); btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('mousedown', close); } };
-  document.addEventListener('mousedown', close);
-  menu.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-b]');
-    if (t) { app.setBrand(t.dataset.b); menu.remove(); route(); }
-    if (e.target.closest('a')) menu.remove();
-  });
-  menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { menu.remove(); btn.focus(); } });
+  const brands = app.activeBrands();
+  const count = (bId) => store.all('ideas', { brandId: bId }).filter((i) => !['publicado', 'analizado', 'descartada'].includes(i.status)).length;
+  const pill = (id, name, color, n) => `<button type="button" class="bpill ${cur === id ? 'active' : ''}" data-b="${id}" style="--bc:${esc(color)}" aria-pressed="${cur === id}" title="${esc(name)}${n ? ` · ${n} en curso` : ''}">
+    <span class="bav">${id === 'all' ? icon('layers', 'ic-sm') : esc((name || '?').trim().charAt(0).toUpperCase())}</span><span class="truncate">${esc(name)}</span>${n ? `<em>${n}</em>` : ''}</button>`;
+  host.innerHTML = `<div class="brail">${pill('all', brands.length ? `Todas (${brands.length})` : 'Todas las marcas', 'var(--indigo)', 0)}
+    ${brands.map((b) => pill(b.id, b.name, b.color || '#6366f1', count(b.id))).join('')}
+    <a class="bpill add" href="#/marcas?new=1" title="Nueva marca" aria-label="Nueva marca">${icon('plus', 'ic-sm')}</a></div>`;
+  host.querySelector('.bpill.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 function renderSyncPill() {
@@ -177,7 +172,9 @@ async function boot() {
   // Estados antiguos (p. ej. "En edición") → equivalentes actuales. También tras recibir cambios remotos.
   await migrateLegacyStatuses().catch((e) => console.warn('Migración de estados', e));
   on('change', (p) => { if (p?.remote || p?.import) migrateLegacyStatuses().catch(() => {}); });
-  delegate(document.getElementById('brand-switch'), 'click', '.brand-btn', (e, el) => openBrandMenu(el));
+  delegate(document.getElementById('brand-switch'), 'click', '[data-b]', (e, el) => { if (el.dataset.b !== app.brandId) { app.setBrand(el.dataset.b); route(); } });
+  // "Nueva idea" (barra lateral y botón central del celular).
+  delegate(document.body, 'click', '[data-create]', () => { if (!app.activeBrands().length) { go('/marcas?new=1'); return; } openIdeaModal({ onSaved: (i) => go(`/contenido/${i.id}`) }); });
   // Menú "Más" del celular.
   const bnav = document.getElementById('bottomnav');
   const closeMore = () => { const sh = bnav.querySelector('.more-sheet'); if (sh) sh.hidden = true; bnav.querySelector('[data-more]')?.setAttribute('aria-expanded', 'false'); };

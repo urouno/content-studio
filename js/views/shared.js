@@ -143,14 +143,15 @@ export function openIdeaModal({ idea = null, brandId = null, preset = {}, onSave
 }
 
 export function ideaCard(idea, { draggable = false, showBrand = true } = {}) {
-  const pl = (idea.platforms || []).map((p) => `<span class="tag">${platformShort(p)}</span>`).join(' ');
+  const st = statusInfo(idea.status);
+  const pls = (idea.platforms || []).map((p) => platformLabel(p));
   const cal = store.filter('calendar', (c) => c.ideaId === idea.id).sort((a, b) => a.date.localeCompare(b.date))[0];
   const late = cal && cal.status !== 'publicado' && cal.date < todayISO();
-  return `<article class="kcard ${late ? 'late' : ''}" data-id="${idea.id}" ${draggable ? 'draggable="true"' : ''} tabindex="0">
-    ${showBrand ? `<div class="kcard-brand">${brandTag(idea.brandId)}</div>` : ''}
+  return `<article class="kcard ${late ? 'late' : ''}" data-id="${idea.id}" ${draggable ? 'draggable="true"' : ''} tabindex="0" style="--bc:${st.color}">
+    <div class="kcard-top"><span class="kcard-fmt truncate">${icon('film', 'ic-sm')}<span class="truncate">${esc(pls.join(' · ') || 'Sin plataforma')}</span></span>${idea.priority === 1 ? '<span class="prio-hi">Alta</span>' : ''}</div>
     <div class="kcard-t">${esc(idea.title)}</div>
-    <div class="row xs muted">${pl}${idea.priority === 1 ? `<span class="badge" style="--bc:var(--danger)">Alta</span>` : ''}${idea.experimental ? '<span class="tag">20 %</span>' : ''}${cal ? `<span class="${late ? 'late-txt' : ''}">${icon('calendar', 'ic-sm')} ${fmtDate(cal.date)}</span>` : ''}</div>
-    ${draggable ? `<button type="button" class="kmove" data-move title="Mover a otra etapa" aria-label="Mover a otra etapa">${icon('arrow', 'ic-sm')}<span>Mover a…</span></button>` : ''}
+    <div class="kcard-meta">${showBrand ? brandTag(idea.brandId) : ''}${idea.experimental ? '<span class="tag">20 %</span>' : ''}${cal ? `<span class="row ${late ? 'late-txt' : ''}" style="gap:4px">${icon('calendar', 'ic-sm')}${late ? 'Retrasado · ' : ''}${fmtDate(cal.date)}</span>` : ''}</div>
+    ${draggable ? `<div class="kcard-foot"><button type="button" class="kmove" data-move title="Mover a otra etapa" aria-label="Mover a otra etapa"><span>Mover</span>${icon('arrow', 'ic-sm')}</button></div>` : ''}
   </article>`;
 }
 

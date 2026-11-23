@@ -1,7 +1,7 @@
 // Pestaña Guion: generador, editor por secciones, versiones, comparación, evaluador y aprobación.
 import { store } from '../core/store.js';
 import { icon, toast, modal, renderFields, readFields, withBusy, confirmDialog, emptyState, setSaving } from '../core/ui.js';
-import { esc, clone, deepSet, debounce, copyText, download, fmtDateTime } from '../core/utils.js';
+import { esc, clone, deepSet, debounce, copyText, download, fmtDateTime, wordCount, estimateSeconds } from '../core/utils.js';
 import { STRUCTURES, HOOK_PATTERNS, CTA_TYPES, KNOWLEDGE_LEVELS, PLATFORMS, OBJECTIVES, CONTENT_TYPES, EVAL_CRITERIA, PRODUCTION_TYPES, GRAPHICS_PRESETS, RESOURCE_TYPES, HOOK_4P, resourcesFor, byId } from '../services/methodology.js';
 import { scriptStats, localEvaluate, normalizeScript, scriptToText, spokenText } from '../services/scriptkit.js';
 import { addVersion, newBlankVersion, saveVersionData, approveVersion, unlockScript, scriptFor, versionsFor, brandConfig } from '../services/workflow.js';
@@ -99,7 +99,7 @@ export function render(host, b, ctx) {
           </div></section>
 
         <section class="card"><div class="card-h"><h3>${icon('list')}Desarrollo</h3><span class="xs muted">Cada frase con una función. Marca los picos de interés (0–3): deben crecer hacia el final.</span></div>
-          <div class="card-b sections">${draft.sections.map((s, i) => sectionCard(s, i, draft.sections.length, lk, draft.productionType)).join('')}
+          <div class="card-b sections">${sectionTimes(draft, wpm).map((t, i) => sectionCard(draft.sections[i], i, draft.sections.length, lk, draft.productionType, t)).join('')}
           ${lk ? '' : `<button class="btn btn-sm" data-addsec>${icon('plus', 'ic-sm')}Añadir sección</button>`}</div></section>
 
         <section class="card"><div class="card-h"><h3>${icon('send')}CTA</h3>${lk ? '' : `<button class="btn btn-sm" data-ai="ctas">${icon('sparkle', 'ic-sm')}Proponer CTA</button>`}</div><div class="card-b"><div class="form-grid cols-3">
@@ -288,14 +288,21 @@ function resourceCount(d) {
   return `Recursos: ${parts.join(' · ')}`;
 }
 
-function sectionCard(s, i, n, lk, production) {
+// Tiempo aproximado de cada sección (00:03–00:15), contando el hook narrado al inicio.
+const mmss = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+function sectionTimes(draft, wpm) {
+  let t = estimateSeconds(wordCount(draft.hook?.narrado), wpm);
+  return draft.sections.map((x) => { const a = t; t += estimateSeconds(wordCount(x.voice), wpm); return { a, b: t }; });
+}
+
+function sectionCard(s, i, n, lk, production, time) {
   const dis = lk ? 'disabled' : '';
   const r = s.resource || {};
   const cat = resourcesFor(production);
   if (r.type && !cat.some((c) => c.id === r.type)) cat.push(byId(RESOURCE_TYPES, r.type) || { id: r.type, name: r.type, kind: '' });
   const kinds = [['flotante', 'Gráficos sobre el video'], ['pantalla', 'A pantalla completa'], ['escena', 'Escenas animadas'], ['broll', 'Tomas'], ['camara', 'Cámara'], ['', 'Otros']];
   return `<div class="sec" data-sec="${i}">
-    <div class="sec-h"><span class="sec-n">${i + 1}</span>
+    <div class="sec-h"><span class="sec-n">${i + 1}</span>${time ? `<span class="sec-time" title="Tiempo aproximado al leerlo (se actualiza al guardar)">${mmss(time.a)} – ${mmss(time.b)}</span>` : ''}
       <select class="input input-sm" data-p="sections.${i}.act" ${dis} style="width:auto">${ACTS.map((a) => `<option value="${a.value}" ${a.value === s.act ? 'selected' : ''}>${a.label}</option>`).join('')}</select>
       <input class="input input-sm" data-p="sections.${i}.beat" value="${esc(s.beat)}" placeholder="Paso de la estructura" ${dis} style="flex:1">
       <select class="input input-sm" data-p="sections.${i}.function" ${dis} style="width:auto" title="Función de la sección">${FUNCTIONS.map((f) => `<option ${f === s.function ? 'selected' : ''}>${f}</option>`).join('')}</select>
@@ -303,10 +310,10 @@ function sectionCard(s, i, n, lk, production) {
       ${lk ? '' : `<span class="row" style="gap:0"><button class="icon-btn sm" data-up="${i}" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button><button class="icon-btn sm" data-down="${i}" title="Bajar" ${i === n - 1 ? 'disabled' : ''}>↓</button><button class="icon-btn sm" data-rewsec="${i}" title="Reescribir solo esta sección con IA">${icon('wand', 'ic-sm')}</button><button class="icon-btn sm" data-delsec="${i}" title="Quitar">${icon('x', 'ic-sm')}</button></span>`}
     </div>
     <div class="form-grid">
-      <div class="field span-2"><label>Voz (lo que se dice)</label><textarea class="input voice" rows="3" data-p="sections.${i}.voice" ${dis}>${esc(s.voice)}</textarea></div>
-      <div class="field"><label>Texto en pantalla</label><input class="input input-sm" data-p="sections.${i}.onScreenText" value="${esc(s.onScreenText)}" ${dis}></div>
-      <div class="field"><label>Visual / B-roll</label><input class="input input-sm" data-p="sections.${i}.visual" value="${esc(s.visual)}" ${dis}></div>
-      <div class="field span-2"><label>Edición</label><input class="input input-sm" data-p="sections.${i}.edit" value="${esc(s.edit)}" ${dis}></div>
+      <div class="field span-2"><label class="lbl-voice">${icon('mic', 'ic-sm')}Locución · lo que se dice</label><textarea class="input voice" rows="3" data-p="sections.${i}.voice" ${dis}>${esc(s.voice)}</textarea></div>
+      <div class="field"><label class="lbl-txt">${icon('text', 'ic-sm')}Texto en pantalla</label><input class="input input-sm" data-p="sections.${i}.onScreenText" value="${esc(s.onScreenText)}" ${dis}></div>
+      <div class="field"><label class="lbl-vis">${icon('camera', 'ic-sm')}Visual / plano / B-roll</label><input class="input input-sm" data-p="sections.${i}.visual" value="${esc(s.visual)}" ${dis}></div>
+      <div class="field span-2"><label class="lbl-edit">${icon('scissors', 'ic-sm')}Edición</label><input class="input input-sm" data-p="sections.${i}.edit" value="${esc(s.edit)}" ${dis}></div>
     </div>
     <div class="sec-res ${r.type ? 'on' : ''}">
       <label class="xs muted">${icon('layers', 'ic-sm')}Recurso visual</label>

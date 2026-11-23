@@ -12,7 +12,7 @@ const DEFAULTS = {
   aiProvider: 'gemini', // antiguo: proveedor único (se migra a aiChain)
   model: 'gemini-flash-latest', modelClaude: 'claude-opus-5-5', temperature: 0.9,
   claudeCodeTasks: [], // tareas que resuelve Claude Code en tu computadora (ver js/services/claudecode.js)
-  aiDailyLimit: 150, theme: 'system', currentBrand: 'all', userName: '',
+  aiDailyLimit: 150, theme: 'dark', currentBrand: 'all', userName: '',
 };
 
 function read() {
@@ -22,6 +22,8 @@ function read() {
   if (!Array.isArray(s.aiChain) || !s.aiChain.length) {
     s.aiChain = s.aiProvider === 'claude' ? ['claude', 'groq', 'gemini', 'openrouter', 'cerebras'] : ['groq', 'gemini', 'openrouter', 'cerebras'];
   }
+  // v2.1 (diseño Studio Pulse): el tema oscuro pasa a ser el predeterminado una sola vez; luego respeta lo que elijas.
+  if (!s.uiVersion) { s.theme = 'dark'; s.uiVersion = 2; }
   return s;
 }
 let current = read();

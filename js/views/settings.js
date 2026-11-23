@@ -213,7 +213,7 @@ async function conflictsTab(host, redraw) {
 
 function apariencia(host) {
   host.innerHTML = `<section class="card" style="max-width:520px"><div class="card-b stack">
-    <label class="field"><span>Tema</span><select class="input" data-theme>${[['system', 'Según el sistema'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<option value="${v}" ${settings.get('theme') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="field"><span>Tema</span><select class="input" data-theme>${[['dark', 'Oscuro (recomendado)'], ['light', 'Claro'], ['system', 'Según el sistema']].map(([v, l]) => `<option value="${v}" ${settings.get('theme') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <label class="field"><span>Tu nombre (para responsables)</span><input class="input" data-name value="${esc(settings.get('userName'))}"></label></div></section>`;
   host.querySelector('[data-theme]').onchange = (e) => settings.set({ theme: e.target.value });
   host.querySelector('[data-name]').onchange = (e) => settings.set({ userName: e.target.value });

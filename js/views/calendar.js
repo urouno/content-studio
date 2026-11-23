@@ -33,6 +33,7 @@ export function render(main, { params }) {
         ${['mes', 'semana'].includes(view) ? `<label class="check"><input type="checkbox" data-unsch ${state.showUnscheduled ? 'checked' : ''}>Sin fecha</label>` : ''}</div>
       </div>
       ${conflicts.size ? `<div class="notice warn" style="margin-bottom:12px">${icon('alert')}<div><b>${conflicts.size} día(s) con más de una publicación de la misma marca en la misma plataforma.</b> <span>Están marcados en rojo.</span></div></div>` : ''}
+      ${view === 'mes' ? dayStrip(entries) : ''}
       <div class="cal-layout ${['mes', 'semana'].includes(view) && state.showUnscheduled ? 'with-side' : ''}"><div class="cal-host"></div>${['mes', 'semana'].includes(view) && state.showUnscheduled ? `<aside class="cal-side card"></aside>` : ''}</div>`;
     const host = main.querySelector('.cal-host');
     if (view === 'mes') drawMonth(host, entries, conflicts);
@@ -47,6 +48,13 @@ export function render(main, { params }) {
     main.querySelector('.filterbar').addEventListener('change', (e) => { state[e.target.name] = e.target.value; draw(); });
     main.querySelector('[data-unsch]')?.addEventListener('change', (e) => { state.showUnscheduled = e.target.checked; draw(); });
     main.querySelectorAll('[data-day]').forEach((d) => d.addEventListener('dblclick', (e) => { if (e.target.closest('.cev')) return; pickIdeaForDay(d.dataset.day); }));
+    const pickDay = (key) => {
+      const d = parseDateKey(key); state.day = key;
+      if (d.getMonth() !== state.cursor.getMonth() || d.getFullYear() !== state.cursor.getFullYear()) state.cursor = new Date(d.getFullYear(), d.getMonth(), 1);
+      main.dispatchEvent(new CustomEvent('cal:redraw'));
+    };
+    main.querySelectorAll('[data-strip]').forEach((b) => (b.onclick = () => pickDay(b.dataset.strip)));
+    main.querySelectorAll('[data-strip-nav]').forEach((b) => (b.onclick = () => pickDay(toDateKey(addDays(parseDateKey(state.day || todayISO()), Number(b.dataset.stripNav))))));
     main.querySelector('[data-pick-day]')?.addEventListener('click', (e) => pickIdeaForDay(e.currentTarget.dataset.pickDay));
   };
   draw();
@@ -55,6 +63,16 @@ export function render(main, { params }) {
   main.addEventListener('cal:redraw', onRedraw);
   const off = on('change', (p) => { if (!p?.remote && ['calendar', 'ideas', undefined].includes(p?.table)) draw(); });
   return () => { off(); unbind(); main.removeEventListener('cal:redraw', onRedraw); };
+}
+
+// Tira con los 7 días de la semana elegida (o la actual): número, día y un punto por publicación.
+function dayStrip(entries) {
+  const today = todayISO(); const sel = state.day || today;
+  const start = startOfWeek(parseDateKey(sel)); const byDay = groupByDay(entries);
+  return `<div class="daystrip-wrap"><button type="button" class="icon-btn" data-strip-nav="-7" aria-label="Semana anterior">${icon('left')}</button><div class="daystrip" role="group" aria-label="Días de la semana">${WD.map((w, k) => {
+    const d = addDays(start, k); const key = toDateKey(d); const list = byDay.get(key) || [];
+    return `<button type="button" class="ds-day ${key === today ? 'today' : ''} ${key === state.day ? 'sel' : ''}" data-strip="${key}" aria-pressed="${key === state.day}" title="${list.length} publicación(es)"><small>${w}</small><b>${d.getDate()}</b><i>${list.slice(0, 4).map((c) => `<s style="--bc:${esc(store.get('brands', c.brandId)?.color || 'var(--cyan)')}"></s>`).join('')}</i></button>`;
+  }).join('')}</div><button type="button" class="icon-btn" data-strip-nav="7" aria-label="Semana siguiente">${icon('right')}</button></div>`;
 }
 
 function conflictKeys(entries) {
@@ -94,7 +112,7 @@ function drawMonth(host, entries, conflicts) {
   }
   // En celular: al tocar un día se muestra abajo la lista de ese día.
   const sel = state.day || (isPhone() ? today : null);
-  const agenda = isPhone() && sel ? `<section class="day-agenda"><div class="row-between"><h3>${esc(new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' }).format(parseDateKey(sel)))}</h3><button class="btn btn-sm" data-pick-day="${sel}">${icon('plus', 'ic-sm')}Programar</button></div>
+  const agenda = (isPhone() || state.day) && sel ? `<section class="day-agenda"><div class="row-between"><h3>${icon('clock')}${esc(new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' }).format(parseDateKey(sel)))}</h3><button class="btn btn-sm" data-pick-day="${sel}">${icon('plus', 'ic-sm')}Programar</button></div>
     <div class="stack">${(byDay.get(sel) || []).sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(dayCard).join('') || '<p class="small muted">Sin publicaciones este día.</p>'}</div></section>` : '';
   host.innerHTML = `${html}</div><p class="xs muted cal-help" style="margin-top:8px">Arrastra para cambiar la fecha. Doble clic en un día para programar. La columna "Semana" compara con la frecuencia objetivo de las plataformas.</p>${agenda}`;
 }
@@ -111,8 +129,8 @@ function drawWeek(host, entries, conflicts, days) {
 
 function dayCard(c) {
   const i = store.get('ideas', c.ideaId);
-  return `<a class="card card-b dcard" href="#/contenido/${i.id}" data-cal="${c.id}"><div class="row-between"><b>${esc(i.title)}</b>${statusBadge(i.status)}</div>
-    <div class="row small muted">${brandTag(c.brandId)}<span>${esc(platformLabel(c.platform))}</span>${c.time ? `<span>${icon('clock', 'ic-sm')} ${esc(c.time)}</span>` : ''}${c.owner ? `<span>${icon('user', 'ic-sm')} ${esc(c.owner)}</span>` : ''}<span>${esc(statusInfo(i.status).name)}</span></div></a>`;
+  return `<div class="tl-row"><div class="tl-time">${c.time ? esc(c.time) : '—'}</div><a class="card card-b dcard" href="#/contenido/${i.id}" data-cal="${c.id}" style="--bc:${esc(statusInfo(i.status).color)}"><div class="row-between"><b>${esc(i.title)}</b>${statusBadge(i.status)}</div>
+    <div class="row small muted">${brandTag(c.brandId)}<span>${esc(platformLabel(c.platform))}</span>${c.time ? `<span>${icon('clock', 'ic-sm')} ${esc(c.time)}</span>` : ''}${c.owner ? `<span>${icon('user', 'ic-sm')} ${esc(c.owner)}</span>` : ''}</div></a></div>`;
 }
 
 function drawList(host, entries) {
