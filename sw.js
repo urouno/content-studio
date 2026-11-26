@@ -1,6 +1,6 @@
 // Service Worker: caché del "app shell" para funcionamiento sin conexión.
 // Cambia CACHE_VERSION en cada despliegue para que los clientes reciban la nueva versión.
-const CACHE_VERSION = 'cs-v202611230138';
+const CACHE_VERSION = 'cs-v202611262331';
 const SHELL = [
   './',
   './assets/icons/apple-touch-icon.png',

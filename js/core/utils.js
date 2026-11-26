@@ -8,18 +8,30 @@ export function uid(prefix = 'ID') {
 export const nowISO = () => new Date().toISOString();
 export const todayISO = () => toDateKey(new Date());
 export function toDateKey(d) {
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
   const x = new Date(d);
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 }
-export function parseDateKey(k) { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); }
+export function parseDateKey(k) { const [y, m, d] = String(k || '').split('-').map(Number); return new Date(y, m - 1, d); }
 export function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 export function startOfWeek(d) { const x = new Date(d); const day = (x.getDay() + 6) % 7; x.setDate(x.getDate() - day); x.setHours(0, 0, 0, 0); return x; }
-export function daysBetween(a, b) { return Math.round((parseDateKey(toDateKey(b)) - parseDateKey(toDateKey(a))) / 86400000); }
+export function daysBetween(a, b) {
+  if (!a || !b) return NaN;
+  return Math.round((parseDateKey(toDateKey(b)) - parseDateKey(toDateKey(a))) / 86400000);
+}
 
 const DF = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric' });
 const DTF = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-export const fmtDate = (v) => (v ? DF.format(typeof v === 'string' && v.length === 10 ? parseDateKey(v) : new Date(v)) : '—');
-export const fmtDateTime = (v) => (v ? DTF.format(new Date(v)) : '—');
+export const fmtDate = (v) => {
+  if (!v) return '—';
+  const d = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? parseDateKey(v) : new Date(v);
+  return Number.isNaN(d.getTime()) ? '—' : DF.format(d);
+};
+export const fmtDateTime = (v) => {
+  if (!v) return '—';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? '—' : DTF.format(d);
+};
 export function fmtRelative(v) {
   if (!v) return 'nunca';
   const s = Math.round((Date.now() - new Date(v)) / 1000);
@@ -33,9 +45,9 @@ export const fmtPct = (n, d = 1) => (n == null || Number.isNaN(n) ? '—' : `${(
 
 export function debounce(fn, ms = 400) {
   // flush() solo ejecuta si hay una llamada pendiente (evita guardados sin cambios al salir de una vista).
-  let t; let pending = false;
-  const d = (...a) => { clearTimeout(t); pending = true; t = setTimeout(() => { pending = false; fn(...a); }, ms); };
-  d.flush = (...a) => { clearTimeout(t); if (!pending) return; pending = false; return fn(...a); };
+  let t; let pending = false; let lastArgs = [];
+  const d = (...a) => { clearTimeout(t); pending = true; lastArgs = a; t = setTimeout(() => { pending = false; fn(...lastArgs); }, ms); };
+  d.flush = (...a) => { clearTimeout(t); if (!pending) return; pending = false; return fn(...(a.length ? a : lastArgs)); };
   d.pending = () => pending;
   return d;
 }

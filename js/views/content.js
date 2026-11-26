@@ -65,9 +65,9 @@ export function render(main, { params }) {
     head.querySelector('[data-del]').addEventListener('click', async () => {
       if (!(await confirmDialog({ title: 'Enviar a la papelera', message: 'El contenido y sus fichas quedarán en la papelera (Ajustes → Papelera) y podrás restaurarlo.', confirm: 'Enviar a la papelera', danger: true }))) return;
       const bb = contentBundle(id);
-      for (const t of ['copies', 'calendar']) for (const r of bb[t]) await store.remove(t, r.id);
+      for (const t of ['copies', 'calendar', 'publications', 'results']) for (const r of bb[t]) await store.remove(t, r.id);
       await store.remove('ideas', id);
-      toast('Enviado a la papelera', 'success', { action: { label: 'Deshacer', fn: async () => { await store.restore('ideas', id); for (const t of ['copies', 'calendar']) for (const r of bb[t]) await store.restore(t, r.id); go(`/contenido/${id}`); } } });
+      toast('Enviado a la papelera', 'success', { action: { label: 'Deshacer', fn: async () => { await store.restore('ideas', id); for (const t of ['copies', 'calendar', 'publications', 'results']) for (const r of bb[t]) await store.restore(t, r.id); go(`/contenido/${id}`); } } });
       go('/contenidos');
     });
   };
@@ -169,7 +169,13 @@ function historyTab(host, b, ctx) {
     </tbody></table></div>` : emptyState('Sin historial', 'Los cambios aparecerán aquí.', '', 'history')}</div>`;
   host.addEventListener('click', async (e) => {
     const v = e.target.closest('[data-view]'); const r = e.target.closest('[data-revert]');
-    if (v) { const h = store.historyFor && entries.find((x) => x.id === v.dataset.view); modal({ title: 'Versión anterior', size: 'lg', body: `<pre class="xs">${esc(JSON.stringify(JSON.parse(h.before), null, 2))}</pre>`, actions: [{ label: 'Cerrar' }] }); }
+    if (v) {
+      const h = entries.find((x) => x.id === v.dataset.view);
+      if (h?.before) {
+        const snap = typeof h.before === 'string' ? JSON.parse(h.before) : h.before;
+        modal({ title: 'Versión anterior', size: 'lg', body: `<pre class="xs">${esc(JSON.stringify(snap, null, 2))}</pre>`, actions: [{ label: 'Cerrar' }] });
+      }
+    }
     if (r) {
       if (!(await confirmDialog({ title: 'Restaurar versión anterior', message: 'El estado actual se guardará en el historial, así que también podrás deshacer esta restauración.', confirm: 'Restaurar' }))) return;
       try { await store.revert(r.dataset.revert); toast('Versión restaurada', 'success'); ctx.refresh(); } catch (err) { toast(err.message, 'error'); }

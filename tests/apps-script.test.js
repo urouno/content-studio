@@ -308,3 +308,30 @@ test('columnas nuevas de una actualización: se añaden solas y guardan sus dato
   const back = post({ action: 'sync', token, since: '', ops: [] }).changes.find((c) => c.record.id === idea.id).record;
   assert.equal(back.productionType, 'cabeza'); assert.equal(back.pitch.firstFrameText, '¿Café quemado?');
 });
+
+test('Claude devuelve usedModel y un 200 con cuerpo no-JSON no rompe el proxy', () => {
+  const { post, token, props } = ready({ geminiResponder: () => ({ code: 200, body: { model: 'claude-opus-5-5', stop_reason: 'end_turn', content: [{ type: 'text', text: '{"ok":true}' }], usage: { input_tokens: 5, output_tokens: 3 } } }) });
+  props.set('ANTHROPIC_API_KEY', 'sk-ant-test');
+  const ok = post({ action: 'ai.generate', token, provider: 'claude', model: 'claude-opus-5-5', body: aiBody() });
+  assert.equal(ok.ok, true); assert.equal(ok.data.usedModel, 'claude-opus-5-5');
+
+  const broken = ready({ geminiResponder: () => ({ code: 200, body: '<html>error</html>' }) });
+  broken.props.set('GEMINI_API_KEY', 'g');
+  const err = broken.post({ action: 'ai.generate', token: broken.token, provider: 'gemini', model: 'gemini-flash-latest', body: aiBody() });
+  assert.equal(err.ok, false); assert.equal(err.error.code, 'AI_ERROR');
+});
+
+test('history.before no se codifica doblemente si llega como string ni como objeto', () => {
+  const { post, token } = ready();
+  const hObj = rec('HIS-aa11-bb22', { table: 'ideas', recordId: 'CNT-aa11-bb22', action: 'update', before: { title: 'Antes' }, summary: 'Cambio' });
+  const hStr = rec('HIS-aa11-cc33', { table: 'ideas', recordId: 'CNT-aa11-bb22', action: 'update', before: '{"title":"Legado"}', summary: 'Cambio' });
+  const r = post({ action: 'sync', token, since: '', ops: [
+    { key: 'history:1', table: 'history', id: hObj.id, baseVersion: 0, record: hObj },
+    { key: 'history:2', table: 'history', id: hStr.id, baseVersion: 0, record: hStr },
+  ] });
+  assert.equal(r.applied.length, 2);
+  const pulled = post({ action: 'sync', token, since: '', ops: [] }).changes.filter((c) => c.table === 'history');
+  assert.deepEqual(pulled.find((c) => c.record.id === hObj.id).record.before, { title: 'Antes' });
+  assert.deepEqual(pulled.find((c) => c.record.id === hStr.id).record.before, { title: 'Legado' });
+});
+

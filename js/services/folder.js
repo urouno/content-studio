@@ -68,7 +68,7 @@ export async function copyFile(path, file, onProgress) {
   const w = await f.createWritable();
   if (!onProgress) { await file.stream().pipeTo(w); return; } // pipeTo cierra el archivo al terminar
   let done = 0;
-  const counter = new TransformStream({ transform(chunk, ctl) { done += chunk.byteLength; onProgress(done / file.size); ctl.enqueue(chunk); } });
+  const counter = new TransformStream({ transform(chunk, ctl) { done += chunk.byteLength; onProgress(file.size ? done / file.size : 1); ctl.enqueue(chunk); } });
   await file.stream().pipeThrough(counter).pipeTo(w);
 }
 /** [{name, kind, size?, modified?}] de una carpeta (vacío si no existe). */

@@ -6,7 +6,7 @@ import {
   buildProyecto, buildGuionMd, buildPropuestaMd, buildVocab, reelFolderName, takeName, takesOf, finalOf, spokenFromPlan,
   buildMarcaJson, mergeStyleGuide, stripGuideBlock, parseMarcaJson, editOf, marcaFileName, guideFileName, creditsFromSources, libraryDirs, librarySummary,
 } from './reels.js';
-import { scriptFor, ensureScript, approvedVersion, brandConfig, productionState, setRecorded, setEdited } from './workflow.js';
+import { scriptFor, ensureScript, approvedVersion, brandConfig, ensureBrandConfig, productionState, setRecorded, setEdited } from './workflow.js';
 import { scriptStats } from './scriptkit.js';
 
 const REELS = 'Reels'; const TAKES = 'Tomas'; const STYLE = 'Mi estilo';
@@ -136,8 +136,8 @@ export async function importBrandFromFolder(brandId) {
 /** Archivos de marca que ya tiene la skill (para elegir el nombre). */
 export async function skillBrandFiles() { return (await F.list(`${STYLE}/marcas`)).filter((f) => f.kind === 'file' && f.name.endsWith('.json')).map((f) => f.name.replace(/\.json$/, '')); }
 
-function saveEdit(brandId, edit) {
-  const c = store.find('brandConfigs', (x) => x.brandId === brandId);
+async function saveEdit(brandId, edit) {
+  const c = await ensureBrandConfig(brandId);
   return store.update('brandConfigs', c.id, (r) => ({ ...r, visual: { ...brandConfig(brandId).visual, edit } }));
 }
 

@@ -80,8 +80,17 @@ export const store = {
   async purge(table, id) {
     const r = cache[table].get(id);
     if (!r?.deletedAt) throw new Error('Solo se pueden borrar definitivamente elementos de la papelera.');
+    const key = `${table}:${id}`;
+    const pendingOp = outbox.get(key);
+    const entries = [{ store: table, delete: true, key: id }];
+    // Si la eliminación lógica aún no se había sincronizado, se conserva una copia en la cola para que llegue a Sheets.
+    if (pendingOp) {
+      const updatedOp = { ...pendingOp, record: clone(r) };
+      outbox.set(key, updatedOp);
+      entries.push({ store: 'outbox', value: updatedOp });
+    }
+    await idb.writeAtomic(entries);
     cache[table].delete(id);
-    await idb.del(table, id);
     emit(`change:${table}`, { id, action: 'purge' }); emit('change', { table, id });
   },
 
@@ -98,8 +107,8 @@ export const store = {
     const h = cache.history.get(historyId);
     if (!h?.before) throw new Error('Esta entrada no tiene una versión anterior completa.');
     const snapshot = typeof h.before === 'string' ? JSON.parse(h.before) : h.before;
-    const { id, createdAt, version, ...rest } = snapshot;
-    return store.update(h.table, h.recordId, (cur) => ({ ...cur, ...rest }), { summary: `Restaurada versión del ${h.createdAt.slice(0, 16).replace('T', ' ')}` });
+    const { id, createdAt, version, updatedAt, updatedBy, ...rest } = snapshot;
+    return store.update(h.table, h.recordId, (cur) => ({ id: cur.id, createdAt: cur.createdAt, version: cur.version, ...rest }), { summary: `Restaurada versión del ${h.createdAt.slice(0, 16).replace('T', ' ')}` });
   },
 
   // --- Sincronización ---
@@ -136,7 +145,7 @@ export const store = {
     await idb.writeAtomic(entries);
     emit(`change:${table}`, { id: rec.id }); emit('change', { table, id: rec.id }); emit('outbox', outbox.size);
   },
-  recordFor(op) { return cache[op.table]?.get(op.id) || null; },
+  recordFor(op) { return cache[op.table]?.get(op.id) || op.record || null; },
 
   exportAll() {
     return { exportedAt: nowISO(), app: 'content-studio', version: 1,
@@ -144,6 +153,15 @@ export const store = {
   },
   async importAll(data, { replace = false, queue = true } = {}) {
     if (!data?.tables) throw new Error('Archivo no válido: falta "tables".');
+    for (const t of Object.keys(TABLES)) {
+      const rows = data.tables[t] || [];
+      if (!Array.isArray(rows)) throw new Error(`Archivo no válido: la tabla "${t}" no es una lista.`);
+      if (rows.some((r) => !r || typeof r !== 'object' || !r.id)) throw new Error(`Archivo no válido: hay registros sin "id" en "${t}".`);
+    }
+    if (replace) {
+      outbox.clear(); await idb.clear('outbox'); await idb.clear('conflicts');
+      await meta.set('lastPull', ''); await meta.set('lastSyncAt', null);
+    }
     for (const t of Object.keys(TABLES)) {
       const rows = data.tables[t] || [];
       if (replace) { cache[t].clear(); await idb.clear(t); }
@@ -162,6 +180,7 @@ export const store = {
   async wipe() {
     for (const t of Object.keys(TABLES)) { cache[t].clear(); await idb.clear(t); }
     outbox.clear(); await idb.clear('outbox'); await idb.clear('conflicts');
+    await meta.set('lastPull', ''); await meta.set('lastSyncAt', null);
     emit('change', { wipe: true }); emit('outbox', 0);
   },
 };
@@ -178,8 +197,8 @@ async function persist(table, rec, before, action, silent, summary) {
   const grouped = action === 'update' && !summary && lastAt && Date.now() - lastAt < 120000;
   if (table !== 'history' && !silent && !grouped) {
     lastHist.set(key, Date.now());
-    let snap = before ? JSON.stringify(before) : null;
-    if (snap && snap.length > HISTORY_MAX_CHARS) snap = null; // demasiado grande para una celda de Sheets
+    let snap = before ? clone(before) : null;
+    if (snap && JSON.stringify(snap).length > HISTORY_MAX_CHARS) snap = null; // demasiado grande para una celda de Sheets
     hist = {
       id: uid('HIS'), brandId: rec.brandId || rec.id, table, recordId: rec.id, action,
       before: snap, summary: summary || describeChange(before, rec, action),

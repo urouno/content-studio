@@ -9,10 +9,11 @@ const ratio = (a, b) => (a != null && b ? a / b : null);
 export function derive(m = {}) {
   const views = num(m.views); const reach = num(m.reach) ?? views;
   const dur = num(m.durationSec); const avgW = num(m.avgWatchSec);
-  let avgPct = num(m.avgPctViewed); if (avgPct != null && avgPct > 1) avgPct /= 100;
+  const pct = (v) => { const n = num(v); return n == null ? null : n / 100; };
+  let avgPct = pct(m.avgPctViewed);
   if (avgPct == null && avgW != null && dur) avgPct = avgW / dur;
-  let completion = num(m.completion); if (completion != null && completion > 1) completion /= 100;
-  let r3 = num(m.retention3s); if (r3 != null && r3 > 1) r3 /= 100;
+  const completion = pct(m.completion);
+  const r3 = pct(m.retention3s);
   const per1k = (x) => (num(x) != null && views ? (num(x) / views) * 1000 : null);
   return {
     views, reach, avgPct, completion, retention3s: r3, durationSec: dur,
@@ -31,7 +32,7 @@ function durationBucket(s) {
 
 /** Filas analíticas: última medición por publicación, enriquecida con datos de idea y guion aprobado. */
 export function buildRows(brandId) {
-  const results = store.all('results', { brandId });
+  const results = store.all('results', { brandId }).filter((r) => store.get('ideas', r.ideaId));
   const latest = new Map();
   results.forEach((r) => {
     const k = r.publicationId || `${r.ideaId}:${r.platform}`;
@@ -115,7 +116,7 @@ export function topContents(brandId, n = 5) {
   return rows.sort((a, b) => score(b) - score(a)).filter((r) => (seen.has(r.ideaId) ? false : seen.add(r.ideaId))).slice(0, n).map((r) => {
     const script = store.find('scripts', (s) => s.ideaId === r.ideaId);
     const hook = script && store.get('scriptVersions', script.approvedVersionId || script.currentVersionId)?.data?.hook?.narrado;
-    const parts = [r.m.views != null && `${Math.round(r.m.views).toLocaleString('es')} vistas`, r.m.avgPct != null && `${Math.round(r.m.avgPct * (r.m.avgPct <= 1 ? 100 : 1))} % visto`, r.m.saveRate != null && `${(r.m.saveRate * 100).toFixed(1)} % guardados`].filter(Boolean);
+    const parts = [r.m.views != null && `${Math.round(r.m.views).toLocaleString('es')} vistas`, r.m.avgPct != null && `${Math.round(r.m.avgPct * 100)} % visto`, r.m.saveRate != null && `${(r.m.saveRate * 100).toFixed(1)} % guardados`].filter(Boolean);
     return `«${r.title}»${hook ? ` · gancho: «${hook}»` : ''} · ${r.dims.structure} · ${r.platform} · ${parts.join(', ')}`;
   });
 }

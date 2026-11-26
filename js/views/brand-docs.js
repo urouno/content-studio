@@ -24,8 +24,8 @@ export function tabDocs(host, brandId, docParam) {
     try { setSaving('saving'); await store.update('brandDocs', id, { content }); setSaving('saved'); drawList(); } catch (e) { setSaving('error'); toast(e.message, 'error'); }
   }, 800);
 
-  const select = (id) => {
-    save.flush?.();
+  const select = async (id) => {
+    await save.flush?.();
     selected = id;
     history.replaceState(null, '', `#/marcas/${brandId}/documentos/${id}`);
     drawList(); drawEditor();
@@ -128,7 +128,7 @@ export function tabDocs(host, brandId, docParam) {
       const text = await readFile(el.files[0]); el.value = '';
       const d = store.get('brandDocs', selected);
       if (cleanDoc(d.content) && !(await confirmDialog({ title: 'Reemplazar contenido', message: `Se sustituirá el contenido de "${d.title}" por el del archivo. La versión actual queda en el historial del documento.`, confirm: 'Reemplazar' }))) return;
-      save.flush?.(); await store.update('brandDocs', selected, { content: text.slice(0, MAX_CHARS) }, { summary: 'Importado desde archivo' });
+      await save.flush?.(); await store.update('brandDocs', selected, { content: text.slice(0, MAX_CHARS) }, { summary: 'Importado desde archivo' });
       drawList(); drawEditor(); toast('Documento importado', 'success');
     }
     if (el.dataset.importnew != null && el.files?.length) {
@@ -139,17 +139,17 @@ export function tabDocs(host, brandId, docParam) {
         last = await createCustomDoc(brandId, { title: title.slice(0, 120), content: text.slice(0, MAX_CHARS) });
       }
       el.value = '';
-      if (last) { toast(`${files.length} documento(s) importado(s)`, 'success'); select(last.id); }
+      if (last) { toast(`${files.length} documento(s) importado(s)`, 'success'); await select(last.id); }
     }
   });
 
   host.addEventListener('click', async (e) => {
     const b = e.target.closest('button, [data-doc]'); if (!b) return;
-    if (b.dataset.doc) { select(b.dataset.doc); return; }
-    if (b.dataset.mode) { save.flush?.(); state.mode = b.dataset.mode; drawEditor(); return; }
-    if (b.dataset.preview != null) { save.flush?.(); showContextPreview(brandId); return; }
+    if (b.dataset.doc) { await select(b.dataset.doc); return; }
+    if (b.dataset.mode) { await save.flush?.(); state.mode = b.dataset.mode; drawEditor(); return; }
+    if (b.dataset.preview != null) { await save.flush?.(); showContextPreview(brandId); return; }
     if (b.dataset.exportall != null) {
-      save.flush?.();
+      await save.flush?.();
       const brand = store.get('brands', brandId);
       const all = docsFor(brandId).map((d) => String(d.content || '').trim()).filter(Boolean).join('\n\n---\n\n');
       download(`${slug(brand?.name)}-documentos.md`, all, 'text/markdown'); return;
@@ -158,23 +158,23 @@ export function tabDocs(host, brandId, docParam) {
       const title = await promptDialog({ title: 'Documento propio', label: 'Título', placeholder: 'Ej.: Lanzamiento de primavera, Protocolo de atención…' });
       if (!title) return;
       const d = await createCustomDoc(brandId, { title });
-      select(d.id); return;
+      await select(d.id); return;
     }
     const d = selected && store.get('brandDocs', selected); if (!d) return;
-    if (b.dataset.export != null) { save.flush?.(); download(`${slug(d.title)}.md`, store.get('brandDocs', d.id).content || '', 'text/markdown'); }
-    if (b.dataset.copy != null) { save.flush?.(); await copyText(store.get('brandDocs', d.id).content || ''); toast('Markdown copiado', 'success'); }
-    if (b.dataset.hist != null) { save.flush?.(); showHistory(d, () => { drawList(); drawEditor(); }); }
+    if (b.dataset.export != null) { await save.flush?.(); download(`${slug(d.title)}.md`, store.get('brandDocs', d.id).content || '', 'text/markdown'); }
+    if (b.dataset.copy != null) { await save.flush?.(); await copyText(store.get('brandDocs', d.id).content || ''); toast('Markdown copiado', 'success'); }
+    if (b.dataset.hist != null) { await save.flush?.(); showHistory(d, () => { drawList(); drawEditor(); }); }
     if (b.dataset.reset != null) {
       if (!(await confirmDialog({ title: 'Volver a la plantilla', message: 'Se borrará el contenido y quedará la plantilla vacía. La versión actual queda en el historial del documento (botón de reloj).', confirm: 'Restaurar plantilla', danger: true }))) return;
-      save.flush?.(); await store.update('brandDocs', d.id, { content: templateMarkdown(d.docType, {}) }, { summary: 'Plantilla restaurada' }); drawList(); drawEditor();
+      await save.flush?.(); await store.update('brandDocs', d.id, { content: templateMarkdown(d.docType, {}) }, { summary: 'Plantilla restaurada' }); drawList(); drawEditor();
     }
     if (b.dataset.del != null) {
       if (!(await confirmDialog({ title: `Eliminar "${d.title}"`, message: 'Irá a la papelera y podrás restaurarlo desde Ajustes.', confirm: 'Eliminar', danger: true }))) return;
-      save.flush?.(); await store.remove('brandDocs', d.id); selected = null; draw();
+      await save.flush?.(); await store.remove('brandDocs', d.id); selected = null; draw();
     }
     if (b.dataset.ai != null) {
       if (!aiGuard()) return;
-      save.flush?.();
+      await save.flush?.();
       await withBusy(b, async () => {
         try {
           const md = await aiBrandDoc(store.get('brandDocs', d.id));

@@ -164,7 +164,7 @@ function bindDnD(main) {
       await store.update('calendar', c.id, { date: d.dataset.day });
       toast(`Movido al ${fmtDate(d.dataset.day)}`, 'success', { action: { label: 'Deshacer', fn: () => store.update('calendar', c.id, { date: prev }) } });
     } else if (p.idea) {
-      const i = store.get('ideas', p.idea); openSchedule(i, null, { date: d.dataset.day });
+      const i = store.get('ideas', p.idea); if (i) openSchedule(i, null, { date: d.dataset.day });
     }
   };
   const onClick = (e) => {

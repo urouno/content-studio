@@ -57,5 +57,6 @@ export function render(main, { query }) {
     main.querySelector('.filterbar').addEventListener('input', (e) => { state[e.target.name] = e.target.value; if (e.target.type !== 'search') draw(); else { clearTimeout(draw._t); draw._t = setTimeout(() => { draw(); const s = main.querySelector('[name="q"]'); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }, 250); } });
   };
   draw();
-  return on('change', (p) => { if (!p?.remote) draw(); });
+  const off = on('change', (p) => { if (!p?.remote) draw(); });
+  return () => { clearTimeout(draw._t); off(); };
 }

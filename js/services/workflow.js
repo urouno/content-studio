@@ -1,8 +1,8 @@
 // Reglas del flujo Idea → … → Analizado. Un contenido = una idea (id CNT-…); todas las fichas cuelgan de ella.
 import { store } from '../core/store.js';
 import { PIPELINE, statusIndex, defaultBrandConfig, LEGACY_STATUS } from '../core/schema.js';
-import { ensureBrandDocs } from './branddocs.js';
-import { nowISO, todayISO, clone, similarity } from '../core/utils.js';
+import { ensureBrandDocs, baseDocId, templateFor } from './branddocs.js';
+import { nowISO, todayISO, clone, similarity, daysBetween } from '../core/utils.js';
 import { normalizeScript, emptyScript } from './scriptkit.js';
 import { STRUCTURES, byId, PUBLISH_FILTER } from './methodology.js';
 
@@ -28,6 +28,7 @@ export async function createBrand(data) {
 // Duplicar marca: copia identidad, configuración, documentos, plataformas, pilares, hooks, CTA y recursos (no contenidos).
 export async function duplicateBrand(brandId) {
   const src = store.get('brands', brandId);
+  if (!src) throw new Error('Marca no encontrada.');
   const { id, createdAt, updatedAt, version, brandId: _b, ...rest } = src;
   const nb = await store.create('brands', { status: 'activa', ...rest, name: `${src.name} (copia)` });
   const cfg = brandConfig(brandId);
@@ -35,12 +36,12 @@ export async function duplicateBrand(brandId) {
   // El archivo de la skill es de cada marca: la copia empieza sin nombre de archivo propio.
   const visual = clone(cfg.visual); if (visual.edit) visual.edit = { ...visual.edit, file: '' };
   await store.update('brandConfigs', nc.id, { voice: clone(cfg.voice), visual, strategy: clone(cfg.strategy) }, { silent: true });
-  const pillarMap = {};
   for (const t of ['brandDocs', 'platforms', 'pillars', 'hooks', 'ctas', 'assets']) {
     for (const r of store.all(t, { brandId })) {
       const { id: oid, createdAt: c1, updatedAt: u1, version: v1, ...copy } = r;
-      const n = await store.create(t, { ...copy, brandId: nb.id }, { silent: true });
-      if (t === 'pillars') pillarMap[oid] = n.id;
+      if (t === 'brandDocs' && templateFor(r.docType)) copy.id = baseDocId(nb.id, r.docType);
+      if (t === 'hooks') copy.sourceIdeaId = '';
+      await store.create(t, { ...copy, brandId: nb.id }, { silent: true });
     }
   }
   await ensureBrandDocs(nb.id);
@@ -115,9 +116,12 @@ export async function approveVersion(ideaId, versionId) {
 }
 export async function unlockScript(ideaId) {
   const s = scriptFor(ideaId);
+  if (!s) return;
   await store.update('scripts', s.id, { locked: false }, { summary: 'Guion desbloqueado' });
   const idea = store.get('ideas', ideaId);
-  if (statusIndex(idea.status) >= statusIndex('guion_aprobado')) await setStatus(ideaId, 'guion', 'Guion desbloqueado para cambios');
+  if (idea && statusIndex(idea.status) >= statusIndex('guion_aprobado') && statusIndex(idea.status) < statusIndex('publicado')) {
+    await setStatus(ideaId, 'guion', 'Guion desbloqueado para cambios');
+  }
 }
 
 // ---------- Grabación y edición ----------
@@ -178,7 +182,8 @@ export async function markPublished(calendarId, { url = '', publishedAt } = {}) 
   return pub;
 }
 export async function addResult(pub, { measuredAt, metrics, notes = '' }) {
-  const days = Math.max(0, Math.round((new Date(measuredAt) - new Date(pub.publishedAt)) / 86400000));
+  const diff = daysBetween(pub.publishedAt, measuredAt);
+  const days = Number.isFinite(diff) ? Math.max(0, diff) : null;
   const r = await store.create('results', { brandId: pub.brandId, ideaId: pub.ideaId, publicationId: pub.id, platform: pub.platform, measuredAt, daysSincePublish: days, metrics, notes });
   await advanceTo(pub.ideaId, 'analizado');
   return r;

@@ -27,8 +27,8 @@ export function openDB(name = DB_NAME) {
       db.onversionchange = () => { db.close(); location.reload(); };
       resolve(db);
     };
-    req.onerror = () => reject(req.error);
-    req.onblocked = () => reject(new Error('La base de datos está bloqueada por otra pestaña. Ciérrala y recarga.'));
+    req.onerror = () => { dbp = null; reject(req.error); };
+    req.onblocked = () => { dbp = null; reject(new Error('La base de datos está bloqueada por otra pestaña. Ciérrala y recarga.')); };
   });
   return dbp;
 }
@@ -38,7 +38,10 @@ function tx(store, mode, fn) {
     const stores = Array.isArray(store) ? store : [store];
     const t = db.transaction(stores, mode);
     let result;
-    Promise.resolve(fn(...stores.map((s) => t.objectStore(s)))).then((r) => { result = r; });
+    Promise.resolve().then(() => fn(...stores.map((s) => t.objectStore(s)))).then(
+      (r) => { result = r; },
+      (err) => { try { t.abort(); } catch { /* ya abortada */ } reject(err); },
+    );
     t.oncomplete = () => resolve(result);
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error || new Error('Transacción abortada (¿espacio insuficiente?)'));

@@ -2,7 +2,7 @@ import { store } from '../core/store.js';
 import { app, go } from '../core/app.js';
 import { on } from '../core/events.js';
 import { icon, emptyState, toast, withBusy } from '../core/ui.js';
-import { esc, fmtNum, fmtPct, fmtDate, daysBetween } from '../core/utils.js';
+import { esc, fmtNum, fmtPct, fmtDate, daysBetween, median } from '../core/utils.js';
 import { DERIVED } from '../core/schema.js';
 import { OBJECTIVES, byId } from '../services/methodology.js';
 import { buildRows, groupBy, DIMENSIONS, tableForPrompt } from '../services/analytics.js';
@@ -18,7 +18,7 @@ export function render(main) {
   const draw = () => {
     const bId = app.brandId;
     const rows = buildRows(bId);
-    const pending = store.all('publications', { brandId: bId }).filter((p) => !store.find('results', (r) => r.publicationId === p.id));
+    const pending = store.all('publications', { brandId: bId }).filter((p) => store.get('ideas', p.ideaId) && !store.find('results', (r) => r.publicationId === p.id));
     main.innerHTML = `${pageHeader({ title: 'Resultados y aprendizaje', sub: bId === 'all' ? 'Vista comparativa de todas las marcas. Para patrones e IA, selecciona una marca.' : `Marca: ${esc(app.brand()?.name)}`,
       actions: bId !== 'all' ? `<button class="btn btn-ai" data-insights ${rows.length < 3 ? 'disabled title="Se necesitan al menos 3 contenidos medidos"' : ''}>${icon('sparkle')}Proponer mejoras con IA</button>` : '' })}
       ${pending.length ? `<section class="card" style="margin-bottom:16px"><div class="card-h"><h3>${icon('clock')}Publicaciones sin resultados</h3><span class="xs muted">${pending.length}</span></div><div class="card-b row">${pending.slice(0, 12).map((p) => { const i = store.get('ideas', p.ideaId); return i ? `<button class="btn btn-sm" data-res="${p.id}">${esc(i.title.slice(0, 40))} · ${platformLabel(p.platform)} · ${daysBetween(p.publishedAt, new Date())} d</button>` : ''; }).join('')}</div></section>` : ''}
@@ -55,7 +55,7 @@ export function render(main) {
 }
 
 function summaryKpis(rows) {
-  const med = (k) => { const a = rows.map((r) => r.m[k]).filter((x) => x != null).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
+  const med = (k) => median(rows.map((r) => r.m[k]));
   return [
     ['Contenidos medidos', fmtNum(rows.length), 'chart', ''], ['Mediana % visto', fmtPct(med('avgPct')), 'eye', 'info'], ['Mediana compartidos/alcance', fmtPct(med('sendRate'), 2), 'send', 'violet'], ['Mediana consultas/1k', fmtNum(med('inquiriesPer1k'), 2), 'trend', 'ok'],
   ].map(([l, v, ic, k]) => `<div class="card kpi ${k}"><div class="kpi-top"><span class="eyebrow">${esc(l)}</span><span class="kpi-ic">${icon(ic)}</span></div><div class="v">${v}</div></div>`).join('');

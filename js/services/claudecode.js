@@ -74,7 +74,7 @@ export async function generateViaClaudeCode(o, { onSent, signal } = {}) {
       await cleanup(req.id);
       return toResult(resp, o);
     }
-    if (Date.now() - t0 > WAIT_MS) throw new Error(`Claude Code no respondió en ${Math.round(WAIT_MS / 60000)} min. El pedido sigue en la carpeta: recógelo después en Ajustes → IA.`);
+    if (Date.now() - t0 > WAIT_MS) throw new Error(`Claude Code no respondió en ${Math.round(WAIT_MS / 60000)} min. El pedido sigue en la carpeta: puedes ver la respuesta o descartarlo en Ajustes → IA.`);
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
 }

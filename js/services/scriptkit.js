@@ -172,9 +172,9 @@ export function localEvaluate(s, { durationTarget, avoid = '', keyword = '', wpm
 
   // Afirmaciones con cifras sin marcar para verificar
   const numeric = sentenceSplit(allVoice).filter((x) => /\d|por ciento|%/.test(x));
-  const verified = s.verify.map((v) => v.claim.toLowerCase()).join(' ');
+  const verified = s.verify.map((v) => String(v.claim || '').toLowerCase()).join(' ');
   const unmarked = numeric.filter((x) => !verified.includes(x.slice(0, 25).toLowerCase()));
-  if (unmarked.length && !s.verify.length) add('veracidad', 'mejorable', `${unmarked.length} frase(s) con cifras sin marcar para verificar.`, 'Confirma la fuente o añádelas a "Verificar".');
+  if (unmarked.length) add('veracidad', 'mejorable', `${unmarked.length} frase(s) con cifras sin marcar para verificar.`, 'Confirma la fuente o añádelas a "Verificar".');
 
   return f;
 }

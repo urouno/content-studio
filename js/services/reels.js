@@ -80,7 +80,7 @@ export function deepMerge(base, over) {
 export function parseCorrections(text) {
   const out = {};
   String(text || '').split('\n').forEach((l) => {
-    const m = l.split(/\s*(?:=|→|->)\s*/);
+    const m = l.split(/\s*(?:=|→|->|:)\s*/);
     if (m.length >= 2 && m[0].trim() && m[1].trim()) out[m[0].trim()] = m.slice(1).join(' ').trim();
   });
   return out;
@@ -151,13 +151,17 @@ export function buildMarcaJson({ brand, config }) {
     ours.sonido = clean({ musica: edit.music || '', efectos });
   }
   if (edit.graphicsAllowed?.length) ours.graficos_permitidos = edit.graphicsAllowed;
-  const corr = { ...(isObj(raw.correcciones) ? raw.correcciones : {}), ...parseCorrections(edit.corrections) };
+  const parsedCorr = parseCorrections(edit.corrections);
+  const corr = (edit.importedAt || edit.corrections) ? parsedCorr : { ...(isObj(raw.correcciones) ? raw.correcciones : {}), ...parsedCorr };
   if (Object.keys(corr).length) ours.correcciones = corr;
   // Las notas de la skill (ahí guarda lo aprendido en cada reel) nunca se pierden: se suman a las de Content Studio.
   const rawNotes = (Array.isArray(raw.notas) ? raw.notas : String(raw.notas || '').split('\n')).map((x) => String(x).trim()).filter((l) => l && !AUTO_NOTE.test(l));
   const notas = [...new Set([...rawNotes, ...notesFor({ brand, config, edit })])];
   if (notas.length) ours.notas = notas; // en la skill, siempre una lista
   const out = deepMerge(raw, clean(ours));
+  if (edit.importedAt || edit.corrections) {
+    if (Object.keys(corr).length) out.correcciones = corr; else delete out.correcciones;
+  }
   // `fuentes` se reescribe entera (con lo conservado ya dentro) para que no queden usos de más.
   if (ours.fuentes) out.fuentes = { ...(isObj(raw.fuentes) ? raw.fuentes : {}), ...ours.fuentes };
   // Los efectos se reemplazan enteros para no dejar tipos de más.

@@ -8,6 +8,7 @@ import { approvedVersion, scriptFor, brandConfig } from '../services/workflow.js
 import * as F from '../services/folder.js';
 import { reelStatus, sendToEdit, addTake, syncStatus } from '../services/production.js';
 import { defaultVideoOpts, reelFolderName, editMessage, buildProyecto, buildGuionMd, buildPropuestaMd, buildVocab, MUSIC_STYLES, skillFor } from '../services/reels.js';
+import { scriptStats } from '../services/scriptkit.js';
 
 const fmtSize = (b) => (b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`);
 
@@ -20,6 +21,7 @@ export function render(host, b, ctx) {
     return null;
   }
   const urls = [];
+  let alive = true;
   let fs = { supported: F.folderSupported() }; let st = null;
   const script = () => scriptFor(idea.id);
   const opts0 = { ...defaultVideoOpts({ idea, script: ver.data }), ...(script()?.editOpts || {}) };
@@ -39,7 +41,9 @@ export function render(host, b, ctx) {
 
   const draw = async () => {
     fs = await F.folderState();
+    if (!alive) return;
     if (fs.connected && fs.granted) st = await reelStatus(idea.id).catch((e) => { toast(e.message, 'error'); return null; });
+    if (!alive) return;
     const folderName = st?.folder || script()?.reelFolder || reelFolderName(idea);
     const sent = !!st?.folder;
     const skill = skillFor(opts.production);
@@ -70,8 +74,18 @@ export function render(host, b, ctx) {
       </aside></div>`;
     bind();
     if (st?.final && fs.granted) {
-      const u = await F.fileURL(`Reels/${st.folder}/${st.final.name}`); if (u) { urls.push(u); host.querySelector('[data-final]').src = u; }
-      if (st.portada) { const p = await F.fileURL(`Reels/${st.folder}/portada.png`); if (p) { urls.push(p); host.querySelector('[data-portada]').src = p; } }
+      const u = await F.fileURL(`Reels/${st.folder}/${st.final.name}`);
+      if (u) {
+        const vid = host.querySelector('[data-final]');
+        if (!alive || !vid) URL.revokeObjectURL(u); else { urls.push(u); vid.src = u; }
+      }
+      if (st.portada && alive) {
+        const p = await F.fileURL(`Reels/${st.folder}/portada.png`);
+        if (p) {
+          const img = host.querySelector('[data-portada]');
+          if (!alive || !img) URL.revokeObjectURL(p); else { urls.push(p); img.src = p; }
+        }
+      }
     }
   };
 
@@ -131,7 +145,8 @@ export function render(host, b, ctx) {
     host.querySelector('[data-dl]')?.addEventListener('click', () => {
       opts = readOpts();
       const brand = store.get('brands', idea.brandId); const config = brandConfig(idea.brandId);
-      download('proyecto.json', JSON.stringify(buildProyecto({ idea, brand, config, opts }), null, 1), 'application/json');
+      const durationSec = scriptStats(ver.data, config.strategy?.wpm || 160).seconds;
+      download('proyecto.json', JSON.stringify(buildProyecto({ idea, brand, config, opts, durationSec }), null, 1), 'application/json');
       download('guion-aprobado.md', buildGuionMd({ idea, brand, script: ver.data }), 'text/markdown');
       download('propuesta-graficos.md', buildPropuestaMd({ script: ver.data, opts }), 'text/markdown');
       download('vocab.txt', buildVocab({ idea, brand, config }), 'text/plain');
@@ -145,9 +160,9 @@ export function render(host, b, ctx) {
     if (changed.includes('editado')) toast('Video editado encontrado: marcado como «Editado».', 'success');
     else if (changed.includes('grabado')) toast('Toma encontrada: marcado como «Grabado».', 'success');
     else if (verbose) toast('Comprobado: sin cambios.', 'info');
-    if (verbose) await draw();
+    if (verbose && alive) await draw();
   }
 
-  draw().then(() => { if (fs.connected && fs.granted && st) check(false).then(() => {}); });
-  return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  draw().then(() => { if (alive && fs.connected && fs.granted && st) check(false).then(() => {}); });
+  return () => { alive = false; urls.splice(0).forEach((u) => URL.revokeObjectURL(u)); };
 }

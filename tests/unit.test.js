@@ -411,3 +411,46 @@ test('biblioteca de escenas: resumen para la IA y marca «de la biblioteca» en 
   const prop = R.buildPropuestaMd({ script: { sections: [{ voice: 'Resiste el calor de la transmisión.', resource: { type: 'escena-mecanismo', what: 'biblioteca: engranes-presion · Resiste el calor', anchor: 'Resiste el calor' } }] }, opts: { graphics: 'pocos' } });
   assert.match(prop, /escena · mecanismo \(de la biblioteca: engranes-presion\)/);
 });
+
+test('fechas YYYY-MM-DD no pierden un día por zona horaria y fmtDate tolera vacíos/inválidos', async () => {
+  const { toDateKey, daysBetween, fmtDate } = await import('../js/core/utils.js');
+  assert.equal(toDateKey('2026-11-26'), '2026-11-26');
+  assert.equal(daysBetween('2026-11-20', '2026-11-26'), 6);
+  assert.ok(Number.isNaN(daysBetween('', '2026-11-26')));
+  assert.equal(fmtDate('fecha-invalida'), '—');
+});
+
+test('debounce.flush conserva los últimos argumentos al ejecutarse sin parámetros', () => {
+  const seen = [];
+  const d = debounce((a, b) => seen.push([a, b]), 500);
+  d('x', 42);
+  d.flush();
+  assert.deepEqual(seen, [['x', 42]]);
+});
+
+test('derive escala porcentajes pequeños (1 %) y >100 % correctamente', () => {
+  assert.equal(derive({ avgPctViewed: 1 }).avgPct, 0.01);
+  assert.equal(derive({ completion: 1 }).completion, 0.01);
+  assert.equal(derive({ avgPctViewed: 120 }).avgPct, 1.2);
+});
+
+test('evaluador local: avisa de cifras sin verificar aunque ya haya otra en verify', () => {
+  const s = normalizeScript({
+    title: 'Datos', promise: 'Veremos dos datos',
+    hook: { narrado: 'Estos dos datos cambian tu café', visual: 'Grano', textual: '2 datos' },
+    sections: [{ act: 'inicio', voice: 'El 80 % quema el café y tarda 15 minutos más.', peak: 1 }, { act: 'desenlace', voice: 'Así ahorras 30 % de café.', peak: 2 }],
+    cta: { text: 'Guárdalo para tu próximo café' },
+    verify: [{ claim: 'El 80 % quema el café', reason: 'encuesta' }],
+  });
+  const f = localEvaluate(s);
+  assert.ok(f.some((x) => x.criterion === 'veracidad'));
+});
+
+test('reels: parseCorrections acepta ":" y buildMarcaJson permite eliminar correcciones importadas', async () => {
+  const R = await import('../js/services/reels.js');
+  assert.deepEqual(R.parseCorrections('Afinazón: Afinazone\nmal = bien'), { Afinazón: 'Afinazone', mal: 'bien' });
+  const imported = R.parseMarcaJson({ nombre: 'Marca', correcciones: { vieja: 'corregida' } }, { fileName: 'marca.json' });
+  const out = R.buildMarcaJson({ brand: { name: 'Marca' }, config: { visual: { edit: { ...imported, corrections: '' } } } });
+  assert.equal(out.correcciones, undefined);
+});
+

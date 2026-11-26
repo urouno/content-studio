@@ -28,7 +28,7 @@ export function render(main) {
     const today = todayISO();
     const count = (st) => ideas.filter((i) => st.includes(i.status)).length;
     const monthStart = today.slice(0, 7);
-    const pubMonth = store.all('publications', { brandId: bId }).filter((p) => String(p.publishedAt).startsWith(monthStart)).length;
+    const pubMonth = store.all('publications', { brandId: bId }).filter((p) => store.get('ideas', p.ideaId) && String(p.publishedAt).startsWith(monthStart)).length;
 
     // Alertas: retrasos y riesgos
     const alerts = [];

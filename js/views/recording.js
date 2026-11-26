@@ -154,8 +154,12 @@ function teleprompter(main, idea, s, wpm) {
   const playBtn = root.querySelector('[data-play] span');
   const start = async () => {
     state.playing = true; state.last = 0; playBtn.textContent = 'Pausa'; root.classList.add('playing');
-    try { state.lock = await navigator.wakeLock?.request('screen'); } catch { /* sin bloqueo de pantalla */ }
-    state.raf = requestAnimationFrame(tick);
+    try {
+      const lock = await navigator.wakeLock?.request('screen');
+      if (!state.playing) { lock?.release?.().catch(() => {}); return; }
+      state.lock = lock;
+    } catch { /* sin bloqueo de pantalla */ }
+    if (state.playing) state.raf = requestAnimationFrame(tick);
   };
   const stop = () => { state.playing = false; cancelAnimationFrame(state.raf); playBtn.textContent = 'Seguir'; root.classList.remove('playing'); state.lock?.release?.().catch(() => {}); state.lock = null; };
   const toggle = () => (state.playing ? stop() : start());

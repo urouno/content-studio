@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const include = ['index.html', 'manifest.webmanifest', 'css', 'js', 'assets'];
 const exts = /\.(html|css|js|svg|png|webmanifest|woff2?)$/;
 const files = [];
-const walk = (p) => { const s = statSync(p); if (s.isDirectory()) readdirSync(p).forEach((f) => walk(join(p, f))); else if (exts.test(p)) files.push('./' + relative(root, p)); };
+const walk = (p) => { const s = statSync(p); if (s.isDirectory()) readdirSync(p).forEach((f) => walk(join(p, f))); else if (exts.test(p)) files.push('./' + relative(root, p).replace(/\\/g, '/')); };
 include.forEach((f) => walk(join(root, f)));
 files.sort();
 const sw = join(root, 'sw.js');

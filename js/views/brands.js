@@ -53,19 +53,23 @@ export function render(main, { params, query }) {
   if (!brand) { main.innerHTML = emptyState('Marca no encontrada', 'Puede estar en la papelera.', '<a class="btn" href="#/marcas">Volver</a>', 'alert'); return null; }
   let tab = TABS.some((t) => t.id === tabId) ? tabId : 'general';
   let cleanup = null;
+  let seq = 0;
   main.innerHTML = `${pageHeader({ title: brand.name, crumbs: `<a href="#/marcas">Marcas</a>${icon('right', 'ic-sm')}<span>${esc(brand.name)}</span>`, sub: 'Cada marca es un espacio independiente. La IA usa solo el contexto de la marca correspondiente.',
     actions: `<button class="btn" data-use>${icon('check')}Trabajar con esta marca</button>` })}<div class="btabs"></div><div class="bbody"></div>`;
   main.querySelector('[data-use]').onclick = () => { app.setBrand(id); toast(`Marca activa: ${brand.name}`, 'success'); go('/'); };
   const drawTabs = () => { main.querySelector('.btabs').innerHTML = tabs(TABS, tab); main.querySelectorAll('[data-tab]').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; history.replaceState(null, '', `#/marcas/${id}/${tab}`); drawTabs(); drawBody(); })); };
   const drawBody = async () => {
+    const mySeq = ++seq;
     try { cleanup?.(); } catch { /* */ }
+    cleanup = null;
     const body = main.querySelector('.bbody'); body.innerHTML = '';
     const host = document.createElement('div'); body.append(host);
     await ensureBrandConfig(id);
+    if (mySeq !== seq) return;
     cleanup = ({ general: tabGeneral, documentos: tabDocs, comunicacion: tabVoice, visual: tabVisual, edicion: tabEdit, redes: tabPlatforms, estrategia: tabStrategy, biblioteca: tabLibrary, referencias: tabRefs })[tab](host, id, subId) || null;
   };
   drawTabs(); drawBody();
-  return () => { try { cleanup?.(); } catch { /* */ } };
+  return () => { seq++; try { cleanup?.(); } catch { /* */ } };
 }
 
 function renderList(main, query) {
@@ -138,7 +142,7 @@ function tabVisual(host, id) {
       <label class="dropzone" data-drop>${icon('upload')}<div class="small">Arrastra logotipos, imágenes o gráficos (≤ 1,5 MB) o haz clic</div><input type="file" accept="image/*,.svg" multiple hidden data-file></label>
       <div class="row"><input class="input input-sm" data-aurl placeholder="O pega un enlace (Drive, Dropbox, Figma…)" style="flex:1"><select class="input input-sm" data-akind style="width:auto"><option value="logo">Logo</option><option value="imagen">Imagen</option><option value="grafico">Gráfico</option><option value="fuente">Fuente</option><option value="audio">Audio</option><option value="plantilla">Plantilla</option></select><button class="btn btn-sm" data-addurl>Añadir</button></div>
       <p class="xs muted">Los archivos subidos se guardan en este dispositivo (Google Sheets no admite archivos). Para compartirlos entre equipos, usa enlaces.</p>
-      <div class="assets">${assets.map((a) => `<div class="asset">${a.dataUrl && /^data:image/.test(a.dataUrl) ? `<img src="${a.dataUrl}" alt="${esc(a.name)}">` : `<div class="asset-ph">${icon(a.kind === 'audio' ? 'send' : 'link')}</div>`}<div class="xs"><b class="truncate" style="display:block">${esc(a.name)}</b><span class="muted">${esc(a.kind)}${a.dataUrl ? ' · local' : ''}</span>${a.url ? ` · <a href="${esc(a.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</div><button class="icon-btn sm" data-delasset="${a.id}" title="Eliminar">${icon('trash', 'ic-sm')}</button></div>`).join('') || '<p class="xs muted">Sin recursos.</p>'}</div>
+      <div class="assets">${assets.map((a) => `<div class="asset">${a.dataUrl && /^data:image/.test(a.dataUrl) ? `<img src="${esc(a.dataUrl)}" alt="${esc(a.name)}">` : `<div class="asset-ph">${icon(a.kind === 'audio' ? 'send' : 'link')}</div>`}<div class="xs"><b class="truncate" style="display:block">${esc(a.name)}</b><span class="muted">${esc(a.kind)}${a.dataUrl ? ' · local' : ''}</span>${a.url ? ` · <a href="${esc(a.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</div><button class="icon-btn sm" data-delasset="${a.id}" title="Eliminar">${icon('trash', 'ic-sm')}</button></div>`).join('') || '<p class="xs muted">Sin recursos.</p>'}</div>
     </div></section></aside></div>`;
     const a = bindAutosave(host.querySelector('[data-vform]'), VISUAL, () => brandConfig(id), (d) => saveVisual({ ...d.visual }));
     host._auto?.destroy(); host._auto = a;
@@ -203,7 +207,10 @@ function tabPlatforms(host, id) {
       draw(); return;
     }
     if (!r) return;
-    if (e.target.dataset.f) await store.update('platforms', r.id, { [e.target.dataset.f]: e.target.type === 'number' ? Number(e.target.value) : e.target.value });
+    if (e.target.dataset.f) {
+      const val = e.target.type === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value;
+      await store.update('platforms', r.id, { [e.target.dataset.f]: val });
+    }
     if (e.target.dataset.arr) { const k = e.target.dataset.arr; await store.update('platforms', r.id, { [k]: [...card.querySelectorAll(`[data-arr="${k}"]:checked`)].map((x) => x.value) }); }
     toast('Guardado', 'success', { timeout: 1200 });
   });
@@ -245,7 +252,13 @@ function tabStrategy(host, id) {
     host._auto?.destroy(); host._auto = a;
   };
   draw();
-  host.addEventListener('change', async (e) => { const tr = e.target.closest('[data-p]'); if (tr && e.target.dataset.f) await store.update('pillars', tr.dataset.p, { [e.target.dataset.f]: e.target.type === 'number' ? Number(e.target.value) : e.target.value }); });
+  host.addEventListener('change', async (e) => {
+    const tr = e.target.closest('[data-p]');
+    if (tr && e.target.dataset.f) {
+      const val = e.target.type === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value;
+      await store.update('pillars', tr.dataset.p, { [e.target.dataset.f]: val });
+    }
+  });
   host.addEventListener('click', async (e) => {
     const t = e.target.closest('button'); if (!t) return;
     if (t.dataset.addp != null) { await store.create('pillars', { brandId: id, name: 'Nuevo pilar', description: '', objective: '', share: null }); draw(); }

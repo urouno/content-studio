@@ -184,18 +184,27 @@ function setup_() {
       sh.getRange(1, 1, 1, hs.length).setValues([hs]);
     } else {
       checked.push(def.sheet);
-      var cur = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0].filter(String);
+      var lastCol = Math.max(1, sh.getLastColumn());
+      var rawHeader = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+      var cur = rawHeader.filter(String);
       var missing = hs.filter(function (h) { return cur.indexOf(h) === -1; });
-      if (missing.length) sh.getRange(1, cur.length + 1, 1, missing.length).setValues([missing]);
+      if (missing.length) {
+        var startCol = cur.length ? lastCol + 1 : 1;
+        sh.getRange(1, startCol, 1, missing.length).setValues([missing]);
+        rawHeader = rawHeader.concat(missing);
+      }
     }
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight('bold').setBackground('#eef0ff');
     // Texto plano: evita que Sheets convierta fechas, horas o números.
     sh.getRange(1, 1, sh.getMaxRows(), sh.getLastColumn()).setNumberFormat('@');
     if (t === 'ideas') {
-      var col = headers_(t).indexOf('status') + 1;
-      var rule = SpreadsheetApp.newDataValidation().requireValueInList(STATUS_VALUES, true).setAllowInvalid(false).build();
-      sh.getRange(2, col, sh.getMaxRows() - 1, 1).setDataValidation(rule);
+      var actualHeaders = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var col = actualHeaders.indexOf('status') + 1;
+      if (col > 0) {
+        var rule = SpreadsheetApp.newDataValidation().requireValueInList(STATUS_VALUES, true).setAllowInvalid(false).build();
+        sh.getRange(2, col, sh.getMaxRows() - 1, 1).setDataValidation(rule);
+      }
     }
   });
   var meta = ss.getSheetByName('_Meta') || ss.insertSheet('_Meta');
@@ -256,7 +265,7 @@ function toRow_(t, tb, rec, syncedAt) {
     if (h === 'syncedAt') return syncedAt;
     var v = rec[h];
     if (v === undefined || v === null) return '';
-    if ((def.json || []).indexOf(h) >= 0) v = JSON.stringify(v);
+    if ((def.json || []).indexOf(h) >= 0) v = (h === 'before' && typeof v === 'string') ? v : JSON.stringify(v);
     else if (typeof v === 'object') v = JSON.stringify(v);
     else v = String(v);
     if (v.length > MAX_CELL) throw err_('TOO_LARGE', 'El campo "' + h + '" de ' + rec.id + ' supera el tamaño máximo de una celda (' + MAX_CELL + ' caracteres).');
@@ -501,7 +510,7 @@ function geminiGenerate_(model, b, maxTokens, quick) {
     });
     var code = res.getResponseCode();
     var data; try { data = JSON.parse(res.getContentText()); } catch (x) { data = null; }
-    if (code === 200) { data.usedModel = m; data.triedModels = errors; return data; }
+    if (code === 200 && data && typeof data === 'object') { data.usedModel = m; data.triedModels = errors; return data; }
     var gmsg = (data && data.error && data.error.message) || ('respondió ' + code);
     errors.push({ model: m, status: code, message: String(gmsg).slice(0, 300) });
     // Clave inválida, permisos o solicitud mal formada: probar otro modelo no ayuda.
@@ -805,11 +814,11 @@ function claudeGenerate_(req, b, maxTokens) {
   }
   var res = UrlFetchApp.fetch(ANTHROPIC_BASE + '/messages', {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    headers: claudeHeaders_(withFallback), payload: JSON.stringify(payload), timeoutSeconds: 300,
+    headers: claudeHeaders_(withFallback), payload: JSON.stringify(payload),
   });
   var code = res.getResponseCode();
   var data; try { data = JSON.parse(res.getContentText()); } catch (x) { data = null; }
-  if (code !== 200) {
+  if (code !== 200 || !data || typeof data !== 'object') {
     var type = data && data.error && data.error.type;
     var msg = (data && data.error && data.error.message) || ('Claude respondió ' + code);
     var friendly = {
@@ -836,6 +845,7 @@ function claudeGenerate_(req, b, maxTokens) {
   return {
     candidates: [{ content: { parts: [{ text: text }] }, finishReason: finish, groundingMetadata: { groundingChunks: sources } }],
     usageMetadata: { totalTokenCount: (u.input_tokens || 0) + (u.output_tokens || 0) },
+    usedModel: data.model || model,
     modelVersion: data.model,
   };
 }

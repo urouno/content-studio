@@ -1,7 +1,8 @@
 // Copies, calendarización/publicación y registro de resultados de un contenido.
 import { store } from '../core/store.js';
+import { settings } from '../core/settings.js';
 import { icon, toast, confirmDialog, withBusy, emptyState, modal, renderFields, readFields, validateFields, setSaving } from '../core/ui.js';
-import { esc, fmtDate, todayISO, copyText, debounce, fmtNum, fmtPct } from '../core/utils.js';
+import { esc, fmtDate, todayISO, copyText, debounce, fmtNum, fmtPct, daysBetween } from '../core/utils.js';
 import { PLATFORMS, byId } from '../services/methodology.js';
 import { METRICS, DERIVED } from '../core/schema.js';
 import { approvedVersion, schedule, markPublished, addResult, scriptFor } from '../services/workflow.js';
@@ -36,13 +37,13 @@ export function renderCopies(host, b, ctx) {
     const card = e.target.closest('[data-copy]'); const f = e.target.dataset.f; if (!card || !f) return;
     const val = f === 'hashtags' ? e.target.value.split(/[\s,]+/).filter(Boolean).map((h) => (h.startsWith('#') ? h : `#${h}`)) : e.target.value;
     setSaving('dirty'); pending.set(card.dataset.copy, { ...(pending.get(card.dataset.copy) || {}), [f]: val }); saveCopy();
-    if (f === 'caption') { const cnt = card.querySelector('[data-count]'); const max = byId(PLATFORMS, store.get('copies', card.dataset.copy).platform)?.maxCaption; cnt.textContent = `${e.target.value.length}/${max}`; cnt.classList.toggle('over', e.target.value.length > max); }
+    if (f === 'caption') { const cnt = card.querySelector('[data-count]'); const max = byId(PLATFORMS, store.get('copies', card.dataset.copy)?.platform)?.maxCaption || 2200; cnt.textContent = `${e.target.value.length}/${max}`; cnt.classList.toggle('over', e.target.value.length > max); }
   });
   host.addEventListener('click', async (e) => {
     const t = e.target.closest('button'); if (!t) return;
     const card = t.closest('[data-copy]'); const cid = card?.dataset.copy;
-    if (t.dataset.approve != null) { saveCopy.flush?.(); const c = store.get('copies', cid); await store.update('copies', cid, { status: c.status === 'aprobado' ? 'borrador' : 'aprobado' }); draw(); }
-    if (t.dataset.copyall != null) { const c = store.get('copies', cid); await copyText([c.title, c.caption, c.ctaText, (c.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Copy copiado al portapapeles', 'success'); }
+    if (t.dataset.approve != null) { await saveCopy.flush?.(); const c = store.get('copies', cid); await store.update('copies', cid, { status: c.status === 'aprobado' ? 'borrador' : 'aprobado' }); draw(); }
+    if (t.dataset.copyall != null) { await saveCopy.flush?.(); const c = store.get('copies', cid); await copyText([c.title, c.caption, c.description, c.ctaText, (c.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Copy copiado al portapapeles', 'success'); }
     if (t.dataset.del != null) { if (await confirmDialog({ title: 'Eliminar copy', message: 'Irá a la papelera.', confirm: 'Eliminar' })) { await store.remove('copies', cid); draw(); ctx.refresh(); } }
     if (t.dataset.manual != null) { const pl = [...host.querySelectorAll('[data-pl]:checked')].map((x) => x.dataset.pl)[0] || 'instagram'; await store.create('copies', { brandId: idea.brandId, ideaId: idea.id, platform: pl, title: '', caption: '', description: '', ctaText: '', hashtags: [], coverText: '', variant: 1, status: 'borrador' }); draw(); }
     if (t.dataset.gen != null) {
@@ -64,13 +65,14 @@ export function renderCopies(host, b, ctx) {
 function copyCard(c) {
   const p = byId(PLATFORMS, c.platform);
   const max = p?.maxCaption || 2200;
+  const cap = String(c.caption || '');
   return `<section class="card copy-card ${c.status === 'aprobado' ? 'approved' : ''}" data-copy="${c.id}">
     <div class="card-h"><h3>${esc(p?.name || c.platform)} <span class="xs muted">variante ${c.variant || 1}</span></h3>
       <div class="row">${c.status === 'aprobado' ? `<span class="badge" style="--bc:var(--ok)">Aprobado</span>` : '<span class="badge">Borrador</span>'}
       <button class="btn btn-sm" data-approve>${c.status === 'aprobado' ? 'Reabrir' : `${icon('check', 'ic-sm')}Aprobar`}</button><button class="icon-btn sm" data-copyall title="Copiar todo">${icon('copy', 'ic-sm')}</button><button class="icon-btn sm" data-del title="Eliminar">${icon('trash', 'ic-sm')}</button></div></div>
     <div class="card-b stack">
       ${c.platform === 'youtube' || c.title ? `<label class="field"><span>Título${p?.titleMax ? ` (≤ ${p.titleMax})` : ''}</span><input class="input" data-f="title" value="${esc(c.title)}" ${p?.titleMax ? `maxlength="${p.titleMax}"` : ''}></label>` : ''}
-      <label class="field"><span class="row-between">Caption <span class="xs muted ${c.caption.length > max ? 'over' : ''}" data-count>${c.caption.length}/${max}</span></span><textarea class="input" rows="6" data-f="caption">${esc(c.caption)}</textarea></label>
+      <label class="field"><span class="row-between">Caption <span class="xs muted ${cap.length > max ? 'over' : ''}" data-count>${cap.length}/${max}</span></span><textarea class="input" rows="6" data-f="caption">${esc(cap)}</textarea></label>
       ${c.description || c.platform === 'youtube' ? `<label class="field"><span>Descripción</span><textarea class="input" rows="3" data-f="description">${esc(c.description)}</textarea></label>` : ''}
       <div class="form-grid"><label class="field"><span>CTA escrito</span><input class="input" data-f="ctaText" value="${esc(c.ctaText)}"></label>
       <label class="field"><span>Texto de portada</span><input class="input" data-f="coverText" value="${esc(c.coverText)}"></label></div>
@@ -105,13 +107,15 @@ export function renderPublishing(host, b, ctx) {
   draw();
   host.addEventListener('change', async (e) => {
     const row = e.target.closest('[data-cal]'); const f = e.target.dataset.cf; if (!row || !f) return;
-    await store.update('calendar', row.dataset.cal, { [f]: e.target.value }); toast('Fecha actualizada', 'success'); draw();
+    if (f === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) { toast('La fecha es obligatoria (para quitarla, usa el botón ×).', 'error'); draw(); return; }
+    await store.update('calendar', row.dataset.cal, { [f]: e.target.value });
+    toast(f === 'date' ? 'Fecha actualizada' : 'Actualizado', 'success'); draw();
   });
   host.addEventListener('click', async (e) => {
     const t = e.target.closest('button'); if (!t) return;
     if (t.dataset.add != null) openSchedule(idea, draw);
     if (t.dataset.delcal) { if (await confirmDialog({ title: 'Quitar del calendario', message: 'La entrada irá a la papelera.', confirm: 'Quitar' })) { await store.remove('calendar', t.dataset.delcal); draw(); ctx.refresh(); } }
-    if (t.dataset.copyc) { const c = store.get('copies', t.dataset.copyc); await copyText([c.title, c.caption, c.ctaText, (c.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Copiado', 'success'); }
+    if (t.dataset.copyc) { const c = store.get('copies', t.dataset.copyc); await copyText([c.title, c.caption, c.description, c.ctaText, (c.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Copiado', 'success'); }
     if (t.dataset.pub) {
       const c = store.get('calendar', t.dataset.pub);
       const fields = [{ name: 'publishedAt', label: 'Fecha de publicación', type: 'date', required: true }, { name: 'url', label: 'URL de la publicación (opcional)', type: 'url' }];
@@ -130,7 +134,7 @@ export function openSchedule(idea, after, preset = {}) {
     { name: 'date', label: 'Fecha', type: 'date', required: true }, { name: 'time', label: 'Hora', type: 'time' }, { name: 'owner', label: 'Responsable' },
   ];
   const body = document.createElement('form'); body.className = 'form-grid';
-  body.innerHTML = renderFields(fields, { platform: (idea.platforms || [])[0] || 'tiktok', date: todayISO(), owner: '', ...preset });
+  body.innerHTML = renderFields(fields, { platform: (idea.platforms || [])[0] || 'tiktok', date: todayISO(), owner: settings.get('userName') || '', ...preset });
   const plats = idea.platforms?.length > 1 ? `<label class="check span-2"><input type="checkbox" data-all checked>Programar en todas sus plataformas (${idea.platforms.map(platformLabel).join(', ')})</label>` : '';
   body.insertAdjacentHTML('beforeend', plats);
   modal({ title: `Programar: ${idea.title}`, body, size: 'sm', actions: [{ label: 'Cancelar' }, { label: 'Programar', kind: 'primary', onClick: async () => {
@@ -159,12 +163,18 @@ export function renderResults(host, b, ctx) {
   draw();
   host.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t) return;
-    if (t.dataset.addres) openResultForm(store.get('publications', t.dataset.addres), null, draw);
-    if (t.dataset.editres) { const r = store.get('results', t.dataset.editres); openResultForm(store.get('publications', r.publicationId), r, draw); }
+    if (t.dataset.addres) { const pub = store.get('publications', t.dataset.addres); if (pub) openResultForm(pub, null, draw); }
+    if (t.dataset.editres) {
+      const r = store.get('results', t.dataset.editres);
+      const pub = r && store.get('publications', r.publicationId);
+      if (!pub) { toast('La publicación asociada ya no existe.', 'error'); return; }
+      openResultForm(pub, r, draw);
+    }
   });
 }
 
 export function openResultForm(pub, existing, after) {
+  if (!pub) return;
   const available = METRICS.filter((m) => !m.platforms || m.platforms.includes(pub.platform));
   const ver = approvedVersion(pub.ideaId);
   const fields = [
@@ -186,7 +196,9 @@ export function openResultForm(pub, existing, after) {
     if (!validateFields(form, fields)) return false;
     const o = readFields(form, fields, {});
     Object.keys(o.metrics || {}).forEach((k) => { if (o.metrics[k] == null || Number.isNaN(o.metrics[k])) delete o.metrics[k]; });
-    if (existing) await store.update('results', existing.id, { measuredAt: o.measuredAt, metrics: o.metrics, notes: o.notes, daysSincePublish: Math.max(0, Math.round((new Date(o.measuredAt) - new Date(pub.publishedAt)) / 86400000)) });
+    const diff = daysBetween(pub.publishedAt, o.measuredAt);
+    const days = Number.isFinite(diff) ? Math.max(0, diff) : null;
+    if (existing) await store.update('results', existing.id, { measuredAt: o.measuredAt, metrics: o.metrics, notes: o.notes, daysSincePublish: days });
     else await addResult(pub, o);
     toast('Resultados guardados', 'success'); after?.(); return true;
   } }] });

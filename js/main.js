@@ -50,17 +50,20 @@ const ROUTES = [
 
 let current = { cleanup: null, path: null };
 
+const safeDecode = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
+
 function parseHash() {
   const raw = location.hash.replace(/^#/, '') || '/';
   const [pathPart, query = ''] = raw.split('?');
   const parts = pathPart.split('/').filter(Boolean);
   const base = `/${parts[0] || ''}`;
-  return { base: base === '/' ? '/' : base, params: parts.slice(1).map(decodeURIComponent), query: Object.fromEntries(new URLSearchParams(query)) };
+  return { base: base === '/' ? '/' : base, params: parts.slice(1).map(safeDecode), query: Object.fromEntries(new URLSearchParams(query)) };
 }
 
 async function route() {
   const { base, params, query } = parseHash();
   const r = ROUTES.find((x) => x.path === base) || NAV[0];
+  const prevPath = current.path;
   try { current.cleanup?.(); } catch (e) { console.error(e); }
   const main = document.getElementById('main');
   main.innerHTML = '';
@@ -71,7 +74,7 @@ async function route() {
     console.error(e);
     main.innerHTML = `<div class="notice danger">${icon('alert')}<div><b>Error al mostrar esta vista.</b><p>${esc(e.message)}</p></div></div>`;
   }
-  if (current.path !== base) window.scrollTo(0, 0);
+  if (prevPath !== base) window.scrollTo(0, 0);
   main.focus({ preventScroll: true });
 }
 

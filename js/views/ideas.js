@@ -63,7 +63,8 @@ export function render(main) {
     });
   };
   draw();
-  return on('change', (p) => { if (!p?.remote && ['ideas', undefined].includes(p?.table)) draw(); });
+  const off = on('change', (p) => { if (!p?.remote && ['ideas', undefined].includes(p?.table)) draw(); });
+  return () => { clearTimeout(draw._t); off(); };
 }
 
 function openAiIdeas(after) {
@@ -140,7 +141,7 @@ function showDuplicates(bId) {
     if (s >= 0.42) pairs.push({ a: ideas[a], b: ideas[b], s });
   }
   pairs.sort((x, y) => y.s - x.s);
-  modal({ title: 'Ideas similares', size: 'lg', body: pairs.length ? `<p class="muted small">Similitud calculada localmente (palabras y fragmentos de texto). Revisa si son la misma idea o enfoques distintos.</p><div class="table-wrap"><table class="tbl"><thead><tr><th>Idea A</th><th>Idea B</th><th class="num">Similitud</th></tr></thead><tbody>${pairs.slice(0, 40).map((p) => `<tr><td><a href="#/contenido/${p.a.id}">${esc(p.a.title)}</a></td><td><a href="#/contenido/${p.b.id}">${esc(p.b.title)}</a></td><td class="num">${Math.round(p.s * 100)} %</td></tr>`).join('')}</tbody></table></div>` : emptyState('Sin duplicados', 'No se encontraron ideas demasiado parecidas.', '', 'check'), actions: [{ label: 'Cerrar' }] });
-  document.querySelectorAll('.modal a').forEach((a) => a.addEventListener('click', () => document.querySelector('.modal-backdrop')?.remove()));
+  const m = modal({ title: 'Ideas similares', size: 'lg', body: pairs.length ? `<p class="muted small">Similitud calculada localmente (palabras y fragmentos de texto). Revisa si son la misma idea o enfoques distintos.</p><div class="table-wrap"><table class="tbl"><thead><tr><th>Idea A</th><th>Idea B</th><th class="num">Similitud</th></tr></thead><tbody>${pairs.slice(0, 40).map((p) => `<tr><td><a href="#/contenido/${p.a.id}">${esc(p.a.title)}</a></td><td><a href="#/contenido/${p.b.id}">${esc(p.b.title)}</a></td><td class="num">${Math.round(p.s * 100)} %</td></tr>`).join('')}</tbody></table></div>` : emptyState('Sin duplicados', 'No se encontraron ideas demasiado parecidas.', '', 'check'), actions: [{ label: 'Cerrar' }] });
+  m.body.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => m.close()));
 }
 

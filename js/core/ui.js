@@ -58,7 +58,8 @@ export function modal({ title, body, size = 'md', actions = [], onClose, dismiss
   const onKey = (e) => { if (e.key === 'Escape' && dismissable) close(); };
   document.addEventListener('keydown', onKey);
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap && dismissable) close(); });
-  wrap.querySelector('[data-close]').onclick = () => close();
+  const closeBtn = wrap.querySelector('[data-close]');
+  if (dismissable) closeBtn.onclick = () => close(); else closeBtn.remove();
   root.append(wrap);
   setTimeout(() => (wrap.querySelector('[autofocus], input, textarea, select, .modal-f .btn-primary') || wrap.querySelector('.modal'))?.focus(), 30);
   return { el: wrap, body: b, close };
@@ -182,7 +183,7 @@ export function setSaving(state) {
 
 export const emptyState = (title, text, actionHtml = '', ic = 'sparkle') => `<div class="empty">${icon(ic, 'ic-xl')}<h3>${esc(title)}</h3><p>${esc(text)}</p>${actionHtml}</div>`;
 
-export function badge(text, color, cls = '') { return `<span class="badge ${cls}" style="${color ? `--bc:${color}` : ''}">${esc(text)}</span>`; }
+export function badge(text, color, cls = '') { return `<span class="badge ${cls}" style="${color ? `--bc:${esc(color)}` : ''}">${esc(text)}</span>`; }
 
 export function tabs(items, active, attr = 'data-tab') {
   return `<nav class="tabs" role="tablist">${items.map((t) => `<button role="tab" class="tab ${t.id === active ? 'active' : ''}" ${attr}="${t.id}" aria-selected="${t.id === active}">${t.icon ? icon(t.icon) : ''}<span>${esc(t.label)}</span>${t.count != null ? `<em>${t.count}</em>` : ''}</button>`).join('')}</nav>`;

@@ -152,9 +152,9 @@ export function render(host, b, ctx) {
   };
 
   const bind = () => {
-    host.querySelector('[data-ver]').onchange = (e) => { save.flush(); current = store.get('scriptVersions', e.target.value); draft = normalizeScript(clone(current.data)); store.update('scripts', script.id, { currentVersionId: current.id }, { silent: true }); draw(); };
+    host.querySelector('[data-ver]').onchange = async (e) => { await save.flush(); current = store.get('scriptVersions', e.target.value); draft = normalizeScript(clone(current.data)); await store.update('scripts', script.id, { currentVersionId: current.id }, { silent: true }); draw(); };
     host.querySelector('[data-gen]').onclick = () => openGenerate(store.get('ideas', idea.id), ctx);
-    host.querySelector('[data-dup]').onclick = async () => { save.flush(); try { await addVersion(store.get('ideas', idea.id), clone(draft), { label: `Copia de v${current.versionNo}` }); ctx.refresh(); } catch (e) { toast(e.message, 'error'); } };
+    host.querySelector('[data-dup]').onclick = async () => { await save.flush(); try { await addVersion(store.get('ideas', idea.id), clone(draft), { label: `Copia de v${current.versionNo}` }); ctx.refresh(); } catch (e) { toast(e.message, 'error'); } };
     host.querySelector('[data-compare]').onclick = () => openCompare(versions, current.id);
     host.querySelector('[data-export]').onclick = () => {
       const txt = scriptToText(draft, { brandName: store.get('brands', idea.brandId)?.name });
@@ -163,7 +163,7 @@ export function render(host, b, ctx) {
         { label: `${icon('copy')}Copiar`, kind: 'primary', onClick: async () => { await copyText(txt); toast('Copiado', 'success'); return false; } }] });
     };
     host.querySelector('[data-approve]')?.addEventListener('click', async () => {
-      save.flush();
+      await save.flush();
       const issues = localEvaluate(draft, { durationTarget, avoid: cfg.voice?.avoid, keyword: idea.keyword, wpm }).filter((x) => x.severity === 'problema');
       const pf = (scriptFor(idea.id).publishFilter || []).filter(Boolean).length;
       const msg = [issues.length ? `Hay ${issues.length} problema(s) en la revisión automática.` : '', pf < 5 ? `El filtro antes de aprobar (pestaña Estrategia) tiene ${pf}/5 respuestas confirmadas.` : '', 'Al aprobar se bloquea la versión y el contenido pasa a "Por grabar".'].filter(Boolean).join(' ');
@@ -208,7 +208,13 @@ export function render(host, b, ctx) {
       if (ds.delsec != null) { if (await confirmDialog({ title: 'Quitar sección', message: 'Puedes recuperarla desde el historial.', confirm: 'Quitar' })) { draft.sections.splice(Number(ds.delsec), 1); markSave(); draw(); } }
       if (ds.up != null) { const i = Number(ds.up); if (i > 0) { [draft.sections[i - 1], draft.sections[i]] = [draft.sections[i], draft.sections[i - 1]]; markSave(); draw(); } }
       if (ds.down != null) { const i = Number(ds.down); if (i < draft.sections.length - 1) { [draft.sections[i + 1], draft.sections[i]] = [draft.sections[i], draft.sections[i + 1]]; markSave(); draw(); } }
-      if (ds.swap != null) { const i = Number(ds.swap); const old = draft.hook; draft.hook = { ...draft.hookAlternatives[i] }; draft.hookAlternatives[i] = old; markSave(); draw(); }
+      if (ds.swap != null) {
+        const i = Number(ds.swap);
+        const { p4, ...oldRest } = draft.hook;
+        draft.hook = { ...draft.hookAlternatives[i], p4: p4 || { promesa: '', prueba: '', plan: '', persona: '' } };
+        draft.hookAlternatives[i] = oldRest;
+        markSave(); draw();
+      }
       if (ds.delalt != null) { draft.hookAlternatives.splice(Number(ds.delalt), 1); markSave(); draw(); }
       if (ds.addver != null) { draft.verify.push({ claim: '', reason: '' }); markSave(); draw(); }
       if (ds.delver != null) { draft.verify.splice(Number(ds.delver), 1); markSave(); draw(); }
@@ -223,7 +229,7 @@ export function render(host, b, ctx) {
 
   async function runAi(mode, btn, extra = {}) {
     if (!aiGuard()) return;
-    save.flush();
+    await save.flush();
     const freshIdea = store.get('ideas', idea.id);
     if (mode === 'hooks-more') {
       await withBusy(btn, async () => { try { const hs = await aiHooks(freshIdea, draft); draft.hookAlternatives = [...draft.hookAlternatives, ...hs.map((h) => ({ patternId: h.patternId, narrado: h.narrado, visual: h.visual, textual: h.textual, auditivo: h.auditivo }))].slice(0, 10); markSave(); draw(); toast(`${hs.length} alternativas añadidas`, 'success'); } catch (e) { toast(e.message, 'error'); } }, 'Pensando…');
@@ -251,9 +257,10 @@ export function render(host, b, ctx) {
     const labels = { section: `Reescritura sección ${(extra.target ?? 0) + 1}`, hook: 'Hook mejorado', shorter: 'Más corta', longer: 'Más larga', simplify: 'Lenguaje simplificado', structure: `Estructura: ${byId(STRUCTURES, opts.structureId)?.name}`, platform: `Adaptada a ${byId(PLATFORMS, opts.platform)?.name}`, free: 'Instrucción libre' };
     await withBusy(btn, async () => {
       try {
+        const prevId = current.id;
         const res = await aiRewrite(freshIdea, draft, opts);
         const v = await addVersion(freshIdea, res, { origin: 'rewrite', label: labels[mode] || 'Reescritura' });
-        toast(`Nueva versión v${v.versionNo} creada (${labels[mode]})`, 'success', { action: { label: 'Comparar', fn: () => openCompare(versionsFor(script.id), v.id, current.id) } });
+        toast(`Nueva versión v${v.versionNo} creada (${labels[mode]})`, 'success', { action: { label: 'Comparar', fn: () => openCompare(versionsFor(script.id), v.id, prevId) } });
         current = v; draft = normalizeScript(clone(v.data)); draw();
       } catch (e) { toast(e.message, 'error'); }
     }, 'Reescribiendo…');
@@ -261,7 +268,7 @@ export function render(host, b, ctx) {
 
   async function runEval(btn) {
     if (!aiGuard()) return;
-    save.flush();
+    await save.flush();
     const localFindings = localEvaluate(draft, { durationTarget, avoid: cfg.voice?.avoid, keyword: idea.keyword, wpm });
     await withBusy(btn, async () => {
       try {
