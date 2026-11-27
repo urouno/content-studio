@@ -8,12 +8,37 @@ import { pageHeader } from './shared.js';
 import { tabDocs } from './brand-docs.js';
 import { tabEdit } from './brand-edit.js';
 
-const TABS = [
-  { id: 'general', label: 'Identidad general', icon: 'brand' }, { id: 'documentos', label: 'Documentos', icon: 'book' }, { id: 'comunicacion', label: 'Comunicación', icon: 'text' },
-  { id: 'visual', label: 'Identidad visual', icon: 'image' }, { id: 'edicion', label: 'Estilo de edición', icon: 'film' }, { id: 'redes', label: 'Redes sociales', icon: 'send' },
-  { id: 'estrategia', label: 'Pilares y estrategia', icon: 'target' }, { id: 'biblioteca', label: 'Hooks y CTA', icon: 'layers' },
-  { id: 'referencias', label: 'Referencias', icon: 'link' },
+const GROUPS = [
+  { id: 'marca', label: 'Marca', icon: 'brand', subs: [
+    { id: 'general', label: 'Identidad', icon: 'brand' },
+    { id: 'comunicacion', label: 'Voz y tono', icon: 'text' },
+    { id: 'visual', label: 'Visual y recursos', icon: 'image' },
+  ] },
+  { id: 'estrategia', label: 'Estrategia', icon: 'target', subs: [
+    { id: 'redes', label: 'Redes sociales', icon: 'send' },
+    { id: 'estrategia', label: 'Pilares y metas', icon: 'target' },
+  ] },
+  { id: 'documentos', label: 'Documentos IA', icon: 'book', subs: [{ id: 'documentos', label: 'Documentos IA', icon: 'book' }] },
+  { id: 'avanzado', label: 'Avanzado', icon: 'sliders', subs: [
+    { id: 'edicion', label: 'Estilo de edición', icon: 'film' },
+    { id: 'biblioteca', label: 'Hooks y CTA', icon: 'layers' },
+    { id: 'referencias', label: 'Referencias', icon: 'link' },
+  ] },
 ];
+
+function resolveBrandRoute(tabId) {
+  if (!tabId) return { group: 'marca', sub: 'general' };
+  const directGroup = GROUPS.find((g) => g.id === tabId);
+  if (directGroup) {
+    // 'estrategia' es a la vez id de grupo y sub-pestaña legacy: si viene por URL, mostrar Pilares y metas.
+    const defaultSub = tabId === 'estrategia' ? 'estrategia' : directGroup.subs[0].id;
+    return { group: directGroup.id, sub: defaultSub };
+  }
+  for (const g of GROUPS) {
+    if (g.subs.some((s) => s.id === tabId)) return { group: g.id, sub: tabId };
+  }
+  return { group: 'marca', sub: 'general' };
+}
 
 const GENERAL = [
   { name: 'name', label: 'Nombre', required: true }, { name: 'sector', label: 'Sector o nicho' },
@@ -51,13 +76,34 @@ export function render(main, { params, query }) {
   if (!id) return renderList(main, query);
   const brand = store.get('brands', id);
   if (!brand) { main.innerHTML = emptyState('Marca no encontrada', 'Puede estar en la papelera.', '<a class="btn" href="#/marcas">Volver</a>', 'alert'); return null; }
-  let tab = TABS.some((t) => t.id === tabId) ? tabId : 'general';
+  let { group, sub: tab } = resolveBrandRoute(tabId);
   let cleanup = null;
   let seq = 0;
   main.innerHTML = `${pageHeader({ title: brand.name, crumbs: `<a href="#/marcas">Marcas</a>${icon('right', 'ic-sm')}<span>${esc(brand.name)}</span>`, sub: 'Cada marca es un espacio independiente. La IA usa solo el contexto de la marca correspondiente.',
-    actions: `<button class="btn" data-use>${icon('check')}Trabajar con esta marca</button>` })}<div class="btabs"></div><div class="bbody"></div>`;
+    actions: `<button class="btn" data-use>${icon('check')}Trabajar con esta marca</button>` })}<div class="btabs"></div><div class="bsubtabs"></div><div class="bbody"></div>`;
   main.querySelector('[data-use]').onclick = () => { app.setBrand(id); toast(`Marca activa: ${brand.name}`, 'success'); go('/'); };
-  const drawTabs = () => { main.querySelector('.btabs').innerHTML = tabs(TABS, tab); main.querySelectorAll('[data-tab]').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; history.replaceState(null, '', `#/marcas/${id}/${tab}`); drawTabs(); drawBody(); })); };
+  const drawTabs = () => {
+    main.querySelector('.btabs').innerHTML = tabs(GROUPS, group);
+    main.querySelectorAll('.btabs [data-tab]').forEach((t) => t.addEventListener('click', () => {
+      group = t.dataset.tab;
+      const g = GROUPS.find((x) => x.id === group);
+      tab = g.subs[0].id;
+      history.replaceState(null, '', `#/marcas/${id}/${tab}`);
+      drawTabs(); drawBody();
+    }));
+    const g = GROUPS.find((x) => x.id === group);
+    const subWrap = main.querySelector('.bsubtabs');
+    if (g && g.subs.length > 1) {
+      subWrap.innerHTML = `<div class="subtabs" role="tablist">${g.subs.map((s) => `<button type="button" class="subtab ${s.id === tab ? 'active' : ''}" data-sub="${s.id}">${icon(s.icon, 'ic-sm')}${esc(s.label)}</button>`).join('')}</div>`;
+      subWrap.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => {
+        tab = b.dataset.sub;
+        history.replaceState(null, '', `#/marcas/${id}/${tab}`);
+        drawTabs(); drawBody();
+      }));
+    } else {
+      subWrap.innerHTML = '';
+    }
+  };
   const drawBody = async () => {
     const mySeq = ++seq;
     try { cleanup?.(); } catch { /* */ }

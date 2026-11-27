@@ -16,6 +16,9 @@ function targetDuration(idea, platform) {
   return Number(p?.durationTarget) || byId(PLATFORMS, platform)?.defaultDuration || 45;
 }
 
+const getMode = () => { try { return localStorage.getItem('cs.scriptMode') === 'detailed' ? 'detailed' : 'simple'; } catch { return 'simple'; } };
+const setMode = (m) => { try { localStorage.setItem('cs.scriptMode', m); } catch { /* */ } };
+
 export function render(host, b, ctx) {
   const { idea } = b;
   const cfg = brandConfig(idea.brandId);
@@ -26,12 +29,28 @@ export function render(host, b, ctx) {
   let current = script && (store.get('scriptVersions', script.currentVersionId) || versions[0]);
   let draft = current ? normalizeScript(clone(current.data)) : null;
   let durationTarget = targetDuration(idea, mainPlatform);
+  let mode = getMode();
 
   if (!current) {
-    host.innerHTML = `<div class="card">${emptyState('Todavía no hay guion', 'Genera versiones con IA a partir de la idea, la identidad de la marca y la metodología, o escribe uno desde cero con la estructura en tres actos.',
-      `<div class="row" style="justify-content:center"><button class="btn btn-ai" data-gen>${icon('sparkle')}Generar con IA</button><button class="btn" data-blank>${icon('edit')}Escribir manualmente</button><a class="btn btn-ghost" href="#/metodo">${icon('book')}Ver Método</a></div>`, 'edit')}</div>`;
+    const featured = STRUCTURES.slice(0, 8);
+    host.innerHTML = `<div class="stack-lg">
+      <div class="card card-b row-between" style="gap:12px;flex-wrap:wrap">
+        <div><h3 style="margin:0 0 4px">Empieza tu guion</h3><p class="small muted" style="margin:0">Genéralo con IA o elige una estructura base para escribirlo paso a paso.</p></div>
+        <div class="row"><button class="btn btn-ai" data-gen>${icon('sparkle')}Generar con IA</button><button class="btn" data-blank>${icon('edit')}En blanco</button></div>
+      </div>
+      <section class="card"><div class="card-h"><h3>${icon('layers')}Crear desde una estructura base</h3><button class="btn btn-sm btn-ghost" data-all-st>Ver todas (${STRUCTURES.length})</button></div>
+        <div class="card-b"><div class="struct-grid">${featured.map((s) => `<button type="button" class="struct-card ${s.id === idea.format ? 'rec' : ''}" data-pick-st="${s.id}">
+          <div class="row-between"><b>${esc(s.name)}</b>${s.id === idea.format ? '<span class="badge" style="--bc:var(--accent)">Sugerida</span>' : ''}</div>
+          <p class="xs muted">${esc(s.when)}</p>
+          <ol class="xs struct-beats">${s.beats.slice(0, 4).map((bt) => `<li>${esc(bt)}</li>`).join('')}</ol></button>`).join('')}</div></div></section>
+    </div>`;
     host.querySelector('[data-gen]').onclick = () => openGenerate(idea, ctx);
     host.querySelector('[data-blank]').onclick = async () => { await newBlankVersion(store.get('ideas', idea.id)); ctx.refresh(); };
+    host.querySelector('[data-all-st]').onclick = () => openStructurePicker(idea, ctx);
+    host.querySelectorAll('[data-pick-st]').forEach((btn) => btn.addEventListener('click', async () => {
+      await newBlankVersion(store.get('ideas', idea.id), btn.dataset.pickSt);
+      ctx.refresh();
+    }));
     return null;
   }
 
@@ -47,91 +66,117 @@ export function render(host, b, ctx) {
   const draw = () => {
     script = scriptFor(idea.id); versions = versionsFor(script.id);
     const lk = locked();
+    const simple = mode === 'simple';
     const st = scriptStats(draft, wpm);
     const dis = lk ? 'disabled' : '';
     const approved = script.approvedVersionId;
-    host.innerHTML = `<div class="split script-split">
-      <div class="stack-lg">
-        <div class="card"><div class="card-b row-between script-toolbar">
-          <div class="row">
-            <select class="input input-sm" data-ver aria-label="Versión" style="width:auto">${versions.map((v) => `<option value="${v.id}" ${v.id === current.id ? 'selected' : ''}>v${v.versionNo} · ${esc(v.label)}${v.id === approved ? ' ✓ aprobada' : ''}</option>`).join('')}</select>
-            <span class="tag">${st.words} palabras</span><span class="tag ${Math.abs(st.seconds - durationTarget) / durationTarget > 0.25 ? 'warn-tag' : ''}">≈ ${st.seconds} s / objetivo ${durationTarget} s</span>
-            <span class="tag" data-rescount title="Recursos visuales propuestos frente al tope del video">${resourceCount(draft)}</span>
-            ${lk ? `<span class="badge" style="--bc:var(--ok)">${icon('lock', 'ic-sm')}Aprobada y bloqueada</span>` : ''}
-          </div>
-          <div class="row">
-            <button class="btn btn-sm btn-ai" data-gen>${icon('sparkle', 'ic-sm')}Generar versiones</button>
-            <button class="btn btn-sm" data-dup>${icon('copy', 'ic-sm')}Duplicar</button>
-            <button class="btn btn-sm" data-compare ${versions.length < 2 ? 'disabled' : ''}>${icon('compare', 'ic-sm')}Comparar</button>
-            <button class="btn btn-sm" data-export>${icon('download', 'ic-sm')}Texto</button>
-            <a class="btn btn-sm btn-ghost" href="#/metodo" title="Guía de estructuras, hooks y CTA">${icon('book', 'ic-sm')}Método</a>
-            ${lk ? `<a class="btn btn-sm btn-primary" href="#/grabar/${idea.id}">${icon('camera', 'ic-sm')}Modo grabación</a><button class="btn btn-sm" data-unlock>${icon('unlock', 'ic-sm')}Desbloquear</button>` : `<button class="btn btn-sm btn-primary" data-approve>${icon('lock', 'ic-sm')}Aprobar versión</button>`}
-          </div></div></div>
-
-        <section class="card"><div class="card-h"><h3>Planteamiento</h3></div><div class="card-b"><div class="form-grid cols-3" data-meta>
-          ${renderFields([
-            { name: 'title', label: 'Título interno', span: 2 },
-            { name: 'objective', label: 'Objetivo', type: 'select', options: OBJECTIVES.map((o) => ({ value: o.id, label: o.name })) },
-            { name: 'audience', label: 'Público' },
-            { name: 'knowledgeLevel', label: 'Nivel de conocimiento', type: 'select', cast: 'number', options: KNOWLEDGE_LEVELS.map((l) => ({ value: l.id, label: `${l.id} · ${l.name}` })), empty: false },
-            { name: 'contentType', label: 'Tipo', type: 'select', options: CONTENT_TYPES.map((o) => ({ value: o.id, label: o.name })) },
-            { name: 'problem', label: 'Problema del espectador', type: 'textarea', rows: 2, span: 3 },
-            { name: 'promise', label: 'Promesa de valor (qué obtiene al terminar)', type: 'textarea', rows: 2, span: 2 },
-            { name: 'structureId', label: 'Estructura narrativa', type: 'select', options: STRUCTURES.map((o) => ({ value: o.id, label: o.name })) },
-            { name: 'productionType', label: 'Tipo de producción', type: 'select', options: PRODUCTION_TYPES.map((o) => ({ value: o.id, label: o.name })), empty: false },
-            { name: 'graphics', label: 'Cantidad de gráficos de este video', type: 'select', options: GRAPHICS_PRESETS.map((o) => ({ value: o.id, label: o.name })), empty: false },
-          ], draft)}</div></div></section>
-
-        <section class="card hook-card"><div class="card-h"><h3>${icon('target')}Hook principal</h3>
-          <div class="row">${lk ? '' : `<button class="btn btn-sm" data-ai="hook">${icon('wand', 'ic-sm')}Mejorar hook</button><button class="btn btn-sm" data-ai="hooks-more">${icon('sparkle', 'ic-sm')}Más alternativas</button>`}</div></div>
-          <div class="card-b"><div class="form-grid">
-            <div class="field span-2"><label>Narrado <span class="xs muted">(≤ 12 palabras, ~3 s)</span></label><textarea class="input" rows="2" data-p="hook.narrado" ${dis}>${esc(draft.hook.narrado)}</textarea></div>
-            <div class="field"><label>Visual (0–3 s)</label><textarea class="input" rows="2" data-p="hook.visual" ${dis}>${esc(draft.hook.visual)}</textarea></div>
-            <div class="field"><label>Texto en pantalla</label><textarea class="input" rows="2" data-p="hook.textual" ${dis}>${esc(draft.hook.textual)}</textarea></div>
-            <div class="field"><label>Auditivo</label><input class="input" data-p="hook.auditivo" value="${esc(draft.hook.auditivo)}" ${dis}></div>
-            <div class="field"><label>Patrón</label><select class="input" data-p="hook.patternId" ${dis}><option value="">—</option>${HOOK_PATTERNS.map((h) => `<option value="${h.id}" ${h.id === draft.hook.patternId ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select></div>
-          </div>
-          <details class="more-fields" ${Object.values(draft.hook.p4 || {}).some(Boolean) ? 'open' : ''}><summary>${icon('down', 'ic-sm')}Las 4 P del gancho (primeros 3 s)</summary><div class="form-grid">
-            ${HOOK_4P.map((p) => `<div class="field"><label>${esc(p.name)} <span class="xs muted">· ${esc(p.desc)}</span></label><input class="input input-sm" data-p="hook.p4.${p.id}" value="${esc(draft.hook.p4?.[p.id] || '')}" ${dis}></div>`).join('')}
-          </div></details>
-          ${draft.hookAlternatives.length ? `<div class="divider-label">Hooks alternativos</div><div class="alts">${draft.hookAlternatives.map((h, i) => `<div class="alt"><div><b>${esc(h.narrado)}</b><div class="xs muted">${esc(byId(HOOK_PATTERNS, h.patternId)?.name || h.patternId || '')}${h.visual ? ` · Visual: ${esc(h.visual)}` : ''}${h.textual ? ` · Texto: ${esc(h.textual)}` : ''}</div></div>${lk ? '' : `<div class="row"><button class="btn btn-sm" data-swap="${i}" title="Usar como principal">Usar</button><button class="icon-btn sm" data-delalt="${i}" title="Quitar">${icon('x', 'ic-sm')}</button></div>`}</div>`).join('')}</div>` : ''}
-          ${lk ? '' : `<button class="btn btn-sm btn-ghost" data-save-hook>${icon('plus', 'ic-sm')}Guardar hook en la biblioteca de la marca</button>`}
-          </div></section>
-
-        <section class="card"><div class="card-h"><h3>${icon('list')}Desarrollo</h3><span class="xs muted">Cada frase con una función. Marca los picos de interés (0–3): deben crecer hacia el final.</span></div>
-          <div class="card-b sections">${sectionTimes(draft, wpm).map((t, i) => sectionCard(draft.sections[i], i, draft.sections.length, lk, draft.productionType, t)).join('')}
-          ${lk ? '' : `<button class="btn btn-sm" data-addsec>${icon('plus', 'ic-sm')}Añadir sección</button>`}</div></section>
-
-        <section class="card"><div class="card-h"><h3>${icon('send')}CTA</h3>${lk ? '' : `<button class="btn btn-sm" data-ai="ctas">${icon('sparkle', 'ic-sm')}Proponer CTA</button>`}</div><div class="card-b"><div class="form-grid cols-3">
-          <div class="field"><label>Tipo</label><select class="input" data-p="cta.type" ${dis}><option value="">—</option>${CTA_TYPES.map((c) => `<option value="${c.id}" ${c.id === draft.cta.type ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
-          <div class="field span-2"><label>Texto hablado</label><input class="input" data-p="cta.text" value="${esc(draft.cta.text)}" ${dis}></div>
-          <div class="field span-3"><label>Cómo se muestra</label><input class="input" data-p="cta.visual" value="${esc(draft.cta.visual)}" ${dis}></div>
-          </div><div data-cta-out></div></div></section>
-
-        <section class="card"><div class="card-h"><h3>${icon('alert')}Afirmaciones a verificar</h3>${lk ? '' : `<button class="btn btn-sm" data-addver>${icon('plus', 'ic-sm')}Añadir</button>`}</div><div class="card-b">
-          ${draft.verify.length ? draft.verify.map((v, i) => `<div class="row verify-row"><input class="input input-sm" data-p="verify.${i}.claim" value="${esc(v.claim)}" placeholder="Afirmación" ${dis} style="flex:2"><input class="input input-sm" data-p="verify.${i}.reason" value="${esc(v.reason)}" placeholder="Motivo / fuente" ${dis} style="flex:1">${lk ? '' : `<button class="icon-btn sm" data-delver="${i}" title="Quitar">${icon('x', 'ic-sm')}</button>`}</div>`).join('') : '<p class="small muted">Sin afirmaciones marcadas. Toda cifra, dato técnico o beneficio debe estar verificado.</p>'}
-          </div></section>
-
-        <section class="card"><div class="card-h"><h3>Indicaciones generales</h3></div><div class="card-b form-grid">
-          <div class="field"><label>Visuales</label><textarea class="input" rows="3" data-p="visualNotes" ${dis}>${esc(draft.visualNotes)}</textarea></div>
-          <div class="field"><label>Edición</label><textarea class="input" rows="3" data-p="editingNotes" ${dis}>${esc(draft.editingNotes)}</textarea></div>
-        </div></section>
+    const structInfo = byId(STRUCTURES, draft.structureId);
+    const toolbar = `<div class="card"><div class="card-b row-between script-toolbar">
+      <div class="row">
+        <select class="input input-sm" data-ver aria-label="Versión" style="width:auto">${versions.map((v) => `<option value="${v.id}" ${v.id === current.id ? 'selected' : ''}>v${v.versionNo} · ${esc(v.label)}${v.id === approved ? ' ✓' : ''}</option>`).join('')}</select>
+        <span class="tag">${st.words} pal.</span><span class="tag ${Math.abs(st.seconds - durationTarget) / durationTarget > 0.25 ? 'warn-tag' : ''}">≈ ${st.seconds} s / ${durationTarget} s</span>
+        ${!simple ? `<span class="tag" data-rescount title="Recursos visuales propuestos frente al tope del video">${resourceCount(draft)}</span>` : ''}
+        ${lk ? `<span class="badge" style="--bc:var(--ok)">${icon('lock', 'ic-sm')}Aprobada</span>` : ''}
       </div>
+      <div class="row">
+        <div class="btn-group" role="group" aria-label="Modo de edición">
+          <button type="button" class="btn btn-sm ${simple ? 'active' : ''}" data-smode="simple">Simple</button>
+          <button type="button" class="btn btn-sm ${!simple ? 'active' : ''}" data-smode="detailed">Detallado</button>
+        </div>
+        ${lk ? '' : `<button class="btn btn-sm" data-pick-struct title="Nueva versión con estructura base">${icon('layers', 'ic-sm')}Estructura</button>`}
+        <button class="btn btn-sm btn-ai" data-gen>${icon('sparkle', 'ic-sm')}IA</button>
+        ${!simple ? `<button class="btn btn-sm" data-dup>${icon('copy', 'ic-sm')}Duplicar</button><button class="btn btn-sm" data-compare ${versions.length < 2 ? 'disabled' : ''}>${icon('compare', 'ic-sm')}Comparar</button>` : ''}
+        <button class="btn btn-sm" data-export title="Ver o copiar texto">${icon('download', 'ic-sm')}Texto</button>
+        ${lk ? `<a class="btn btn-sm btn-primary" href="#/grabar/${idea.id}">${icon('camera', 'ic-sm')}Grabar</a><button class="btn btn-sm" data-unlock>${icon('unlock', 'ic-sm')}Desbloquear</button>` : `<button class="btn btn-sm btn-primary" data-approve>${icon('lock', 'ic-sm')}Aprobar</button>`}
+      </div></div></div>`;
 
-      <aside class="stack-lg sticky eval-col">
-        ${lk ? '' : `<section class="card"><div class="card-h"><h3>${icon('wand')}Reescribir con IA</h3></div><div class="card-b stack">
-          <p class="xs muted">Cada acción crea una nueva versión; la actual se conserva.</p>
-          <div class="grid g-2" style="gap:6px">
-            <button class="btn btn-sm" data-ai="shorter">Reducir duración</button><button class="btn btn-sm" data-ai="longer">Ampliar duración</button>
-            <button class="btn btn-sm" data-ai="simplify">Simplificar lenguaje</button><button class="btn btn-sm" data-ai="free">Instrucción libre…</button>
-          </div>
-          <div class="row"><select class="input input-sm" data-structure style="flex:1">${STRUCTURES.map((s) => `<option value="${s.id}" ${s.id === draft.structureId ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select><button class="btn btn-sm" data-ai="structure">Cambiar estructura</button></div>
-          <div class="row"><select class="input input-sm" data-platform style="flex:1">${PLATFORMS.map((p) => `<option value="${p.id}" ${p.id === mainPlatform ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select><button class="btn btn-sm" data-ai="platform">Adaptar</button></div>
-          <div class="row"><label class="small">Duración objetivo</label><input class="input input-sm" type="number" min="5" max="600" data-dur value="${durationTarget}" style="width:80px"><span class="small muted">s</span></div>
-        </div></section>`}
-        <section class="card"><div class="card-h"><h3>${icon('check')}Evaluación</h3><button class="btn btn-sm btn-ai" data-eval>${icon('sparkle', 'ic-sm')}Evaluar con IA</button></div>
-          <div class="card-b"><p class="xs muted">Observaciones para mejorar. No son predicciones de retención ni de viralidad.</p><div data-local></div><div data-aieval></div></div></section>
-      </aside></div>`;
+    const hookSection = `<section class="card hook-card"><div class="card-h"><h3>${icon('target')}Gancho (0–3 s)</h3>
+      <div class="row">${lk ? '' : `<button class="btn btn-sm" data-hook-tpl>${icon('book', 'ic-sm')}Plantillas</button><button class="btn btn-sm" data-ai="hook">${icon('wand', 'ic-sm')}Mejorar</button>${!simple ? `<button class="btn btn-sm" data-ai="hooks-more">${icon('sparkle', 'ic-sm')}Alternativas</button>` : ''}`}</div></div>
+      <div class="card-b"><div class="form-grid">
+        <div class="field span-2"><label>Lo que dices <span class="xs muted">(≤ 12 palabras, ~3 s)</span></label><textarea class="input voice" rows="2" data-p="hook.narrado" placeholder="${esc(structInfo?.beats?.[0] || 'Primera frase directa al problema del espectador…')}" ${dis}>${esc(draft.hook.narrado)}</textarea></div>
+        <div class="field ${simple ? 'span-2' : ''}"><label>Texto en pantalla</label><input class="input" data-p="hook.textual" value="${esc(draft.hook.textual)}" placeholder="≤ 7 palabras en el primer cuadro" ${dis}></div>
+        ${!simple ? `
+          <div class="field"><label>Visual (0–3 s)</label><textarea class="input" rows="2" data-p="hook.visual" ${dis}>${esc(draft.hook.visual)}</textarea></div>
+          <div class="field"><label>Auditivo</label><input class="input" data-p="hook.auditivo" value="${esc(draft.hook.auditivo)}" ${dis}></div>
+          <div class="field"><label>Patrón</label><select class="input" data-p="hook.patternId" ${dis}><option value="">—</option>${HOOK_PATTERNS.map((h) => `<option value="${h.id}" ${h.id === draft.hook.patternId ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select></div>` : ''}
+      </div>
+      ${!simple ? `<details class="more-fields" ${Object.values(draft.hook.p4 || {}).some(Boolean) ? 'open' : ''}><summary>${icon('down', 'ic-sm')}Las 4 P del gancho (primeros 3 s)</summary><div class="form-grid">
+        ${HOOK_4P.map((p) => `<div class="field"><label>${esc(p.name)} <span class="xs muted">· ${esc(p.desc)}</span></label><input class="input input-sm" data-p="hook.p4.${p.id}" value="${esc(draft.hook.p4?.[p.id] || '')}" ${dis}></div>`).join('')}
+      </div></details>` : ''}
+      ${draft.hookAlternatives.length ? `<div class="divider-label">Ganchos alternativos</div><div class="alts">${draft.hookAlternatives.map((h, i) => `<div class="alt"><div><b>${esc(h.narrado)}</b><div class="xs muted">${esc(byId(HOOK_PATTERNS, h.patternId)?.name || h.patternId || '')}${h.textual ? ` · Texto: ${esc(h.textual)}` : ''}</div></div>${lk ? '' : `<div class="row"><button class="btn btn-sm" data-swap="${i}" title="Usar como principal">Usar</button><button class="icon-btn sm" data-delalt="${i}" title="Quitar">${icon('x', 'ic-sm')}</button></div>`}</div>`).join('')}</div>` : ''}
+      ${!simple && !lk ? `<button class="btn btn-sm btn-ghost" data-save-hook>${icon('plus', 'ic-sm')}Guardar hook en la biblioteca de la marca</button>` : ''}
+      </div></section>`;
+
+    const devSection = `<section class="card"><div class="card-h"><h3>${icon('list')}Desarrollo${structInfo ? ` <span class="xs muted">· ${esc(structInfo.name)}</span>` : ''}</h3>
+      ${lk ? '' : `<button class="btn btn-sm" data-addsec>${icon('plus', 'ic-sm')}Bloque</button>`}</div>
+      <div class="card-b sections">${sectionTimes(draft, wpm).map((t, i) => sectionCard(draft.sections[i], i, draft.sections.length, lk, draft.productionType, t, simple)).join('')}
+      ${lk ? '' : `<button class="btn btn-sm" data-addsec>${icon('plus', 'ic-sm')}Añadir bloque</button>`}</div></section>`;
+
+    const ctaSection = `<section class="card"><div class="card-h"><h3>${icon('send')}Cierre / CTA</h3>${lk ? '' : `<button class="btn btn-sm" data-ai="ctas">${icon('sparkle', 'ic-sm')}Proponer CTA</button>`}</div><div class="card-b"><div class="form-grid cols-3">
+      <div class="field"><label>Tipo</label><select class="input" data-p="cta.type" ${dis}><option value="">—</option>${CTA_TYPES.map((c) => `<option value="${c.id}" ${c.id === draft.cta.type ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+      <div class="field span-2"><label>Lo que dices al final</label><input class="input voice" data-p="cta.text" value="${esc(draft.cta.text)}" placeholder="Ej.: Guárdalo para tu próximo video…" ${dis}></div>
+      ${!simple ? `<div class="field span-3"><label>Cómo se muestra</label><input class="input" data-p="cta.visual" value="${esc(draft.cta.visual)}" ${dis}></div>` : ''}
+      </div><div data-cta-out></div></div></section>`;
+
+    if (simple) {
+      host.innerHTML = `<div class="stack-lg simple-script">
+        ${toolbar}
+        ${hookSection}
+        ${devSection}
+        ${ctaSection}
+        ${lk ? '' : `<section class="card"><div class="card-h"><h3>${icon('wand')}Ajustar guion con IA</h3><span class="xs muted">Crea una nueva versión; la actual se conserva</span></div><div class="card-b row" style="gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm" data-ai="shorter">Más corto</button>
+          <button class="btn btn-sm" data-ai="longer">Más largo</button>
+          <button class="btn btn-sm" data-ai="simplify">Más natural / simple</button>
+          <button class="btn btn-sm" data-ai="free">Instrucción libre…</button>
+          <button class="btn btn-sm btn-ai" data-eval>${icon('sparkle', 'ic-sm')}Revisar con IA</button>
+          ${versions.length > 1 ? `<button class="btn btn-sm btn-ghost" data-compare>${icon('compare', 'ic-sm')}Comparar versiones</button>` : ''}
+        </div><div class="card-b" style="padding-top:0"><div data-aieval></div></div></section>`}
+      </div>`;
+    } else {
+      host.innerHTML = `<div class="split script-split">
+        <div class="stack-lg">
+          ${toolbar}
+          <section class="card"><div class="card-h"><h3>Planteamiento</h3></div><div class="card-b"><div class="form-grid cols-3" data-meta>
+            ${renderFields([
+              { name: 'title', label: 'Título interno', span: 2 },
+              { name: 'objective', label: 'Objetivo', type: 'select', options: OBJECTIVES.map((o) => ({ value: o.id, label: o.name })) },
+              { name: 'audience', label: 'Público' },
+              { name: 'knowledgeLevel', label: 'Nivel de conocimiento', type: 'select', cast: 'number', options: KNOWLEDGE_LEVELS.map((l) => ({ value: l.id, label: `${l.id} · ${l.name}` })), empty: false },
+              { name: 'contentType', label: 'Tipo', type: 'select', options: CONTENT_TYPES.map((o) => ({ value: o.id, label: o.name })) },
+              { name: 'problem', label: 'Problema del espectador', type: 'textarea', rows: 2, span: 3 },
+              { name: 'promise', label: 'Promesa de valor (qué obtiene al terminar)', type: 'textarea', rows: 2, span: 2 },
+              { name: 'structureId', label: 'Estructura narrativa', type: 'select', options: STRUCTURES.map((o) => ({ value: o.id, label: o.name })) },
+              { name: 'productionType', label: 'Tipo de producción', type: 'select', options: PRODUCTION_TYPES.map((o) => ({ value: o.id, label: o.name })), empty: false },
+              { name: 'graphics', label: 'Cantidad de gráficos de este video', type: 'select', options: GRAPHICS_PRESETS.map((o) => ({ value: o.id, label: o.name })), empty: false },
+            ], draft)}</div></div></section>
+          ${hookSection}
+          ${devSection}
+          ${ctaSection}
+          <section class="card"><div class="card-h"><h3>${icon('alert')}Afirmaciones a verificar</h3>${lk ? '' : `<button class="btn btn-sm" data-addver>${icon('plus', 'ic-sm')}Añadir</button>`}</div><div class="card-b">
+            ${draft.verify.length ? draft.verify.map((v, i) => `<div class="row verify-row"><input class="input input-sm" data-p="verify.${i}.claim" value="${esc(v.claim)}" placeholder="Afirmación" ${dis} style="flex:2"><input class="input input-sm" data-p="verify.${i}.reason" value="${esc(v.reason)}" placeholder="Motivo / fuente" ${dis} style="flex:1">${lk ? '' : `<button class="icon-btn sm" data-delver="${i}" title="Quitar">${icon('x', 'ic-sm')}</button>`}</div>`).join('') : '<p class="small muted">Sin afirmaciones marcadas. Toda cifra, dato técnico o beneficio debe estar verificado.</p>'}
+            </div></section>
+          <section class="card"><div class="card-h"><h3>Indicaciones generales</h3></div><div class="card-b form-grid">
+            <div class="field"><label>Visuales</label><textarea class="input" rows="3" data-p="visualNotes" ${dis}>${esc(draft.visualNotes)}</textarea></div>
+            <div class="field"><label>Edición</label><textarea class="input" rows="3" data-p="editingNotes" ${dis}>${esc(draft.editingNotes)}</textarea></div>
+          </div></section>
+        </div>
+
+        <aside class="stack-lg sticky eval-col">
+          ${lk ? '' : `<section class="card"><div class="card-h"><h3>${icon('wand')}Reescribir con IA</h3></div><div class="card-b stack">
+            <p class="xs muted">Cada acción crea una nueva versión; la actual se conserva.</p>
+            <div class="grid g-2" style="gap:6px">
+              <button class="btn btn-sm" data-ai="shorter">Reducir duración</button><button class="btn btn-sm" data-ai="longer">Ampliar duración</button>
+              <button class="btn btn-sm" data-ai="simplify">Simplificar lenguaje</button><button class="btn btn-sm" data-ai="free">Instrucción libre…</button>
+            </div>
+            <div class="row"><select class="input input-sm" data-structure style="flex:1">${STRUCTURES.map((s) => `<option value="${s.id}" ${s.id === draft.structureId ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select><button class="btn btn-sm" data-ai="structure">Cambiar estructura</button></div>
+            <div class="row"><select class="input input-sm" data-platform style="flex:1">${PLATFORMS.map((p) => `<option value="${p.id}" ${p.id === mainPlatform ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select><button class="btn btn-sm" data-ai="platform">Adaptar</button></div>
+            <div class="row"><label class="small">Duración objetivo</label><input class="input input-sm" type="number" min="5" max="600" data-dur value="${durationTarget}" style="width:80px"><span class="small muted">s</span></div>
+          </div></section>`}
+          <section class="card"><div class="card-h"><h3>${icon('check')}Evaluación</h3><button class="btn btn-sm btn-ai" data-eval>${icon('sparkle', 'ic-sm')}Evaluar con IA</button></div>
+            <div class="card-b"><p class="xs muted">Observaciones para mejorar. No son predicciones de retención ni de viralidad.</p><div data-local></div><div data-aieval></div></div></section>
+        </aside></div>`;
+    }
     drawLocal(); drawAiEval();
     bind();
   };
@@ -153,9 +198,16 @@ export function render(host, b, ctx) {
 
   const bind = () => {
     host.querySelector('[data-ver]').onchange = async (e) => { await save.flush(); current = store.get('scriptVersions', e.target.value); draft = normalizeScript(clone(current.data)); await store.update('scripts', script.id, { currentVersionId: current.id }, { silent: true }); draw(); };
+    host.querySelectorAll('[data-smode]').forEach((b) => (b.onclick = async () => { await save.flush(); mode = b.dataset.smode; setMode(mode); draw(); }));
+    host.querySelector('[data-pick-struct]')?.addEventListener('click', () => openStructurePicker(store.get('ideas', idea.id), ctx));
+    host.querySelector('[data-hook-tpl]')?.addEventListener('click', () => openHookPicker((pat) => {
+      draft.hook.patternId = pat.id;
+      draft.hook.narrado = pat.template;
+      markSave(); draw();
+    }));
     host.querySelector('[data-gen]').onclick = () => openGenerate(store.get('ideas', idea.id), ctx);
-    host.querySelector('[data-dup]').onclick = async () => { await save.flush(); try { await addVersion(store.get('ideas', idea.id), clone(draft), { label: `Copia de v${current.versionNo}` }); ctx.refresh(); } catch (e) { toast(e.message, 'error'); } };
-    host.querySelector('[data-compare]').onclick = () => openCompare(versions, current.id);
+    host.querySelector('[data-dup]')?.addEventListener('click', async () => { await save.flush(); try { await addVersion(store.get('ideas', idea.id), clone(draft), { label: `Copia de v${current.versionNo}` }); ctx.refresh(); } catch (e) { toast(e.message, 'error'); } });
+    host.querySelectorAll('[data-compare]').forEach((b) => (b.onclick = () => openCompare(versions, current.id)));
     host.querySelector('[data-export]').onclick = () => {
       const txt = scriptToText(draft, { brandName: store.get('brands', idea.brandId)?.name });
       modal({ title: 'Guion en texto', size: 'lg', body: `<pre class="small">${esc(txt)}</pre>`, actions: [
@@ -165,22 +217,21 @@ export function render(host, b, ctx) {
     host.querySelector('[data-approve]')?.addEventListener('click', async () => {
       await save.flush();
       const issues = localEvaluate(draft, { durationTarget, avoid: cfg.voice?.avoid, keyword: idea.keyword, wpm }).filter((x) => x.severity === 'problema');
-      const pf = (scriptFor(idea.id).publishFilter || []).filter(Boolean).length;
-      const msg = [issues.length ? `Hay ${issues.length} problema(s) en la revisión automática.` : '', pf < 5 ? `El filtro antes de aprobar (pestaña Estrategia) tiene ${pf}/5 respuestas confirmadas.` : '', 'Al aprobar se bloquea la versión y el contenido pasa a "Por grabar".'].filter(Boolean).join(' ');
+      const msg = [issues.length ? `Hay ${issues.length} detalle(s) por revisar en el guion.` : '', 'Al aprobar se bloquea la versión y el contenido pasa a «Por grabar».'].filter(Boolean).join(' ');
       if (!(await confirmDialog({ title: `Aprobar v${current.versionNo}`, message: msg, confirm: 'Aprobar y bloquear' }))) return;
       await approveVersion(idea.id, current.id);
-      toast('Guion aprobado. Listo para grabar: márcalo como grabado y editado arriba cuando esté hecho.', 'success');
+      toast('Guion aprobado. Listo para grabar.', 'success');
       ctx.refresh();
     });
-    host.querySelector('[data-eval]').onclick = (e) => runEval(e.currentTarget);
+    host.querySelector('[data-eval]')?.addEventListener('click', (e) => runEval(e.currentTarget));
     host.querySelector('[data-unlock]')?.addEventListener('click', async () => {
-      if (!(await confirmDialog({ title: 'Desbloquear guion', message: 'Podrás editar y crear versiones. El contenido volverá a "Guion en desarrollo".', confirm: 'Desbloquear' }))) return;
+      if (!(await confirmDialog({ title: 'Desbloquear guion', message: 'Podrás editar y crear versiones nuevamente.', confirm: 'Desbloquear' }))) return;
       await unlockScript(idea.id); ctx.refresh();
     });
 
     // Edición de campos con data-p (rutas dentro del borrador)
     const metaFields = ['title', 'objective', 'audience', 'knowledgeLevel', 'contentType', 'problem', 'promise', 'structureId', 'productionType', 'graphics'];
-    host.querySelector('[data-meta]').querySelectorAll('input,select,textarea').forEach((el) => { if (locked()) el.disabled = true; });
+    host.querySelector('[data-meta]')?.querySelectorAll('input,select,textarea').forEach((el) => { if (locked()) el.disabled = true; });
     if (host._bound) return;
     host._bound = true;
     host.addEventListener('input', onInput);
@@ -199,7 +250,11 @@ export function render(host, b, ctx) {
       setSaving('dirty'); markSave(); drawLocal();
       const rc = host.querySelector('[data-rescount]'); if (rc) rc.textContent = resourceCount(draft);
       const st = scriptStats(draft, wpm); const tags = host.querySelectorAll('.script-toolbar .tag');
-      if (tags[0]) tags[0].textContent = `${st.words} palabras`; if (tags[1]) tags[1].textContent = `≈ ${st.seconds} s / objetivo ${durationTarget} s`;
+      if (tags[0]) tags[0].textContent = `${st.words} pal.`;
+      if (tags[1]) {
+        tags[1].textContent = `≈ ${st.seconds} s / ${durationTarget} s`;
+        tags[1].classList.toggle('warn-tag', Math.abs(st.seconds - durationTarget) / durationTarget > 0.25);
+      }
     }
     host.addEventListener('click', async (e) => {
       const t = e.target.closest('button'); if (!t || locked()) return;
@@ -302,8 +357,20 @@ function sectionTimes(draft, wpm) {
   return draft.sections.map((x) => { const a = t; t += estimateSeconds(wordCount(x.voice), wpm); return { a, b: t }; });
 }
 
-function sectionCard(s, i, n, lk, production, time) {
+function sectionCard(s, i, n, lk, production, time, simple = false) {
   const dis = lk ? 'disabled' : '';
+  const actions = lk ? '' : `<span class="row" style="gap:0"><button class="icon-btn sm" data-up="${i}" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button><button class="icon-btn sm" data-down="${i}" title="Bajar" ${i === n - 1 ? 'disabled' : ''}>↓</button><button class="icon-btn sm" data-rewsec="${i}" title="Reescribir solo este bloque con IA">${icon('wand', 'ic-sm')}</button><button class="icon-btn sm" data-delsec="${i}" title="Quitar">${icon('x', 'ic-sm')}</button></span>`;
+  if (simple) {
+    return `<div class="sec sec-simple" data-sec="${i}">
+      <div class="sec-h"><span class="sec-n">${i + 1}</span>${time ? `<span class="sec-time">${mmss(time.a)}–${mmss(time.b)}</span>` : ''}
+        <input class="input input-sm" data-p="sections.${i}.beat" value="${esc(s.beat)}" placeholder="Nombre del paso…" ${dis} style="flex:1">
+        ${actions}
+      </div>
+      <div class="stack" style="gap:8px">
+        <textarea class="input voice" rows="3" data-p="sections.${i}.voice" placeholder="${esc(s.beat ? `Escribe lo que dices en: ${s.beat}` : 'Escribe lo que vas a decir a cámara…')}" ${dis}>${esc(s.voice)}</textarea>
+        <input class="input input-sm" data-p="sections.${i}.visual" value="${esc(s.visual)}" placeholder="Nota visual / qué se ve (opcional)" ${dis}>
+      </div></div>`;
+  }
   const r = s.resource || {};
   const cat = resourcesFor(production);
   if (r.type && !cat.some((c) => c.id === r.type)) cat.push(byId(RESOURCE_TYPES, r.type) || { id: r.type, name: r.type, kind: '' });
@@ -314,7 +381,7 @@ function sectionCard(s, i, n, lk, production, time) {
       <input class="input input-sm" data-p="sections.${i}.beat" value="${esc(s.beat)}" placeholder="Paso de la estructura" ${dis} style="flex:1">
       <select class="input input-sm" data-p="sections.${i}.function" ${dis} style="width:auto" title="Función de la sección">${FUNCTIONS.map((f) => `<option ${f === s.function ? 'selected' : ''}>${f}</option>`).join('')}</select>
       <span class="range peak" title="Pico de interés"><span class="xs muted">Pico</span><input type="range" min="0" max="3" data-p="sections.${i}.peak" value="${s.peak || 0}" ${dis}><output>${s.peak || 0}</output></span>
-      ${lk ? '' : `<span class="row" style="gap:0"><button class="icon-btn sm" data-up="${i}" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button><button class="icon-btn sm" data-down="${i}" title="Bajar" ${i === n - 1 ? 'disabled' : ''}>↓</button><button class="icon-btn sm" data-rewsec="${i}" title="Reescribir solo esta sección con IA">${icon('wand', 'ic-sm')}</button><button class="icon-btn sm" data-delsec="${i}" title="Quitar">${icon('x', 'ic-sm')}</button></span>`}
+      ${actions}
     </div>
     <div class="form-grid">
       <div class="field span-2"><label class="lbl-voice">${icon('mic', 'ic-sm')}Locución · lo que se dice</label><textarea class="input voice" rows="3" data-p="sections.${i}.voice" ${dis}>${esc(s.voice)}</textarea></div>
@@ -328,6 +395,40 @@ function sectionCard(s, i, n, lk, production, time) {
       <input class="input input-sm" data-p="sections.${i}.resource.what" value="${esc(r.what)}" placeholder="Qué aparece (con las palabras de la voz)" ${dis} style="flex:2">
       <input class="input input-sm" data-p="sections.${i}.resource.anchor" value="${esc(r.anchor)}" placeholder="Entra en la frase…" ${dis} style="flex:1">
     </div></div>`;
+}
+
+function openStructurePicker(idea, ctx) {
+  const m = modal({
+    title: 'Elegir estructura base', size: 'lg',
+    body: `<p class="small muted" style="margin-top:0">Se creará una nueva versión del guion con los pasos listos para rellenar (tu versión actual se conserva).</p>
+      <div class="struct-grid">${STRUCTURES.map((s) => `<button type="button" class="struct-card ${s.id === idea.format ? 'rec' : ''}" data-pick="${s.id}">
+        <div class="row-between"><b>${esc(s.name)}</b>${s.id === idea.format ? '<span class="badge" style="--bc:var(--accent)">Sugerida</span>' : ''}</div>
+        <p class="xs muted">${esc(s.when)}</p>
+        <ol class="xs struct-beats">${s.beats.map((bt) => `<li>${esc(bt)}</li>`).join('')}</ol></button>`).join('')}</div>`,
+    actions: [{ label: 'Cancelar' }],
+  });
+  m.body.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-pick]'); if (!b) return;
+    try {
+      await newBlankVersion(store.get('ideas', idea.id), b.dataset.pick);
+      m.close(); toast('Guion creado con estructura base', 'success'); ctx.refresh();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+}
+
+function openHookPicker(onPick) {
+  const m = modal({
+    title: 'Plantillas de gancho (0–3 s)', size: 'lg',
+    body: `<p class="small muted" style="margin-top:0">Elige una plantilla y sustituye lo que está entre corchetes por tu tema.</p>
+      <div class="stack" style="gap:6px">${HOOK_PATTERNS.map((h) => `<button type="button" class="hook-tpl" data-hp="${h.id}">
+        <div><b>${esc(h.template)}</b><div class="xs muted">${esc(h.name)} · ${esc(h.use)}</div></div></button>`).join('')}</div>`,
+    actions: [{ label: 'Cerrar' }],
+  });
+  m.body.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hp]'); if (!b) return;
+    const pat = byId(HOOK_PATTERNS, b.dataset.hp);
+    if (pat) { onPick(pat); m.close(); }
+  });
 }
 
 function askInstruction() {

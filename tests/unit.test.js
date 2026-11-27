@@ -454,3 +454,20 @@ test('reels: parseCorrections acepta ":" y buildMarcaJson permite eliminar corre
   assert.equal(out.correcciones, undefined);
 });
 
+test('scriptFromStructure: genera bloques guiados desde una estructura base y soporta vacío', async () => {
+  const { scriptFromStructure } = await import('../js/services/scriptkit.js');
+  const idea = { title: 'Errores al preparar café', problem: 'Sale amargo', format: 'errores' };
+  const s = scriptFromStructure(idea, 'errores');
+  assert.equal(s.structureId, 'errores');
+  assert.equal(s.title, idea.title);
+  assert.equal(s.problem, idea.problem);
+  assert.ok(s.sections.length >= 2);
+  assert.equal(s.sections[0].act, 'inicio');
+  assert.equal(s.sections.at(-1).act, 'desenlace');
+  assert.ok(s.sections.every((sec) => typeof sec.beat === 'string' && sec.beat.length > 0));
+  // Fallback si no existe la estructura
+  const fallback = scriptFromStructure({ title: 'Idea libre' }, 'inexistente');
+  assert.equal(fallback.structureId, '');
+  assert.ok(fallback.sections.length >= 1);
+});
+

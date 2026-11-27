@@ -474,3 +474,105 @@ textarea.voice { font-style: normal; }
   .btn-sm { min-height: 36px; }
   .cal-bar .icon-btn { flex: none; width: 40px; }
 }
+
+/* =========================================================================
+   v2.2 · Ideas en tarjetas, estructuras base, modo simple y sub-pestañas
+   ========================================================================= */
+
+/* Chips de filtro rápido (Ideas) */
+.idea-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.idea-chips::-webkit-scrollbar { display: none; }
+.idea-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text-2); font-size: var(--fs-sm); font-weight: 600;
+  white-space: nowrap; flex: none; transition: background .12s, border-color .12s, color .12s;
+}
+.idea-chip em { font-style: normal; font-size: var(--fs-xs); color: var(--text-3); font-weight: 600; }
+.idea-chip:hover { border-color: var(--accent); color: var(--text); }
+.idea-chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.idea-chip.active em { color: var(--accent); }
+
+/* Lista de ideas en tarjetas escaneables */
+.idea-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.icard {
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--bc, var(--accent));
+  border-radius: var(--r-lg); cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .12s;
+}
+.icard:hover { border-color: var(--border-strong); border-left-color: var(--bc, var(--accent)); box-shadow: var(--shadow-sm); }
+.icard-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.icard-title {
+  margin: 0; font-size: var(--fs-md); font-weight: 700; line-height: 1.3; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.icard-sub {
+  margin: 0; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.icard-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.icard-act {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border);
+}
+.icard-act .icon-btn:last-child { margin-left: auto; }
+
+/* Selector de estructuras base para guiones */
+.struct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.struct-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-lg);
+  background: var(--surface-2); color: var(--text); cursor: pointer;
+  transition: border-color .15s, background .15s, transform .12s;
+}
+.struct-card:hover { border-color: var(--accent); background: var(--surface); transform: translateY(-1px); }
+.struct-card.rec { border-color: var(--accent); background: var(--accent-soft); }
+.struct-card strong { font-size: var(--fs); line-height: 1.25; }
+.struct-beats {
+  font-size: var(--fs-xs); color: var(--text-3); line-height: 1.35; margin-top: 4px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Selector de plantillas de gancho */
+.hook-tpl {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; width: 100%;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r);
+  background: var(--surface-2); color: var(--text); cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.hook-tpl:hover { border-color: var(--accent); background: var(--accent-soft); }
+.hook-tpl strong { font-size: var(--fs-sm); color: var(--text); }
+.hook-tpl span { line-height: 1.35; }
+
+/* Editor de guion en modo Simple */
+.simple-script { max-width: 880px; margin: 0 auto; }
+.sec-simple .sec-h { padding-bottom: 6px; }
+
+/* Sub-pestañas tipo píldora (Publicar y Marca) */
+.subtabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtab {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px;
+  border: 1px solid var(--border); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text-2); font-size: var(--fs-sm); font-weight: 600;
+  white-space: nowrap; flex: none; cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+}
+.subtab:hover { border-color: var(--border-strong); color: var(--text); }
+.subtab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.subtab .count {
+  font-size: var(--fs-xs); padding: 0 6px; border-radius: 10px;
+  background: var(--surface-2); color: var(--text-3);
+}
+.subtab.active .count { background: var(--surface); color: var(--accent); }
+
+/* Documentos de marca: grupo plegable de opcionales */
+.docs-more { border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; padding: 0; }
+.docs-more > summary { padding: 10px 12px; font-size: var(--fs-xs); color: var(--text-3); }
+.docs-more[open] { padding-bottom: 0; }
+.docs-more-list { display: flex; flex-direction: column; }
+
+/* Dashboard: cumplimiento plegable */
+.dash-compliance > summary .ic { transition: transform .15s; }
+.dash-compliance:not([open]) > summary > span .ic { transform: rotate(-90deg); }
+.dash-compliance:not([open]) > summary { border-bottom: 0; }
+

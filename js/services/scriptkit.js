@@ -17,6 +17,25 @@ export function emptyScript(idea = {}) {
   });
 }
 
+/** Crea un guion guiado con los pasos (beats) de una estructura base de methodology.js. */
+export function scriptFromStructure(idea = {}, structureId = '') {
+  const st = byId(STRUCTURES, structureId || idea.format);
+  if (!st) return emptyScript(idea);
+  const base = emptyScript({ ...idea, format: st.id });
+  const beats = st.beats.filter((b) => !/^cta\b/i.test(b.trim()));
+  const bodyBeats = beats.length > 1 ? beats.slice(1) : beats;
+  base.structureId = st.id;
+  base.sections = bodyBeats.map((beat, i) => ({
+    act: i === 0 ? 'inicio' : i === bodyBeats.length - 1 ? 'desenlace' : 'nudo',
+    beat,
+    function: i === 0 ? 'problema' : i === bodyBeats.length - 1 ? 'resultado' : 'explicacion',
+    voice: '', onScreenText: '', visual: '', edit: '',
+    peak: Math.min(3, i + 1),
+    resource: { type: '', what: '', anchor: '' },
+  }));
+  return normalizeScript(base);
+}
+
 const RES = { type: '', what: '', anchor: '' };
 export const normalizeResource = (r) => (r && typeof r === 'object' ? { ...RES, ...r } : { ...RES });
 

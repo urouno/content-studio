@@ -3,7 +3,7 @@ import { store } from '../core/store.js';
 import { PIPELINE, statusIndex, defaultBrandConfig, LEGACY_STATUS } from '../core/schema.js';
 import { ensureBrandDocs, baseDocId, templateFor } from './branddocs.js';
 import { nowISO, todayISO, clone, similarity, daysBetween } from '../core/utils.js';
-import { normalizeScript, emptyScript } from './scriptkit.js';
+import { normalizeScript, emptyScript, scriptFromStructure } from './scriptkit.js';
 import { STRUCTURES, byId, PUBLISH_FILTER } from './methodology.js';
 
 export function brandConfig(brandId) {
@@ -99,7 +99,11 @@ export async function addVersion(idea, data, { origin = 'manual', label = '' } =
   return v;
 }
 
-export async function newBlankVersion(idea) { return addVersion(idea, emptyScript(idea), { origin: 'manual', label: 'En blanco' }); }
+export async function newBlankVersion(idea, structureId = '') {
+  const st = byId(STRUCTURES, structureId);
+  const data = st ? scriptFromStructure(idea, st.id) : emptyScript(idea);
+  return addVersion(idea, data, { origin: 'manual', label: st ? `Estructura: ${st.name}` : 'En blanco' });
+}
 
 export async function saveVersionData(versionId, data) {
   const v = store.get('scriptVersions', versionId);

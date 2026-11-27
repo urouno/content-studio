@@ -227,7 +227,7 @@ button.kpi { display: block; width: 100%; text-align: left; font: inherit; color
   .crumbs { flex-wrap: wrap; }
   .content-title { font-size: 21px; }
   .content-meta { flex-direction: column; align-items: stretch; margin-bottom: 12px; }
-  .head-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .head-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
   .head-actions [data-next] { grid-column: 1 / -1; justify-content: center; }
   .head-actions select { max-width: none; width: 100%; }
   .stepper { margin-bottom: 10px; }
@@ -255,4 +255,18 @@ button.kpi { display: block; width: 100%; text-align: left; font: inherit; color
   .docs-main .card-h .btn-group { width: 100%; }
   .docs-main .card-h .btn-group .btn { flex: 1; justify-content: center; }
   textarea.doc-ta { min-height: 55vh; font-size: 16px; }
+
+  /* v2.2 · KPIs 2x2 compactos, chips desplazables, tarjetas de ideas y estructuras */
+  .kpis.g-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpis.g-4 .kpi { padding: 12px; }
+  .kpis.g-4 .kpi .v { font-size: 24px; }
+  .kpis.g-4 .kpi .l { font-size: var(--fs-xs); }
+  .kpis.g-4 .kpi .eyebrow { font-size: 10px; }
+  .idea-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px 4px; scrollbar-width: none; }
+  .idea-chip { height: 38px; padding: 0 14px; }
+  .idea-list { grid-template-columns: 1fr; gap: 10px; }
+  .icard { padding: 14px; }
+  .struct-grid { grid-template-columns: 1fr; }
+  .subtabs { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px 4px; scrollbar-width: none; }
+  .subtab { height: 38px; padding: 0 14px; }
 }

@@ -48,18 +48,25 @@ export function tabDocs(host, brandId, docParam) {
     const docs = docsFor(brandId);
     const ctx = docsContext(brandId, 'guion');
     const filled = docs.filter((d) => cleanDoc(d.content)).length;
+    const docBtn = (d) => {
+      const t = templateFor(d.docType); const pct = docCompleteness(d.content);
+      return `<button class="doc-item ${d.id === selected ? 'active' : ''} ${d.active === false ? 'off' : ''}" data-doc="${d.id}">
+        <span class="doc-t">${esc(d.title)}</span>
+        <span class="row xs muted" style="gap:6px">${t ? `<span class="tier tier-${t.tier}">${DOC_TIERS[t.tier].name}</span>` : '<span class="tier">Propio</span>'}${d.active === false ? '<span>· no se usa</span>' : ''}</span>
+        <span class="meter"><i style="width:${Math.round(pct * 100)}%"></i></span></button>`;
+    };
+    const core = docs.filter((d) => templateFor(d.docType)?.tier === 'esencial');
+    const rest = docs.filter((d) => templateFor(d.docType)?.tier !== 'esencial');
+    const restHasSelected = rest.some((d) => d.id === selected);
     side.innerHTML = `<section class="card"><div class="card-b stack small">
         <div class="row-between"><span>Con contenido</span><b>${filled} / ${docs.length}</b></div>
         <div class="row-between"><span>Contexto al escribir un guion</span><b title="${ctx.chars.toLocaleString('es')} caracteres">≈ ${approxTokens(ctx.chars).toLocaleString('es')} tokens</b></div>
         ${ctx.used.some((u) => u.truncated) || ctx.skipped.some((s) => s.reason === 'sin espacio en el contexto') ? `<p class="xs" style="color:var(--warn);margin:0">${icon('alert', 'ic-sm')} Algún documento supera el límite y se recorta (máx. ${DOC_LIMITS.perDoc.toLocaleString('es')} caracteres por documento y ${DOC_LIMITS.total.toLocaleString('es')} en total). Resume o desactiva lo menos útil.</p>` : ''}
         <button class="btn btn-sm" data-preview>${icon('eye', 'ic-sm')}Ver lo que recibe la IA</button></div></section>
-      <nav class="card docs-list" aria-label="Documentos">${docs.map((d) => {
-        const t = templateFor(d.docType); const pct = docCompleteness(d.content);
-        return `<button class="doc-item ${d.id === selected ? 'active' : ''} ${d.active === false ? 'off' : ''}" data-doc="${d.id}">
-          <span class="doc-t">${esc(d.title)}</span>
-          <span class="row xs muted" style="gap:6px">${t ? `<span class="tier tier-${t.tier}">${DOC_TIERS[t.tier].name}</span>` : '<span class="tier">Propio</span>'}${d.active === false ? '<span>· no se usa</span>' : ''}</span>
-          <span class="meter"><i style="width:${Math.round(pct * 100)}%"></i></span></button>`;
-      }).join('')}</nav>
+      <nav class="card docs-list" aria-label="Documentos esenciales">
+        ${core.map(docBtn).join('')}
+        ${rest.length ? `<details class="more-fields docs-more" ${restHasSelected ? 'open' : ''}><summary>${icon('down', 'ic-sm')}Recomendados, tácticos y propios (${rest.length})</summary><div class="docs-more-list">${rest.map(docBtn).join('')}</div></details>` : ''}
+      </nav>
       <div class="stack">
         <button class="btn btn-sm" data-newdoc>${icon('plus', 'ic-sm')}Documento propio</button>
         <label class="btn btn-sm">${icon('upload', 'ic-sm')}Importar .md<input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple hidden data-importnew></label>

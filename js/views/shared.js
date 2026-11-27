@@ -72,16 +72,20 @@ export function ideaFields(brandId) {
 }
 
 /** Formulario de idea: campos principales + sección plegable "Más detalles (opcional)". */
-export function renderIdeaForm(fields, data = {}) {
-  const main = fields.filter((f) => !f.advanced && !f.group); const adv = fields.filter((f) => f.advanced); const pitch = fields.filter((f) => f.group === 'pitch');
+export function renderIdeaForm(fields, data = {}, { quick = false } = {}) {
+  const QUICK_NAMES = new Set(['brandId', 'title', 'problem', 'format', 'platforms']);
+  const main = quick ? fields.filter((f) => QUICK_NAMES.has(f.name)) : fields.filter((f) => !f.advanced && !f.group);
+  const restMain = quick ? fields.filter((f) => !f.advanced && !f.group && !QUICK_NAMES.has(f.name)) : [];
+  const adv = [...restMain, ...fields.filter((f) => f.advanced)];
+  const pitch = fields.filter((f) => f.group === 'pitch');
   const val = (f) => deepGet(data, f.name);
-  const count = (list) => list.filter((f) => f.name !== 'knowledgeLevel' && (Array.isArray(val(f)) ? val(f).length : val(f) != null && val(f) !== '' && val(f) !== false)).length;
+  const count = (list) => list.filter((f) => f.name !== 'knowledgeLevel' && f.name !== 'priority' && (Array.isArray(val(f)) ? val(f).length : val(f) != null && val(f) !== '' && val(f) !== false)).length;
   const block = (list, title, open) => {
     if (!list.length) return '';
     const n = count(list);
     return `<details class="more-fields span-3" ${open && n ? 'open' : ''}><summary>${icon('down', 'ic-sm')}${title}${n ? ` <span class="muted">· ${n} con datos</span>` : ''}</summary><div class="form-grid cols-3">${renderFields(list, data)}</div></details>`;
   };
-  return `${renderFields(main, data)}${block(pitch, 'Empaque: primer cuadro y gancho', true)}${block(adv, 'Más detalles (opcional)', false)}`;
+  return `${renderFields(main, data)}${block(pitch, 'Empaque: primer cuadro y gancho', !quick)}${block(adv, quick ? 'Más opciones (pilar, objetivo, fecha…)' : 'Más detalles (opcional)', false)}`;
 }
 
 export function openIdeaModal({ idea = null, brandId = null, preset = {}, onSaved } = {}) {
@@ -90,7 +94,7 @@ export function openIdeaModal({ idea = null, brandId = null, preset = {}, onSave
   const data = idea || { priority: 2, knowledgeLevel: 1, platforms: [], status: 'idea', brandId: bId, ...preset };
   const fields = [...(idea ? [] : [requireBrandSelect()]), ...ideaFields(bId)];
   const body = document.createElement('div');
-  body.innerHTML = `<form class="form-grid cols-3" novalidate>${renderIdeaForm(fields, data)}</form><div class="dup-box" style="margin-top:12px"></div>`;
+  body.innerHTML = `<form class="form-grid cols-3" novalidate>${renderIdeaForm(fields, data, { quick: !idea })}</form><div class="dup-box" style="margin-top:12px"></div>`;
   const form = body.querySelector('form');
   // Al cambiar de marca, recarga los pilares de esa marca.
   form.querySelector('[name="brandId"]')?.addEventListener('change', (e) => {

@@ -33,11 +33,11 @@ const NAV = [
 const SIDE_FOOT = [
   { path: '/metodo', label: 'Método', icon: 'book' }, { path: '/ajustes', label: 'Ajustes', icon: 'settings' },
 ];
-// Celular: Inicio, Contenidos, [Crear], Calendario y "Más" (el resto).
-const BOTTOM_L = ['/', '/contenidos'];
-const BOTTOM_R = ['/calendario'];
+// Celular: Inicio, Ideas, [Crear], Contenidos y "Más" (el resto).
+const BOTTOM_L = ['/', '/ideas'];
+const BOTTOM_R = ['/contenidos'];
 const MORE = [
-  { path: '/ideas', label: 'Ideas', icon: 'bulb' }, { path: '/resultados', label: 'Resultados', icon: 'trend' }, { path: '/marcas', label: 'Marcas', icon: 'brand' },
+  { path: '/calendario', label: 'Calendario', icon: 'calendar' }, { path: '/resultados', label: 'Resultados', icon: 'trend' }, { path: '/marcas', label: 'Marcas', icon: 'brand' },
   { path: '/metodo', label: 'Método (guía de guiones)', icon: 'book' }, { path: '/ajustes', label: 'Ajustes', icon: 'settings' },
 ];
 const ROUTES = [
@@ -90,14 +90,14 @@ function renderNav(base) {
   document.getElementById('bottomnav').innerHTML = pick(BOTTOM_L)
     + `<button type="button" class="bn-create" data-create aria-label="Nueva idea"><i>${icon('plus')}</i><span>Crear</span></button>`
     + pick(BOTTOM_R)
-    + `<button type="button" class="${moreActive ? 'active' : ''}" data-more aria-haspopup="true" aria-expanded="false">${icon('list')}<span>Más</span>${pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</button>
-    <div class="more-sheet" hidden role="menu">${MORE.map((m) => `<a href="#${m.path}" role="menuitem" class="${m.path === base ? 'active' : ''}">${icon(m.icon)}${m.label}${m.path === '/ideas' && pendingIdeas ? `<em>${pendingIdeas}</em>` : ''}</a>`).join('')}</div>`;
+    + `<button type="button" class="${moreActive ? 'active' : ''}" data-more aria-haspopup="true" aria-expanded="false">${icon('list')}<span>Más</span></button>
+    <div class="more-sheet" hidden role="menu">${MORE.map((m) => `<a href="#${m.path}" role="menuitem" class="${m.path === base ? 'active' : ''}">${icon(m.icon)}${m.label}</a>`).join('')}</div>`;
   renderBrandSwitch();
 }
 
 function renderNavBadge() {
   const n = store.all('ideas', { brandId: app.brandId }).filter((i) => i.status === 'idea').length;
-  document.querySelectorAll('#mainnav a[href="#/ideas"], #bottomnav [data-more], #bottomnav .more-sheet a[href="#/ideas"]').forEach((a) => {
+  document.querySelectorAll('#mainnav a[href="#/ideas"], #bottomnav a[href="#/ideas"]').forEach((a) => {
     let em = a.querySelector('em');
     if (!n) { em?.remove(); return; }
     if (!em) { em = document.createElement('em'); a.append(em); }
